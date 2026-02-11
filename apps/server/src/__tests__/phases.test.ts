@@ -35,6 +35,12 @@ function createMockPhaseCtx(initialState: PokerGameState, sessionId = 'test-sess
   let state = { ...initialState }
   const dispatched: Array<{ name: string; args: unknown[] }> = []
 
+  // session object with a live `state` getter so endIf/next always see current state
+  const session = {
+    members: {},
+    get state() { return state },
+  }
+
   const ctx = {
     getState: () => state,
     getSessionId: () => sessionId,
@@ -51,7 +57,7 @@ function createMockPhaseCtx(initialState: PokerGameState, sessionId = 'test-sess
       upsertTimeout: vi.fn(),
       cancel: vi.fn(),
     },
-    session: { members: {} },
+    session,
   }
 
   return { ctx, dispatched, getState: () => state }

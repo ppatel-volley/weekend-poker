@@ -136,6 +136,9 @@ export interface PokerGameState {
   handHistory: HandAction[]
   lastAggressor: string | null
 
+  // Lobby state
+  lobbyReady: boolean
+
   // Dealing state
   dealingComplete: boolean
 

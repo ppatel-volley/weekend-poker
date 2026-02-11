@@ -51,6 +51,7 @@ export function createInitialState(
     handHistory: [],
     lastAggressor: null,
     dealingComplete: false,
+    lobbyReady: false,
     dealerMessage: null,
     ttsQueue: [],
     sessionStats: {
@@ -335,6 +336,10 @@ const reducers: Record<string, Reducer<any>> = {
       ),
     }
   }) satisfies Reducer<[string]>,
+
+  setLobbyReady: ((state: PokerGameState, ready: boolean): PokerGameState => {
+    return { ...state, lobbyReady: ready }
+  }) satisfies Reducer<[boolean]>,
 }
 
 // ── Shared helpers ─────────────────────────────────────────────
@@ -568,6 +573,31 @@ const thunks: Record<string, Thunk<any>> = {
 // We use (ctx: any) for the stubs to avoid importing every context variant.
 // Once implementations are written, proper types should be applied.
 
+/**
+ * Adapts VGF's OnBeginContext/OnEndContext to expose the same API as ThunkContext.
+ *
+ * VGF context differences:
+ * - OnBeginContext/OnEndContext: `reducerDispatcher`, `thunkDispatcher`, `getState()`, `session`
+ * - ThunkContext:               `dispatch` (getter),  `dispatchThunk` (getter), `getState()`, `getSessionId()`, `getMembers()`
+ *
+ * This adapter lets phase hooks use `ctx.dispatch(...)` and `ctx.getSessionId()` uniformly.
+ */
+function adaptPhaseCtx(vgfCtx: any) {
+  // Delegate to the original VGF context without spreading, because
+  // OnBeginContext/OnEndContext use private class fields (#session) that
+  // break when spread into a plain object.
+  return {
+    get dispatch() { return vgfCtx.reducerDispatcher ?? vgfCtx.dispatch },
+    get dispatchThunk() { return vgfCtx.thunkDispatcher ?? vgfCtx.dispatchThunk },
+    getState: () => vgfCtx.getState?.() ?? vgfCtx.session?.state,
+    getSessionId: () => vgfCtx.getSessionId?.() ?? vgfCtx.session?.sessionId,
+    getMembers: () => vgfCtx.getMembers?.() ?? vgfCtx.session?.members,
+    get session() { return vgfCtx.session },
+    get scheduler() { return vgfCtx.scheduler },
+    get logger() { return vgfCtx.logger },
+  }
+}
+
 function makePhase(overrides: {
   reducers?: Record<string, Reducer<any>>
   thunks?: Record<string, Thunk<any>>
@@ -576,27 +606,35 @@ function makePhase(overrides: {
   endIf?: (ctx: any) => boolean
   next: string | ((ctx: any) => string)
 }) {
+  const wrappedOnBegin = overrides.onBegin
+    ? (ctx: any) => overrides.onBegin!(adaptPhaseCtx(ctx))
+    : (ctx: any) => ctx.session.state
+
+  const wrappedOnEnd = overrides.onEnd
+    ? (ctx: any) => overrides.onEnd!(adaptPhaseCtx(ctx))
+    : undefined
+
   return {
     actions: {} as Record<string, never>,
     reducers: overrides.reducers ?? {},
     thunks: overrides.thunks ?? {},
-    onBegin: overrides.onBegin ?? ((ctx: any) => ctx.getState()),
+    onBegin: wrappedOnBegin,
     endIf: overrides.endIf ?? (() => false),
     next: overrides.next,
-    ...(overrides.onEnd ? { onEnd: overrides.onEnd } : {}),
+    ...(wrappedOnEnd ? { onEnd: wrappedOnEnd } : {}),
   }
 }
 
 // ── Phase helper: betting phase endIf (shared by all 4 betting phases) ──
 
 function bettingEndIf(ctx: any): boolean {
-  const state: PokerGameState = ctx.getState()
+  const state: PokerGameState = ctx.session.state
   return isBettingRoundComplete(state) || isOnlyOnePlayerRemaining(state)
 }
 
 /** Determines the next phase after a betting round. Shared by all betting phases. */
 function bettingNextPhase(ctx: any, normalNext: string): string {
-  const state: PokerGameState = ctx.getState()
+  const state: PokerGameState = ctx.session.state
   if (isOnlyOnePlayerRemaining(state)) return PokerPhase.HandComplete
   if (areAllRemainingPlayersAllIn(state)) return PokerPhase.AllInRunout
   return normalNext
@@ -647,14 +685,17 @@ const lobbyPhase = makePhase({
     startGame: (async (_ctx: ThunkCtx) => {
       // TODO: Verify min player count, fill bots if auto-fill is on, begin hand
     }) satisfies Thunk,
-    checkLobbyReady: (async (_ctx: ThunkCtx) => {
-      // No-op — the dispatch itself triggers endIf evaluation
-    }) satisfies Thunk,
+  },
+  reducers: {
+    // No-op reducer — the dispatch itself triggers endIf evaluation.
+    // The controller dispatches this after toggleReady() so VGF re-evaluates endIf.
+    checkLobbyReady: ((state: PokerGameState): PokerGameState => state) satisfies Reducer,
   },
   onBegin: (ctx: any) => {
     return ctx.getState()
   },
   endIf: (ctx: any) => {
+    // ctx.session.members is available in GameActionContext (endIf/next context)
     const members = ctx.session?.members ?? {}
     const readyControllers = Object.values(members).filter(
       (m: any) => m.clientType === ClientType.Controller && m.isReady,
@@ -697,7 +738,7 @@ const postingBlindsPhase = makePhase({
     return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: PokerGameState = ctx.getState()
+    const state: PokerGameState = ctx.session.state
     // Check both blinds are posted by looking for the blind posting actions
     const sbPosted = state.players.some(p => p.lastAction === 'post_small_blind' && p.bet > 0)
     const bbPosted = state.players.some(p => p.lastAction === 'post_big_blind' && p.bet > 0)
@@ -750,7 +791,7 @@ const dealingHoleCardsPhase = makePhase({
     return ctx.getState()
   },
   endIf: (ctx: any) => {
-    return ctx.getState().dealingComplete === true
+    return ctx.session.state.dealingComplete === true
   },
   onEnd: (ctx: any) => {
     ctx.dispatch('markDealingComplete', false)
@@ -783,7 +824,7 @@ const dealingFlopPhase = makePhase({
     dealCommunityOnBegin(ctx, 3)
     return ctx.getState()
   },
-  endIf: (ctx: any) => ctx.getState().dealingComplete === true,
+  endIf: (ctx: any) => ctx.session.state.dealingComplete === true,
   onEnd: (ctx: any) => {
     ctx.dispatch('markDealingComplete', false)
     return ctx.getState()
@@ -810,7 +851,7 @@ const dealingTurnPhase = makePhase({
     dealCommunityOnBegin(ctx, 1)
     return ctx.getState()
   },
-  endIf: (ctx: any) => ctx.getState().dealingComplete === true,
+  endIf: (ctx: any) => ctx.session.state.dealingComplete === true,
   onEnd: (ctx: any) => {
     ctx.dispatch('markDealingComplete', false)
     return ctx.getState()
@@ -837,7 +878,7 @@ const dealingRiverPhase = makePhase({
     dealCommunityOnBegin(ctx, 1)
     return ctx.getState()
   },
-  endIf: (ctx: any) => ctx.getState().dealingComplete === true,
+  endIf: (ctx: any) => ctx.session.state.dealingComplete === true,
   onEnd: (ctx: any) => {
     ctx.dispatch('markDealingComplete', false)
     return ctx.getState()
@@ -856,7 +897,7 @@ const riverBettingPhase = makePhase({
   },
   endIf: bettingEndIf,
   next: (ctx: any) => {
-    const state: PokerGameState = ctx.getState()
+    const state: PokerGameState = ctx.session.state
     if (isOnlyOnePlayerRemaining(state)) return PokerPhase.HandComplete
     return PokerPhase.Showdown
   },
@@ -925,7 +966,7 @@ const handCompletePhase = makePhase({
   },
   endIf: () => true,
   next: (ctx: any) => {
-    const state: PokerGameState = ctx.getState()
+    const state: PokerGameState = ctx.session.state
     const playablePlayers = state.players.filter(
       p => p.status !== 'busted' && p.status !== 'sitting_out',
     )

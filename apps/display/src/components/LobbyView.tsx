@@ -50,16 +50,22 @@ export function LobbyView() {
           marginBottom: '2rem',
         }}
       >
-        <span
+        <a
+          href={controllerUrl}
+          target="_blank"
+          rel="noopener noreferrer"
           style={{
-            opacity: 0.5,
+            opacity: 0.7,
             textAlign: 'center',
             padding: '1rem',
             fontSize: '0.875rem',
+            color: 'white',
+            textDecoration: 'underline',
+            cursor: 'pointer',
           }}
         >
           {controllerUrl}
-        </span>
+        </a>
       </div>
 
       {/* Connected players */}
