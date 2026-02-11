@@ -15,6 +15,7 @@ declare module 'react' {
       directionalLight: any
       pointLight: any
       spotLight: any
+      hemisphereLight: any
       cylinderGeometry: any
       torusGeometry: any
       boxGeometry: any
@@ -23,6 +24,7 @@ declare module 'react' {
       meshStandardMaterial: any
       meshBasicMaterial: any
       meshPhysicalMaterial: any
+      instancedMesh: any
       primitive: any
     }
   }

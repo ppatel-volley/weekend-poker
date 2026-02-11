@@ -14,6 +14,7 @@
   "dependencies": {
     "@react-three/drei": "^9.121.4",
     "@react-three/fiber": "^8.17.14",
+    "@react-three/postprocessing": "^3.0.4",
     "@volley/vgf": "^4.3.1",
     "@weekend-poker/shared": "workspace:*",
     "react": "^19.0.0",

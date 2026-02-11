@@ -46,11 +46,12 @@ describe('pokerRuleset', () => {
     }
   })
 
-  it('should have reducers that return state unchanged (stubs)', () => {
+  it('should have reducers that return new state (implemented)', () => {
     const state = createInitialState()
-    const updatePlayerBet = pokerRuleset.reducers['updatePlayerBet']!
-    const result = updatePlayerBet(state, 'player-1', 50)
-    expect(result).toBe(state)
+    const markDealingComplete = pokerRuleset.reducers['markDealingComplete']!
+    const result = markDealingComplete(state)
+    expect(result).not.toBe(state)
+    expect(result.dealingComplete).toBe(true)
   })
 
   // ── Thunks ─────────────────────────────────────────────────

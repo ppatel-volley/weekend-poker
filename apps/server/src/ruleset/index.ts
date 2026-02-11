@@ -1,7 +1,27 @@
 import type { GameRuleset, GameReducer, GameThunk, IThunkContext, IConnectionLifeCycleContext } from '@volley/vgf/types'
 import { ClientType } from '@volley/vgf/types'
-import type { PokerGameState, PokerPlayer, PlayerAction } from '@weekend-poker/shared'
-import { PokerPhase, DEFAULT_BLIND_LEVEL, MAX_PLAYERS, MIN_PLAYERS_TO_START, STARTING_STACK } from '@weekend-poker/shared'
+import type { PokerGameState, PokerPlayer, PlayerAction, Card, TTSMessage, HandHighlight, BotDifficulty } from '@weekend-poker/shared'
+import { PokerPhase, DEFAULT_BLIND_LEVEL, MAX_PLAYERS, MIN_PLAYERS_TO_START, STARTING_STACK, BLIND_LEVELS } from '@weekend-poker/shared'
+import {
+  calculateSidePots,
+  rotateDealerButton as rotateDealerButtonFn,
+  createDeck,
+  shuffleDeck,
+  evaluateHand,
+  compareHands,
+  getLegalActions,
+  isBettingRoundComplete,
+  isOnlyOnePlayerRemaining,
+  areAllRemainingPlayersAllIn,
+  getSmallBlindIndex,
+  getBigBlindIndex,
+  findFirstActivePlayerLeftOfButton,
+  findFirstActivePlayerLeftOfBB,
+  nextActivePlayer,
+  getServerHandState,
+  setServerHandState,
+} from '../poker-engine/index.js'
+import type { HandRank } from '../poker-engine/index.js'
 import { parseVoiceIntent } from '../voice/parseVoiceIntent.js'
 
 // ── Initial state factory ──────────────────────────────────────
@@ -67,39 +87,98 @@ const reducers: Record<string, Reducer<any>> = {
     return { ...state, players: state.players.filter(p => p.id !== playerId) }
   }) satisfies Reducer<[string]>,
 
-  updatePlayerBet: ((state: PokerGameState, _playerId: string, _amount: number): PokerGameState => {
-    // TODO: Find the player by ID and update their bet, deducting from stack
-    return state
+  updatePlayerBet: ((state: PokerGameState, playerId: string, amount: number): PokerGameState => {
+    return {
+      ...state,
+      players: state.players.map(p => {
+        if (p.id !== playerId) return p
+        const additionalChips = amount - p.bet
+        const newStack = p.stack - additionalChips
+        return {
+          ...p,
+          bet: amount,
+          stack: newStack,
+          status: newStack <= 0 ? 'all_in' as const : p.status,
+        }
+      }),
+      currentBet: Math.max(state.currentBet, amount),
+      // Update minRaiseIncrement when this is a raise above the current bet
+      minRaiseIncrement: amount > state.currentBet
+        ? Math.max(state.minRaiseIncrement, amount - state.currentBet)
+        : state.minRaiseIncrement,
+    }
   }) satisfies Reducer<[string, number]>,
 
-  foldPlayer: ((state: PokerGameState, _playerId: string): PokerGameState => {
-    // TODO: Set player status to 'folded' and clear their active state
-    return state
+  foldPlayer: ((state: PokerGameState, playerId: string): PokerGameState => {
+    return {
+      ...state,
+      players: state.players.map(p =>
+        p.id === playerId ? { ...p, status: 'folded' as const, lastAction: 'fold' as const } : p,
+      ),
+    }
   }) satisfies Reducer<[string]>,
 
-  dealCommunityCards: ((state: PokerGameState, _cards: unknown[]): PokerGameState => {
-    // TODO: Append dealt cards to communityCards array
-    return state
-  }) satisfies Reducer<[unknown[]]>,
+  dealCommunityCards: ((state: PokerGameState, cards: Card[]): PokerGameState => {
+    return {
+      ...state,
+      communityCards: [...state.communityCards, ...cards],
+    }
+  }) satisfies Reducer<[Card[]]>,
 
   rotateDealerButton: ((state: PokerGameState): PokerGameState => {
-    // TODO: Advance dealerIndex to next active, non-busted player
-    return state
+    const newDealerIndex = rotateDealerButtonFn(state.players, state.dealerIndex)
+    return { ...state, dealerIndex: newDealerIndex }
   }) satisfies Reducer,
 
   updatePot: ((state: PokerGameState): PokerGameState => {
-    // TODO: Gather bets from all players, calculate main pot and side pots
-    return state
+    const totalBets = state.players.reduce((sum, p) => sum + p.bet, 0)
+    if (totalBets === 0) return state
+
+    const newSidePots = calculateSidePots(state.players)
+
+    // Merge new side pots with any existing ones from prior betting rounds.
+    // Side pots with identical eligible player sets are combined; otherwise appended.
+    const mergedPots = state.sidePots.map(p => ({ ...p, eligiblePlayerIds: [...p.eligiblePlayerIds] }))
+    for (const newPot of newSidePots) {
+      const keyNew = [...newPot.eligiblePlayerIds].sort().join(',')
+      const existing = mergedPots.find(p => [...p.eligiblePlayerIds].sort().join(',') === keyNew)
+      if (existing) {
+        existing.amount += newPot.amount
+      } else {
+        mergedPots.push({ ...newPot })
+      }
+    }
+
+    return {
+      ...state,
+      pot: state.pot + totalBets,
+      sidePots: mergedPots,
+      currentBet: 0,
+      players: state.players.map(p => ({ ...p, bet: 0 })),
+    }
   }) satisfies Reducer,
 
-  awardPot: ((state: PokerGameState, _winnerIds: string[], _amounts: number[]): PokerGameState => {
-    // TODO: Add winnings to each winner's stack, reset pot to zero
-    return state
+  awardPot: ((state: PokerGameState, winnerIds: string[], amounts: number[]): PokerGameState => {
+    // Build a map of winnerId -> total amount awarded
+    const winnings = new Map<string, number>()
+    for (let i = 0; i < winnerIds.length; i++) {
+      const id = winnerIds[i]!
+      winnings.set(id, (winnings.get(id) ?? 0) + amounts[i]!)
+    }
+
+    return {
+      ...state,
+      pot: 0,
+      sidePots: [],
+      players: state.players.map(p => {
+        const award = winnings.get(p.id)
+        return award ? { ...p, stack: p.stack + award } : p
+      }),
+    }
   }) satisfies Reducer<[string[], number[]]>,
 
-  setActivePlayer: ((state: PokerGameState, _playerIndex: number): PokerGameState => {
-    // TODO: Update activePlayerIndex and notify clients
-    return state
+  setActivePlayer: ((state: PokerGameState, playerIndex: number): PokerGameState => {
+    return { ...state, activePlayerIndex: playerIndex }
   }) satisfies Reducer<[number]>,
 
   markPlayerDisconnected: ((state: PokerGameState, playerId: string): PokerGameState => {
@@ -129,67 +208,260 @@ const reducers: Record<string, Reducer<any>> = {
     }
   }) satisfies Reducer<[string, string]>,
 
-  updateDealerCharacter: ((state: PokerGameState, _characterId: string): PokerGameState => {
-    // TODO: Update dealerCharacterId and trigger voice/personality change
-    return state
+  updateDealerCharacter: ((state: PokerGameState, characterId: string): PokerGameState => {
+    return { ...state, dealerCharacterId: characterId }
   }) satisfies Reducer<[string]>,
 
-  updateBlindLevel: ((state: PokerGameState, _level: number): PokerGameState => {
-    // TODO: Look up new blind level from BLIND_LEVELS and update state
-    return state
+  updateBlindLevel: ((state: PokerGameState, level: number): PokerGameState => {
+    const blindLevel = BLIND_LEVELS.find(bl => bl.level === level)
+    if (!blindLevel) return state
+    return {
+      ...state,
+      blindLevel,
+      minRaiseIncrement: blindLevel.bigBlind,
+    }
   }) satisfies Reducer<[number]>,
 
-  addBotPlayer: ((state: PokerGameState, _seatIndex: number, _difficulty: string): PokerGameState => {
-    // TODO: Create a PokerPlayer with isBot=true and add to players array
-    return state
+  addBotPlayer: ((state: PokerGameState, seatIndex: number, difficulty: string): PokerGameState => {
+    const botId = `bot-${seatIndex}`
+    const botPlayer: PokerPlayer = {
+      id: botId,
+      name: `Bot ${seatIndex + 1}`,
+      seatIndex,
+      stack: STARTING_STACK,
+      bet: 0,
+      status: 'active',
+      lastAction: null,
+      isBot: true,
+      botConfig: {
+        difficulty: difficulty as BotDifficulty,
+        personalityId: `bot-personality-${seatIndex}`,
+      },
+      isConnected: true,
+      sittingOutHandCount: 0,
+    }
+    return { ...state, players: [...state.players, botPlayer] }
   }) satisfies Reducer<[number, string]>,
 
-  removeBotPlayer: ((state: PokerGameState, _playerId: string): PokerGameState => {
-    // TODO: Filter the bot out of the players array
-    return state
+  removeBotPlayer: ((state: PokerGameState, playerId: string): PokerGameState => {
+    return {
+      ...state,
+      players: state.players.filter(p => !(p.id === playerId && p.isBot)),
+    }
   }) satisfies Reducer<[string]>,
 
-  updateEmotionalState: ((state: PokerGameState, _emotion: string): PokerGameState => {
-    // TODO: Store emotional state for dealer character rendering
-    return state
+  updateEmotionalState: ((state: PokerGameState, emotion: string): PokerGameState => {
+    return { ...state, dealerEmotion: emotion }
   }) satisfies Reducer<[string]>,
 
-  updateOpponentProfile: ((state: PokerGameState, _playerId: string, _profileData: unknown): PokerGameState => {
-    // TODO: Store updated opponent modelling data for bot decisions
-    return state
+  updateOpponentProfile: ((state: PokerGameState, playerId: string, profileData: unknown): PokerGameState => {
+    return {
+      ...state,
+      opponentProfiles: {
+        ...(state['opponentProfiles'] as Record<string, unknown> ?? {}),
+        [playerId]: profileData,
+      },
+    }
   }) satisfies Reducer<[string, unknown]>,
 
-  setPlayerLastAction: ((state: PokerGameState, playerId: string, action: string): PokerGameState => {
+  setPlayerLastAction: ((state: PokerGameState, playerId: string, action: string | null): PokerGameState => {
     return {
       ...state,
       players: state.players.map(p =>
-        p.id === playerId ? { ...p, lastAction: action as PlayerAction } : p,
+        p.id === playerId ? { ...p, lastAction: action as PlayerAction | null } : p,
       ),
     }
-  }) satisfies Reducer<[string, string]>,
+  }) satisfies Reducer<[string, string | null]>,
 
-  updateSessionHighlights: ((state: PokerGameState, _highlight: unknown): PokerGameState => {
-    // TODO: Compare incoming highlight against session records and update
-    return state
-  }) satisfies Reducer<[unknown]>,
+  updateSessionHighlights: ((state: PokerGameState, highlight: HandHighlight): PokerGameState => {
+    const stats = { ...state.sessionStats }
 
-  enqueueTTSMessage: ((state: PokerGameState, _message: unknown): PokerGameState => {
-    // TODO: Push new TTSMessage onto the ttsQueue array
-    return state
-  }) satisfies Reducer<[unknown]>,
+    // Update largest pot if this highlight's pot is bigger
+    if (!stats.largestPot || highlight.potSize > stats.largestPot.potSize) {
+      stats.largestPot = highlight
+    }
 
-  markDealingComplete: ((state: PokerGameState): PokerGameState => {
-    // TODO: Set dealingComplete = true so betting can commence
-    return state
+    return { ...state, sessionStats: stats }
+  }) satisfies Reducer<[HandHighlight]>,
+
+  enqueueTTSMessage: ((state: PokerGameState, message: TTSMessage): PokerGameState => {
+    return { ...state, ttsQueue: [...state.ttsQueue, message] }
+  }) satisfies Reducer<[TTSMessage]>,
+
+  markDealingComplete: ((state: PokerGameState, complete?: boolean): PokerGameState => {
+    return { ...state, dealingComplete: complete ?? true }
+  }) satisfies Reducer<[boolean?]>,
+
+  resetHandState: ((state: PokerGameState): PokerGameState => {
+    return {
+      ...state,
+      communityCards: [],
+      pot: 0,
+      sidePots: [],
+      currentBet: 0,
+      minRaiseIncrement: state.blindLevel.bigBlind,
+      handHistory: [],
+      lastAggressor: null,
+      dealingComplete: false,
+      dealerMessage: null,
+      players: state.players.map(p => ({
+        ...p,
+        bet: 0,
+        lastAction: null,
+        status: p.status === 'busted' ? 'busted' as const
+          : p.status === 'sitting_out' ? 'sitting_out' as const
+          : 'active' as const,
+      })),
+    }
   }) satisfies Reducer,
+
+  setHandNumber: ((state: PokerGameState, handNumber: number): PokerGameState => {
+    return { ...state, handNumber }
+  }) satisfies Reducer<[number]>,
+
+  setCurrentBet: ((state: PokerGameState, amount: number): PokerGameState => {
+    return { ...state, currentBet: amount }
+  }) satisfies Reducer<[number]>,
+
+  setMinRaiseIncrement: ((state: PokerGameState, amount: number): PokerGameState => {
+    return { ...state, minRaiseIncrement: amount }
+  }) satisfies Reducer<[number]>,
+
+  markPlayerBusted: ((state: PokerGameState, playerId: string): PokerGameState => {
+    return {
+      ...state,
+      players: state.players.map(p =>
+        p.id === playerId ? { ...p, status: 'busted' as const } : p,
+      ),
+    }
+  }) satisfies Reducer<[string]>,
+}
+
+// ── Shared helpers ─────────────────────────────────────────────
+
+/**
+ * Evaluates hands and determines pot distribution.
+ * Returns { winnerIds, amounts } for use with the awardPot reducer.
+ * Handles both single-winner (sole remaining) and multi-player showdown with side pots.
+ */
+function resolveWinners(
+  state: PokerGameState,
+  sessionId: string,
+): { winnerIds: string[]; amounts: number[] } | null {
+  const serverState = getServerHandState(sessionId)
+  const remaining = state.players.filter(
+    p => p.status === 'active' || p.status === 'all_in',
+  )
+
+  // If only one player remains (everyone else folded), they win by default
+  if (remaining.length === 1) {
+    return { winnerIds: [remaining[0]!.id], amounts: [state.pot] }
+  }
+
+  // Evaluate each remaining player's hand
+  const playerHands: Array<{ playerId: string; hand: HandRank }> = []
+  for (const player of remaining) {
+    const holeCards = serverState?.holeCards.get(player.id)
+    if (!holeCards) continue
+    const allCards = [...holeCards, ...state.communityCards]
+    const hand = evaluateHand(allCards)
+    playerHands.push({ playerId: player.id, hand })
+  }
+
+  // Handle side pots if they exist, otherwise treat as a single pot
+  const pots = state.sidePots.length > 0
+    ? state.sidePots
+    : [{ amount: state.pot, eligiblePlayerIds: remaining.map(p => p.id) }]
+
+  const winnerIds: string[] = []
+  const amounts: number[] = []
+
+  for (const pot of pots) {
+    // Find best hand(s) among eligible players in this pot
+    const eligible = playerHands.filter(ph => pot.eligiblePlayerIds.includes(ph.playerId))
+    if (eligible.length === 0) continue
+
+    // Sort best-first
+    eligible.sort((a, b) => compareHands(b.hand, a.hand))
+
+    // Find all players tied for best
+    const bestHand = eligible[0]!.hand
+    const winners = eligible.filter(e => compareHands(e.hand, bestHand) === 0)
+
+    // Split the pot among winners (integer division, remainder to first winner)
+    const share = Math.floor(pot.amount / winners.length)
+    const remainder = pot.amount - (share * winners.length)
+
+    for (let i = 0; i < winners.length; i++) {
+      winnerIds.push(winners[i]!.playerId)
+      amounts.push(share + (i === 0 ? remainder : 0))
+    }
+  }
+
+  return { winnerIds, amounts }
+}
+
+/** Advances to the next active player if the betting round is not yet over. */
+function advanceToNextPlayer(ctx: ThunkCtx): void {
+  const state = ctx.getState()
+  if (!isBettingRoundComplete(state) && !isOnlyOnePlayerRemaining(state)) {
+    const nextIdx = nextActivePlayer(state.players, state.activePlayerIndex)
+    if (nextIdx !== -1) {
+      ctx.dispatch('setActivePlayer', nextIdx)
+    }
+  }
 }
 
 // ── Global thunks ──────────────────────────────────────────────
 
 const thunks: Record<string, Thunk<any>> = {
-  processPlayerAction: (async (_ctx: ThunkCtx) => {
-    // TODO: Validate the action is legal, then dispatch appropriate reducers
-  }) satisfies Thunk,
+  /**
+   * Central action handler — validates legality, executes via reducers,
+   * and advances to the next active player.
+   */
+  processPlayerAction: (async (ctx: ThunkCtx, playerId: string, action: PlayerAction, amount?: number) => {
+    const state = ctx.getState()
+    const player = state.players.find(p => p.id === playerId)
+    if (!player) return
+
+    // Validate turn order
+    if (state.players[state.activePlayerIndex]?.id !== playerId) return
+
+    // Validate action legality
+    const legalActions = getLegalActions(state, playerId)
+    if (!legalActions.includes(action)) return
+
+    // Execute the action
+    switch (action) {
+      case 'fold':
+        ctx.dispatch('foldPlayer', playerId)
+        break
+      case 'check':
+        // No bet change — just record the action
+        break
+      case 'call': {
+        ctx.dispatch('updatePlayerBet', playerId, state.currentBet)
+        break
+      }
+      case 'bet':
+        if (amount === undefined) return
+        ctx.dispatch('updatePlayerBet', playerId, amount)
+        break
+      case 'raise':
+        if (amount === undefined) return
+        ctx.dispatch('updatePlayerBet', playerId, amount)
+        break
+      case 'all_in':
+        ctx.dispatch('updatePlayerBet', playerId, player.stack + player.bet)
+        break
+    }
+
+    // Record the action
+    ctx.dispatch('setPlayerLastAction', playerId, action)
+
+    // Advance to the next active player (if the round isn't over)
+    advanceToNextPlayer(ctx)
+  }) satisfies Thunk<[string, PlayerAction, number?]>,
 
   processVoiceCommand: (async (ctx: ThunkCtx, transcript: string) => {
     const result = parseVoiceIntent(transcript)
@@ -201,25 +473,65 @@ const thunks: Record<string, Thunk<any>> = {
     }
   }) satisfies Thunk<[string]>,
 
-  startHand: (async (_ctx: ThunkCtx) => {
-    // TODO: Reset hand state, rotate dealer, post blinds, transition to dealing
+  /**
+   * Resets hand state in preparation for a new hand.
+   * Called at the start of the PostingBlinds phase.
+   */
+  startHand: (async (ctx: ThunkCtx) => {
+    ctx.dispatch('resetHandState')
   }) satisfies Thunk,
 
-  evaluateHands: (async (_ctx: ThunkCtx) => {
-    // TODO: Run hand evaluation logic and determine winners
+  /**
+   * Evaluates all remaining (non-folded) players' hands and awards
+   * the pot. Uses the server-side hole cards combined with community cards.
+   */
+  evaluateHands: (async (ctx: ThunkCtx) => {
+    const result = resolveWinners(ctx.getState(), ctx.getSessionId())
+    if (result) {
+      ctx.dispatch('awardPot', result.winnerIds, result.amounts)
+    }
   }) satisfies Thunk,
 
-  distributePot: (async (_ctx: ThunkCtx) => {
-    // TODO: Calculate split pots, award winnings, update session stats
+  /**
+   * Distributes pots to winners. Handles the case where everyone
+   * has folded (sole remaining player wins) as well as showdown scenarios.
+   */
+  distributePot: (async (ctx: ThunkCtx) => {
+    const state = ctx.getState()
+    const remaining = state.players.filter(
+      p => p.status === 'active' || p.status === 'all_in',
+    )
+
+    // If only one player remains, they win the entire pot
+    if (remaining.length === 1) {
+      ctx.dispatch('awardPot', [remaining[0]!.id], [state.pot])
+      return
+    }
+
+    // Otherwise, use evaluateHands to determine winners
+    await ctx.dispatchThunk('evaluateHands')
   }) satisfies Thunk,
 
   botDecision: (async (_ctx: ThunkCtx) => {
     // TODO: Run bot AI logic based on difficulty and dispatch the chosen action
   }) satisfies Thunk,
 
-  autoFoldPlayer: (async (_ctx: ThunkCtx) => {
-    // TODO: Dispatch foldPlayer reducer for the timed-out player
-  }) satisfies Thunk,
+  /**
+   * Auto-action for timed-out or disconnected players.
+   * Checks if legal (no bet facing), otherwise folds.
+   */
+  autoFoldPlayer: (async (ctx: ThunkCtx, playerId: string) => {
+    const state = ctx.getState()
+    const legalActions = getLegalActions(state, playerId)
+
+    if (legalActions.includes('check')) {
+      ctx.dispatch('setPlayerLastAction', playerId, 'check')
+    } else {
+      ctx.dispatch('foldPlayer', playerId)
+    }
+
+    advanceToNextPlayer(ctx)
+  }) satisfies Thunk<[string]>,
 
   requestTTS: (async (_ctx: ThunkCtx) => {
     // TODO: Build the TTS message and enqueue it via reducer
@@ -275,6 +587,61 @@ function makePhase(overrides: {
   }
 }
 
+// ── Phase helper: betting phase endIf (shared by all 4 betting phases) ──
+
+function bettingEndIf(ctx: any): boolean {
+  const state: PokerGameState = ctx.getState()
+  return isBettingRoundComplete(state) || isOnlyOnePlayerRemaining(state)
+}
+
+/** Determines the next phase after a betting round. Shared by all betting phases. */
+function bettingNextPhase(ctx: any, normalNext: string): string {
+  const state: PokerGameState = ctx.getState()
+  if (isOnlyOnePlayerRemaining(state)) return PokerPhase.HandComplete
+  if (areAllRemainingPlayersAllIn(state)) return PokerPhase.AllInRunout
+  return normalNext
+}
+
+/** Shared onBegin for post-flop betting phases (flop, turn, river). */
+function postFlopBettingOnBegin(ctx: any): void {
+  const state: PokerGameState = ctx.getState()
+  const firstToAct = findFirstActivePlayerLeftOfButton(state.players, state.dealerIndex)
+  ctx.dispatch('setActivePlayer', firstToAct)
+  ctx.dispatch('setCurrentBet', 0)
+  ctx.dispatch('setMinRaiseIncrement', state.blindLevel.bigBlind)
+  // Reset player lastActions for the new betting round
+  for (const player of state.players) {
+    if (player.status === 'active') {
+      ctx.dispatch('setPlayerLastAction', player.id, null)
+    }
+  }
+}
+
+/**
+ * Shared onBegin for dealing phases — burns a card and deals N community cards.
+ * Updates the server-side deck state accordingly.
+ */
+function dealCommunityOnBegin(ctx: any, cardCount: number): void {
+  const sessionId = ctx.getSessionId()
+  const serverState = getServerHandState(sessionId)
+  if (!serverState) return
+
+  const deck = [...serverState.deck]
+
+  // Burn one card
+  deck.shift()
+
+  // Deal the specified number of cards
+  const dealtCards = deck.splice(0, cardCount)
+  ctx.dispatch('dealCommunityCards', dealtCards)
+  ctx.dispatch('markDealingComplete', true)
+
+  // Update the deck in server state
+  setServerHandState(sessionId, { ...serverState, deck })
+}
+
+// ── Phase definitions ────────────────────────────────────────────
+
 const lobbyPhase = makePhase({
   thunks: {
     startGame: (async (_ctx: ThunkCtx) => {
@@ -285,7 +652,6 @@ const lobbyPhase = makePhase({
     }) satisfies Thunk,
   },
   onBegin: (ctx: any) => {
-    // TODO: Lobby setup — reset hand state, welcome message via TTS
     return ctx.getState()
   },
   endIf: (ctx: any) => {
@@ -300,133 +666,272 @@ const lobbyPhase = makePhase({
 
 const postingBlindsPhase = makePhase({
   onBegin: (ctx: any) => {
-    // TODO: Identify SB and BB positions, post forced bets
+    const state: PokerGameState = ctx.getState()
+
+    // Reset hand state for the new hand
+    ctx.dispatch('resetHandState')
+
+    // Increment hand number
+    ctx.dispatch('setHandNumber', state.handNumber + 1)
+
+    // Rotate dealer button
+    ctx.dispatch('rotateDealerButton')
+
+    const updated: PokerGameState = ctx.getState()
+    const dealerIndex = updated.dealerIndex
+
+    // Identify blind positions
+    const sbIndex = getSmallBlindIndex(updated.players, dealerIndex)
+    const bbIndex = getBigBlindIndex(updated.players, dealerIndex)
+    const sbPlayer = updated.players[sbIndex]!
+    const bbPlayer = updated.players[bbIndex]!
+
+    // Post small blind
+    ctx.dispatch('updatePlayerBet', sbPlayer.id, updated.blindLevel.smallBlind)
+    ctx.dispatch('setPlayerLastAction', sbPlayer.id, 'post_small_blind')
+
+    // Post big blind
+    ctx.dispatch('updatePlayerBet', bbPlayer.id, updated.blindLevel.bigBlind)
+    ctx.dispatch('setPlayerLastAction', bbPlayer.id, 'post_big_blind')
+
     return ctx.getState()
   },
-  endIf: () => false, // TODO: Return true once both blinds are posted
+  endIf: (ctx: any) => {
+    const state: PokerGameState = ctx.getState()
+    // Check both blinds are posted by looking for the blind posting actions
+    const sbPosted = state.players.some(p => p.lastAction === 'post_small_blind' && p.bet > 0)
+    const bbPosted = state.players.some(p => p.lastAction === 'post_big_blind' && p.bet > 0)
+    return sbPosted && bbPosted
+  },
   next: PokerPhase.DealingHoleCards,
 })
 
 const dealingHoleCardsPhase = makePhase({
   onBegin: (ctx: any) => {
-    // TODO: Shuffle deck, deal two hole cards to each active player
+    const state: PokerGameState = ctx.getState()
+    const sessionId = ctx.getSessionId()
+
+    // Create and shuffle a fresh deck
+    const deck = shuffleDeck(createDeck())
+
+    // Determine active players (not busted, not sitting out)
+    const activePlayers = state.players.filter(
+      p => p.status !== 'busted' && p.status !== 'sitting_out',
+    )
+
+    // Deal 2 cards per player, one at a time, clockwise from left of button
+    const startIndex = activePlayers.length > 0
+      ? (state.dealerIndex + 1) % activePlayers.length
+      : 0
+    const holeCards = new Map<string, [Card, Card]>()
+    let deckIndex = 0
+    const cardsByPlayer = new Map<string, Card[]>()
+    for (let round = 0; round < 2; round++) {
+      for (let i = 0; i < activePlayers.length; i++) {
+        const playerIndex = (startIndex + i) % activePlayers.length
+        const player = activePlayers[playerIndex]!
+        const cards = cardsByPlayer.get(player.id) ?? []
+        cards.push(deck[deckIndex]!)
+        cardsByPlayer.set(player.id, cards)
+        deckIndex++
+      }
+    }
+    for (const [playerId, cards] of cardsByPlayer) {
+      holeCards.set(playerId, [cards[0]!, cards[1]!])
+    }
+
+    // Store in server-side state (not broadcast to clients)
+    setServerHandState(sessionId, {
+      deck: deck.slice(deckIndex),
+      holeCards,
+    })
+
+    ctx.dispatch('markDealingComplete', true)
     return ctx.getState()
   },
-  endIf: () => false, // TODO: Return true when dealing animation completes
+  endIf: (ctx: any) => {
+    return ctx.getState().dealingComplete === true
+  },
+  onEnd: (ctx: any) => {
+    ctx.dispatch('markDealingComplete', false)
+    return ctx.getState()
+  },
   next: PokerPhase.PreFlopBetting,
 })
 
 const preFlopBettingPhase = makePhase({
   onBegin: (ctx: any) => {
-    // TODO: Set first active player (left of big blind), start action timer
+    const state: PokerGameState = ctx.getState()
+    // UTG = first active player left of big blind
+    const firstToAct = findFirstActivePlayerLeftOfBB(state.players, state.dealerIndex)
+    ctx.dispatch('setActivePlayer', firstToAct)
+    // currentBet is already set from the big blind posting
+    ctx.dispatch('setCurrentBet', state.blindLevel.bigBlind)
     return ctx.getState()
   },
-  endIf: () => false, // TODO: Return true when betting round is complete
-  next: () => {
-    // TODO: If all but one folded, go to HandComplete
-    // TODO: If all-in detected, go to AllInRunout
-    return PokerPhase.DealingFlop
+  onEnd: (ctx: any) => {
+    ctx.dispatch('updatePot')
+    return ctx.getState()
   },
+  endIf: bettingEndIf,
+  next: (ctx: any) => bettingNextPhase(ctx, PokerPhase.DealingFlop),
 })
 
 const dealingFlopPhase = makePhase({
   onBegin: (ctx: any) => {
-    // TODO: Deal three community cards (the flop)
+    ctx.dispatch('markDealingComplete', false)
+    dealCommunityOnBegin(ctx, 3)
     return ctx.getState()
   },
-  endIf: () => false,
+  endIf: (ctx: any) => ctx.getState().dealingComplete === true,
+  onEnd: (ctx: any) => {
+    ctx.dispatch('markDealingComplete', false)
+    return ctx.getState()
+  },
   next: PokerPhase.FlopBetting,
 })
 
 const flopBettingPhase = makePhase({
   onBegin: (ctx: any) => {
-    // TODO: Set first active player (left of dealer), reset current bet
+    postFlopBettingOnBegin(ctx)
     return ctx.getState()
   },
-  endIf: () => false,
-  next: () => {
-    // TODO: If all but one folded, go to HandComplete; if all-in, go to AllInRunout
-    return PokerPhase.DealingTurn
+  onEnd: (ctx: any) => {
+    ctx.dispatch('updatePot')
+    return ctx.getState()
   },
+  endIf: bettingEndIf,
+  next: (ctx: any) => bettingNextPhase(ctx, PokerPhase.DealingTurn),
 })
 
 const dealingTurnPhase = makePhase({
   onBegin: (ctx: any) => {
-    // TODO: Deal one community card (the turn)
+    ctx.dispatch('markDealingComplete', false)
+    dealCommunityOnBegin(ctx, 1)
     return ctx.getState()
   },
-  endIf: () => false,
+  endIf: (ctx: any) => ctx.getState().dealingComplete === true,
+  onEnd: (ctx: any) => {
+    ctx.dispatch('markDealingComplete', false)
+    return ctx.getState()
+  },
   next: PokerPhase.TurnBetting,
 })
 
 const turnBettingPhase = makePhase({
   onBegin: (ctx: any) => {
-    // TODO: Set first active player (left of dealer), reset current bet
+    postFlopBettingOnBegin(ctx)
     return ctx.getState()
   },
-  endIf: () => false,
-  next: () => {
-    // TODO: If all but one folded, go to HandComplete; if all-in, go to AllInRunout
-    return PokerPhase.DealingRiver
+  onEnd: (ctx: any) => {
+    ctx.dispatch('updatePot')
+    return ctx.getState()
   },
+  endIf: bettingEndIf,
+  next: (ctx: any) => bettingNextPhase(ctx, PokerPhase.DealingRiver),
 })
 
 const dealingRiverPhase = makePhase({
   onBegin: (ctx: any) => {
-    // TODO: Deal one community card (the river)
+    ctx.dispatch('markDealingComplete', false)
+    dealCommunityOnBegin(ctx, 1)
     return ctx.getState()
   },
-  endIf: () => false,
+  endIf: (ctx: any) => ctx.getState().dealingComplete === true,
+  onEnd: (ctx: any) => {
+    ctx.dispatch('markDealingComplete', false)
+    return ctx.getState()
+  },
   next: PokerPhase.RiverBetting,
 })
 
 const riverBettingPhase = makePhase({
   onBegin: (ctx: any) => {
-    // TODO: Set first active player (left of dealer), reset current bet
+    postFlopBettingOnBegin(ctx)
     return ctx.getState()
   },
-  endIf: () => false,
-  next: () => {
-    // TODO: If all but one folded, go to HandComplete
+  onEnd: (ctx: any) => {
+    ctx.dispatch('updatePot')
+    return ctx.getState()
+  },
+  endIf: bettingEndIf,
+  next: (ctx: any) => {
+    const state: PokerGameState = ctx.getState()
+    if (isOnlyOnePlayerRemaining(state)) return PokerPhase.HandComplete
     return PokerPhase.Showdown
   },
 })
 
 const allInRunoutPhase = makePhase({
   onBegin: (ctx: any) => {
-    // TODO: Deal remaining community cards with animation delays
+    const state: PokerGameState = ctx.getState()
+    const sessionId = ctx.getSessionId()
+    const serverState = getServerHandState(sessionId)
+    if (!serverState) return ctx.getState()
+
+    const deck = [...serverState.deck]
+    const cardsNeeded = 5 - state.communityCards.length
+
+    // Deal remaining cards with burns
+    for (let i = 0; i < cardsNeeded; i++) {
+      deck.shift() // burn
+      const card = deck.shift()
+      if (card) {
+        ctx.dispatch('dealCommunityCards', [card])
+      }
+    }
+
+    setServerHandState(sessionId, { ...serverState, deck })
     return ctx.getState()
   },
-  endIf: () => false,
+  endIf: () => true, // Immediate transition
   next: PokerPhase.Showdown,
 })
 
 const showdownPhase = makePhase({
   onBegin: (ctx: any) => {
-    // TODO: Reveal hole cards, evaluate hands, announce results via TTS
+    // Showdown evaluates hands — the actual evaluation happens in the
+    // evaluateHands thunk which is called from here or from distributePot
     return ctx.getState()
   },
-  endIf: () => false,
+  endIf: () => true,
   next: PokerPhase.PotDistribution,
 })
 
 const potDistributionPhase = makePhase({
   onBegin: (ctx: any) => {
-    // TODO: Distribute main pot and side pots to winners
+    const result = resolveWinners(ctx.getState(), ctx.getSessionId())
+    if (result) {
+      ctx.dispatch('awardPot', result.winnerIds, result.amounts)
+    }
     return ctx.getState()
   },
-  endIf: () => false,
+  endIf: () => true,
   next: PokerPhase.HandComplete,
 })
 
 const handCompletePhase = makePhase({
   onBegin: (ctx: any) => {
-    // TODO: Update session stats, check for busted players, apply inter-hand delay
+    const state: PokerGameState = ctx.getState()
+
+    // Mark players with zero stack as busted
+    for (const player of state.players) {
+      if (player.stack === 0 && player.status !== 'busted') {
+        ctx.dispatch('markPlayerBusted', player.id)
+      }
+    }
+
     return ctx.getState()
   },
-  endIf: () => false,
-  next: () => {
-    // TODO: If fewer than MIN_PLAYERS_TO_START remain, return to Lobby
+  endIf: () => true,
+  next: (ctx: any) => {
+    const state: PokerGameState = ctx.getState()
+    const playablePlayers = state.players.filter(
+      p => p.status !== 'busted' && p.status !== 'sitting_out',
+    )
+    if (playablePlayers.length < MIN_PLAYERS_TO_START) {
+      return PokerPhase.Lobby
+    }
     return PokerPhase.PostingBlinds
   },
 })
