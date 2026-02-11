@@ -1,39 +1,59 @@
+import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Environment } from '@react-three/drei'
-import { ACESFilmicToneMapping } from 'three'
+import { ACESFilmicToneMapping, PCFShadowMap, SRGBColorSpace } from 'three'
 import type { PokerPhase } from '@weekend-poker/shared'
 import { PokerTable } from './PokerTable.js'
+import { Lighting } from './Lighting.js'
+import { CameraRig } from './CameraRig.js'
+import { PostProcessing } from './PostProcessing.js'
+import { CardDeckProvider } from './CardDeck.js'
+import { CommunityCards } from './CommunityCards.js'
+import { PlayerSeats } from './PlayerSeats.js'
+import { PotDisplay } from './PotDisplay.js'
+import { DealerSpeechBubble } from './DealerSpeechBubble.js'
 import { HUD } from './HUD.js'
 
 /**
  * Main 3D game view rendered via React Three Fibre.
  *
- * The Canvas fills the entire viewport. A 2D HUD overlay is positioned
- * absolutely on top to display phase, pot, and dealer messages.
+ * The Canvas fills the entire viewport with PCFSoftShadowMap shadows,
+ * ACES Filmic tone mapping, and sRGB output. A 2D HUD overlay is
+ * positioned absolutely on top to display phase, pot, and dealer messages.
  *
- * TODO: Add Theatre.js sheet for cinematic camera transitions between phases
- * TODO: Add card dealing animations
- * TODO: Add chip movement animations
- * TODO: Add player seat positions around the table
+ * CardDeckProvider wraps the 3D scene so that CommunityCards (and
+ * future hole-card displays) can access card mesh clones via context.
  */
 export function GameView({ phase }: { phase: PokerPhase }) {
   return (
     <>
       <Canvas
-        gl={{ antialias: true, toneMapping: ACESFilmicToneMapping }}
-        camera={{ position: [0, 8, 6], fov: 45 }}
+        shadows={{ type: PCFShadowMap }}
+        gl={{
+          antialias: true,
+          toneMapping: ACESFilmicToneMapping,
+          outputColorSpace: SRGBColorSpace,
+          powerPreference: 'high-performance',
+        }}
+        dpr={1}
+        camera={{ fov: 45, near: 0.1, far: 100, position: [0, 8, 10] }}
         style={{ position: 'absolute', inset: 0 }}
-        shadows
       >
-        <ambientLight intensity={0.4} />
-        <directionalLight position={[5, 10, 5]} intensity={1} castShadow />
+        <Suspense fallback={null}>
+          <Lighting />
+          <CameraRig phase={phase} />
 
-        <PokerTable />
+          <CardDeckProvider>
+            <PokerTable />
+            <CommunityCards />
+            <PlayerSeats />
+            <PotDisplay />
+            <DealerSpeechBubble />
+          </CardDeckProvider>
 
-        {/* TODO: Render player positions, cards, chips here */}
+          {/* Particles */}
 
-        <OrbitControls enablePan={false} maxPolarAngle={Math.PI / 2.2} />
-        <Environment preset="apartment" background={false} />
+          <PostProcessing />
+        </Suspense>
       </Canvas>
 
       <HUD phase={phase} />

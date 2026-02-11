@@ -1,12 +1,26 @@
 import { describe, it, expect, vi } from 'vitest'
 
-// Mock R3F and drei to avoid react-reconciler incompatibility with React 19 in tests
+// Mock R3F, drei, and postprocessing to avoid react-reconciler
+// incompatibility with React 19 in the test environment.
 vi.mock('@react-three/fiber', () => ({
   Canvas: vi.fn(({ children }) => children),
+  useFrame: vi.fn(),
+  useThree: vi.fn(() => ({
+    camera: { position: { lerp: vi.fn() }, lookAt: vi.fn(), fov: 45, updateProjectionMatrix: vi.fn() },
+  })),
 }))
 vi.mock('@react-three/drei', () => ({
   OrbitControls: vi.fn(() => null),
   Environment: vi.fn(() => null),
+  Text: vi.fn(() => null),
+  useGLTF: Object.assign(vi.fn(() => ({ scene: { traverse: vi.fn() } })), {
+    preload: vi.fn(),
+  }),
+}))
+vi.mock('@react-three/postprocessing', () => ({
+  EffectComposer: vi.fn(({ children }) => children),
+  Bloom: vi.fn(() => null),
+  Vignette: vi.fn(() => null),
 }))
 
 /**
