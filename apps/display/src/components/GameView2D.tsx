@@ -1,5 +1,6 @@
 import { useStateSync } from '../hooks/useVGFHooks.js'
 import type { PokerGameState, PokerPlayer } from '@weekend-poker/shared'
+import { CardImage } from './CardImage.js'
 
 function PlayerCard({ player, isActive }: { player: PokerPlayer; isActive: boolean }) {
   return (
@@ -89,14 +90,21 @@ export function GameView2D() {
         }}
       >
         <div style={{ fontSize: '0.8rem', opacity: 0.6, marginBottom: 8 }}>COMMUNITY CARDS</div>
-        <div style={{ fontSize: '2rem', letterSpacing: '0.5rem', marginBottom: '1rem', minHeight: '2.5rem' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: 8,
+            marginBottom: '1rem',
+            minHeight: 120,
+            alignItems: 'center',
+          }}
+        >
           {communityCards.length > 0
-            ? communityCards.map((c, i) => (
-                <span key={i} style={{ color: c.suit === 'hearts' || c.suit === 'diamonds' ? '#ef4444' : 'white' }}>
-                  {c.rank}{c.suit === 'hearts' ? '\u2665' : c.suit === 'diamonds' ? '\u2666' : c.suit === 'clubs' ? '\u2663' : '\u2660'}
-                </span>
+            ? communityCards.map((c) => (
+                <CardImage key={`${c.rank}-${c.suit}`} card={c} height={110} />
               ))
-            : <span style={{ opacity: 0.3 }}>--</span>
+            : <span style={{ opacity: 0.3, fontSize: '2rem' }}>--</span>
           }
         </div>
         <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>

@@ -132,6 +132,10 @@ export interface PokerGameState {
   currentBet: number
   minRaiseIncrement: number
 
+  // Hole cards per player (playerId -> [Card, Card])
+  // Stored in shared state for simplicity; controllers read only their own.
+  holeCards: Record<string, [Card, Card]>
+
   // Hand history (current hand only)
   handHistory: HandAction[]
   lastAggressor: string | null

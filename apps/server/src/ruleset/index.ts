@@ -48,6 +48,7 @@ export function createInitialState(
     sidePots: [],
     currentBet: 0,
     minRaiseIncrement: DEFAULT_BLIND_LEVEL.bigBlind,
+    holeCards: {},
     handHistory: [],
     lastAggressor: null,
     dealingComplete: false,
@@ -293,6 +294,10 @@ const reducers: Record<string, Reducer<any>> = {
     return { ...state, dealingComplete: complete ?? true }
   }) satisfies Reducer<[boolean?]>,
 
+  setHoleCards: ((state: PokerGameState, holeCards: Record<string, [Card, Card]>): PokerGameState => {
+    return { ...state, holeCards }
+  }) satisfies Reducer<[Record<string, [Card, Card]>]>,
+
   resetHandState: ((state: PokerGameState): PokerGameState => {
     return {
       ...state,
@@ -301,6 +306,7 @@ const reducers: Record<string, Reducer<any>> = {
       sidePots: [],
       currentBet: 0,
       minRaiseIncrement: state.blindLevel.bigBlind,
+      holeCards: {},
       handHistory: [],
       lastAggressor: null,
       dealingComplete: false,
@@ -781,11 +787,18 @@ const dealingHoleCardsPhase = makePhase({
       holeCards.set(playerId, [cards[0]!, cards[1]!])
     }
 
-    // Store in server-side state (not broadcast to clients)
+    // Store in server-side state (for hand evaluation)
     setServerHandState(sessionId, {
       deck: deck.slice(deckIndex),
       holeCards,
     })
+
+    // Broadcast hole cards to shared state so controllers can display them
+    const holeCardsRecord: Record<string, [Card, Card]> = {}
+    for (const [playerId, cards] of holeCards) {
+      holeCardsRecord[playerId] = cards
+    }
+    ctx.dispatch('setHoleCards', holeCardsRecord)
 
     ctx.dispatch('markDealingComplete', true)
     return ctx.getState()
