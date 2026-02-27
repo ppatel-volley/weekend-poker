@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useClientActions, useSessionMember, useDispatch, useDispatchThunk } from '../hooks/useVGFHooks.js'
+import { useClientActions, useSessionMember, useDispatch } from '../hooks/useVGFHooks.js'
 
 /**
  * Mobile-optimised lobby screen.
@@ -11,7 +11,6 @@ export function ControllerLobby() {
   const [name, setName] = useState('')
   const { toggleReady, updateState } = useClientActions()
   const dispatch = useDispatch()
-  const dispatchThunk = useDispatchThunk()
   const member = useSessionMember()
   const isReady = member.isReady
 
@@ -22,17 +21,17 @@ export function ControllerLobby() {
   }
 
   const handleReady = () => {
-    // Ensure the server-side player name is up to date before toggling ready
+    // Toggle VGF member readiness first
+    toggleReady()
+    // Ensure the server-side player name is up to date
     if (name.trim()) {
       ;(dispatch as (name: string, ...args: unknown[]) => void)(
         'updatePlayerName', member.sessionMemberId, name.trim(),
       )
     }
-    toggleReady()
-    // VGF bug: SocketIOConnection.onMessage drops the Socket.IO ack callback,
-    // so all dispatches produce DispatchTimeoutError. The state changes still
-    // work — the thunk triggers endIf evaluation server-side.
-    ;(dispatchThunk as (name: string, ...args: unknown[]) => void)(
+    // Dispatch a no-op reducer to trigger endIf evaluation after toggleReady.
+    // endIf checks ctx.session.members directly for ready controllers.
+    ;(dispatch as (name: string, ...args: unknown[]) => void)(
       'checkLobbyReady',
     )
   }
