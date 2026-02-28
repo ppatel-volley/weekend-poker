@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 test.describe('Smoke tests', () => {
   test('display client loads', async ({ page }) => {
     await page.goto('http://localhost:5173')
-    await expect(page.locator('text=Weekend Poker')).toBeVisible()
+    await expect(page.locator('text=Weekend Casino')).toBeVisible()
   })
 
   test('controller shows no-session error without sessionId', async ({ page }) => {

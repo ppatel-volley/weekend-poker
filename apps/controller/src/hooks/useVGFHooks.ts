@@ -1,6 +1,6 @@
 import { getVGFHooks, useClientActions, useSessionMember, useSessionMembers } from '@volley/vgf/client'
-import type { PokerGameState } from '@weekend-poker/shared'
-import type { PokerPhase } from '@weekend-poker/shared'
+import type { PokerGameState } from '@weekend-casino/shared'
+import type { PokerPhase } from '@weekend-casino/shared'
 
 // TODO: Pass the actual ruleset type parameter once server types are shared.
 // For now, we use `any` for the ruleset generic and supply the concrete

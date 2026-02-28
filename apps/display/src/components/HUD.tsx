@@ -1,4 +1,4 @@
-import type { PokerPhase } from '@weekend-poker/shared'
+import type { PokerPhase } from '@weekend-casino/shared'
 import { useStateSyncSelector } from '../hooks/useVGFHooks.js'
 
 /**

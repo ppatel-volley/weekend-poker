@@ -2,7 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { createServer } from 'node:http'
 import { VGFServer, MemoryStorage, SocketIOTransport } from '@volley/vgf/server'
-import type { PokerGameState } from '@weekend-poker/shared'
+import type { PokerGameState } from '@weekend-casino/shared'
 import { pokerRuleset } from './ruleset/index.js'
 import { logger } from './logger.js'
 
@@ -75,4 +75,4 @@ const server = new VGFServer<PokerGameState>({
 
 server.start()
 
-logger.info({ port: PORT }, 'Weekend Poker server started')
+logger.info({ port: PORT }, 'Weekend Casino server started')

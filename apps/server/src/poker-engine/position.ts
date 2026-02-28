@@ -4,7 +4,7 @@
  * All functions are pure — no mutation, no side effects.
  * Handles both standard (3+ player) and heads-up (2 player) rules.
  */
-import type { PokerPlayer } from '@weekend-poker/shared'
+import type { PokerPlayer } from '@weekend-casino/shared'
 
 /** Statuses that prevent a player from acting in a betting round. */
 const INACTIVE_STATUSES = new Set(['folded', 'all_in', 'sitting_out', 'busted'])

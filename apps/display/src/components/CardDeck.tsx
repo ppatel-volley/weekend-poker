@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
-import type { Card } from '@weekend-poker/shared'
+import type { Card } from '@weekend-casino/shared'
 import { buildCardMeshMap, cardToMeshName } from '../utils/cardUtils.js'
 
 // ── Context ──────────────────────────────────────────────────

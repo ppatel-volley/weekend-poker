@@ -1,6 +1,6 @@
-# Weekend Poker
+# Weekend Casino
 
-A multiplayer Texas Hold'em poker game built on the Volley Games Framework (VGF). Three-app architecture: a Node.js game server, a 3D TV display (React Three Fiber), and a mobile phone controller (React).
+A multi-game casino platform built on the Volley Games Framework (VGF). Three-app architecture: a Node.js game server, a 3D TV display (React Three Fiber), and a mobile phone controller (React).
 
 ## Architecture
 

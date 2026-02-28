@@ -1,4 +1,4 @@
-import { PokerPhase } from '@weekend-poker/shared'
+import { PokerPhase } from '@weekend-casino/shared'
 import { usePhase } from '../hooks/useVGFHooks.js'
 import { LobbyView } from './LobbyView.js'
 import { GameView2D } from './GameView2D.js'
@@ -21,7 +21,7 @@ export function PhaseRouter() {
           fontFamily: 'system-ui, sans-serif',
         }}
       >
-        <h1>Weekend Poker</h1>
+        <h1>Weekend Casino</h1>
         <p>Connecting...</p>
       </div>
     )

@@ -1,4 +1,4 @@
-import type { Rank, Suit, Card } from '@weekend-poker/shared'
+import type { Rank, Suit, Card } from '@weekend-casino/shared'
 import * as THREE from 'three'
 
 /** Human-readable rank names matching the GLB mesh naming convention. */

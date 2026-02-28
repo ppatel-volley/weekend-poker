@@ -1,7 +1,7 @@
 import { ClientType } from '@volley/vgf/client'
 import { useSessionMembers } from '../hooks/useVGFHooks.js'
 import { useSessionId } from '../hooks/useSessionId.js'
-import { MAX_PLAYERS } from '@weekend-poker/shared'
+import { MAX_PLAYERS } from '@weekend-casino/shared'
 
 /**
  * Lobby view displayed on the shared screen whilst waiting for players to join.
@@ -35,7 +35,7 @@ export function LobbyView() {
           'radial-gradient(ellipse at center, #1a3a1a 0%, #0a0a0a 80%)',
       }}
     >
-      <h1 style={{ fontSize: '3rem', marginBottom: '1rem' }}>Weekend Poker</h1>
+      <h1 style={{ fontSize: '3rem', marginBottom: '1rem' }}>Weekend Casino</h1>
 
       {/* TODO: Replace with actual QR code component (e.g. qrcode.react) */}
       <div

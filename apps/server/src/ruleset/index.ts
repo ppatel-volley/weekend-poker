@@ -1,7 +1,7 @@
 import type { GameRuleset, GameReducer, GameThunk, IThunkContext, IConnectionLifeCycleContext } from '@volley/vgf/types'
 import { ClientType } from '@volley/vgf/types'
-import type { PokerGameState, PokerPlayer, PlayerAction, Card, TTSMessage, HandHighlight, BotDifficulty } from '@weekend-poker/shared'
-import { PokerPhase, DEFAULT_BLIND_LEVEL, MAX_PLAYERS, MIN_PLAYERS_TO_START, STARTING_STACK, BLIND_LEVELS } from '@weekend-poker/shared'
+import type { PokerGameState, PokerPlayer, PlayerAction, Card, TTSMessage, HandHighlight, BotDifficulty } from '@weekend-casino/shared'
+import { PokerPhase, DEFAULT_BLIND_LEVEL, MAX_PLAYERS, MIN_PLAYERS_TO_START, STARTING_STACK, BLIND_LEVELS } from '@weekend-casino/shared'
 import {
   calculateSidePots,
   rotateDealerButton as rotateDealerButtonFn,

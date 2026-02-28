@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import type { PokerGameState, PokerPlayer } from '@weekend-poker/shared'
-import { STARTING_STACK } from '@weekend-poker/shared'
+import type { PokerGameState, PokerPlayer } from '@weekend-casino/shared'
+import { STARTING_STACK } from '@weekend-casino/shared'
 import { createInitialState, pokerRuleset } from '../ruleset/index.js'
 
 /** Helper to create a test player. */

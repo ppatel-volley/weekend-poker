@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { evaluateHand, compareHands, HandCategory } from '../hand-evaluator.js'
-import type { Card, Suit } from '@weekend-poker/shared'
+import type { Card, Suit } from '@weekend-casino/shared'
 
 // ── Helpers ──────────────────────────────────────────────────────
 

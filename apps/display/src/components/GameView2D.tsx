@@ -1,5 +1,5 @@
 import { useStateSync } from '../hooks/useVGFHooks.js'
-import type { PokerGameState, PokerPlayer } from '@weekend-poker/shared'
+import type { PokerGameState, PokerPlayer } from '@weekend-casino/shared'
 import { CardImage } from './CardImage.js'
 
 function PlayerCard({ player, isActive }: { player: PokerPlayer; isActive: boolean }) {
@@ -54,7 +54,7 @@ export function GameView2D() {
     >
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Weekend Poker</h1>
+        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Weekend Casino</h1>
         <div style={{ textAlign: 'right', opacity: 0.7, fontSize: '0.9rem' }}>
           <div>Phase: <strong>{phase}</strong></div>
           <div>Hand #{handNumber}</div>

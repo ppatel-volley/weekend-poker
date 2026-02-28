@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { PokerPhase } from '@weekend-poker/shared'
+import { PokerPhase } from '@weekend-casino/shared'
 
 /* ------------------------------------------------------------------ */
 /*  Camera presets — named positions for each game moment              */

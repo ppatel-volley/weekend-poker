@@ -1,6 +1,6 @@
 import React from 'react'
 import { Text } from '@react-three/drei'
-import type { PokerPlayer } from '@weekend-poker/shared'
+import type { PokerPlayer } from '@weekend-casino/shared'
 import { SEAT_POSITIONS, ACTION_COLOURS, ACTION_LABELS } from '../constants/sceneConstants.js'
 
 // ── Types ────────────────────────────────────────────────────────

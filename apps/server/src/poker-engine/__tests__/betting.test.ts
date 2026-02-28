@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import type { PokerGameState, PokerPlayer } from '@weekend-poker/shared'
-import { PokerPhase, DEFAULT_BLIND_LEVEL, STARTING_STACK } from '@weekend-poker/shared'
+import type { PokerGameState, PokerPlayer } from '@weekend-casino/shared'
+import { PokerPhase, DEFAULT_BLIND_LEVEL, STARTING_STACK } from '@weekend-casino/shared'
 import { createInitialState } from '../../ruleset/index.js'
 import {
   getLegalActions,

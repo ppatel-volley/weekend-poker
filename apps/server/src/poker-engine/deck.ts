@@ -1,5 +1,5 @@
-import type { Card } from '@weekend-poker/shared'
-import { RANKS, SUITS } from '@weekend-poker/shared'
+import type { Card } from '@weekend-casino/shared'
+import { RANKS, SUITS } from '@weekend-casino/shared'
 
 /**
  * Creates a fresh, unshuffled 52-card deck.

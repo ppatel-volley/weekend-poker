@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { pokerRuleset, createInitialState } from '../ruleset/index.js'
-import type { PokerGameState } from '@weekend-poker/shared'
+import type { PokerGameState } from '@weekend-casino/shared'
 
 // ── Mock ThunkCtx ─────────────────────────────────────────────
 

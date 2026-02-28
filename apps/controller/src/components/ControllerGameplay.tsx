@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
-import type { PokerPhase, PlayerAction, PokerGameState, Card } from '@weekend-poker/shared'
-import { BETTING_PHASES } from '@weekend-poker/shared'
+import type { PokerPhase, PlayerAction, PokerGameState, Card } from '@weekend-casino/shared'
+import { BETTING_PHASES } from '@weekend-casino/shared'
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition.js'
 import { useDispatchThunk, useSessionMember, useStateSync } from '../hooks/useVGFHooks.js'
 

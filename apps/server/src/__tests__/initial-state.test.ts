@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PokerPhase, DEFAULT_BLIND_LEVEL } from '@weekend-poker/shared'
+import { PokerPhase, DEFAULT_BLIND_LEVEL } from '@weekend-casino/shared'
 import { createInitialState } from '../ruleset/index.js'
 
 describe('createInitialState', () => {

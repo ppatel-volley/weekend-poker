@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { PokerGameState, PokerPlayer, Card } from '@weekend-poker/shared'
-import { PokerPhase, STARTING_STACK } from '@weekend-poker/shared'
+import type { PokerGameState, PokerPlayer, Card } from '@weekend-casino/shared'
+import { PokerPhase, STARTING_STACK } from '@weekend-casino/shared'
 import { createInitialState, pokerRuleset } from '../ruleset/index.js'
 import { _resetAllServerState, setServerHandState } from '../poker-engine/index.js'
 

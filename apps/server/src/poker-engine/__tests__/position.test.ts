@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import type { PokerPlayer } from '@weekend-poker/shared'
-import { STARTING_STACK } from '@weekend-poker/shared'
+import type { PokerPlayer } from '@weekend-casino/shared'
+import { STARTING_STACK } from '@weekend-casino/shared'
 import {
   nextActivePlayer,
   findFirstActivePlayerLeftOfButton,

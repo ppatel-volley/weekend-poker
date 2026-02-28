@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PokerPhase } from '@weekend-poker/shared'
+import { PokerPhase } from '@weekend-casino/shared'
 import { pokerRuleset, createInitialState } from '../ruleset/index.js'
 
 describe('pokerRuleset', () => {

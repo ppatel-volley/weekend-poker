@@ -1,4 +1,4 @@
-import { PokerPhase } from '@weekend-poker/shared'
+import { PokerPhase } from '@weekend-casino/shared'
 import { usePhase } from '../hooks/useVGFHooks.js'
 import { ControllerLobby } from './ControllerLobby.js'
 import { ControllerGameplay } from './ControllerGameplay.js'

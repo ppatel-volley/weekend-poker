@@ -1,12 +1,12 @@
 {
-  "name": "weekend-poker",
+  "name": "weekend-casino",
   "private": true,
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "pnpm -r --parallel dev",
-    "dev:server": "pnpm --filter @weekend-poker/server dev",
-    "dev:display": "pnpm --filter @weekend-poker/display dev",
-    "dev:controller": "pnpm --filter @weekend-poker/controller dev",
+    "dev:server": "pnpm --filter @weekend-casino/server dev",
+    "dev:display": "pnpm --filter @weekend-casino/display dev",
+    "dev:controller": "pnpm --filter @weekend-casino/controller dev",
     "build": "pnpm -r build",
     "test": "vitest",
     "test:run": "vitest run",

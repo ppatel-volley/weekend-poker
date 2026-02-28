@@ -10,7 +10,7 @@
  * across server restarts. For a single-server weekend poker game this is
  * perfectly adequate.
  */
-import type { Card } from '@weekend-poker/shared'
+import type { Card } from '@weekend-casino/shared'
 
 export interface ServerHandState {
   deck: Card[]

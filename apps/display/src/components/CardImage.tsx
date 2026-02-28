@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Card } from '@weekend-poker/shared'
+import type { Card } from '@weekend-casino/shared'
 import { cardToMeshName } from '../utils/cardUtils.js'
 import { loadCardTextures } from '../utils/cardTextureExtractor.js'
 

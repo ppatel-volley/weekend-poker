@@ -6,8 +6,8 @@
  *
  * All functions are pure — no mutation, no side effects.
  */
-import type { PokerGameState, PokerPlayer, PlayerAction } from '@weekend-poker/shared'
-import { PokerPhase } from '@weekend-poker/shared'
+import type { PokerGameState, PokerPlayer, PlayerAction } from '@weekend-casino/shared'
+import { PokerPhase } from '@weekend-casino/shared'
 
 /** Actions that count as a player having voluntarily acted in a betting round. */
 const VOLUNTARY_ACTIONS = new Set<PlayerAction>([

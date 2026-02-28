@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { ACESFilmicToneMapping, PCFShadowMap, SRGBColorSpace } from 'three'
-import type { PokerPhase } from '@weekend-poker/shared'
+import type { PokerPhase } from '@weekend-casino/shared'
 import { PokerTable } from './PokerTable.js'
 import { Lighting } from './Lighting.js'
 import { CameraRig } from './CameraRig.js'

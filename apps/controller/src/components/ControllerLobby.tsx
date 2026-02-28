@@ -49,7 +49,7 @@ export function ControllerLobby() {
         background: '#1a1a2e',
       }}
     >
-      <h1 style={{ fontSize: '24px', marginBottom: '32px' }}>Weekend Poker</h1>
+      <h1 style={{ fontSize: '24px', marginBottom: '32px' }}>Weekend Casino</h1>
 
       <label
         htmlFor="player-name"

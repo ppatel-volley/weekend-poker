@@ -16,7 +16,7 @@ const SERVER_URL =
  * the same identity, but a new tab gets a fresh one.
  */
 function getOrCreateUserId(): string {
-  const key = 'weekend-poker-user-id'
+  const key = 'weekend-casino-user-id'
   let userId = sessionStorage.getItem(key)
   if (!userId) {
     userId = crypto.randomUUID()

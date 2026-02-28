@@ -57,7 +57,7 @@ export function App() {
   if (!sessionId) {
     return (
       <div style={{ color: 'white', textAlign: 'center', paddingTop: '40vh', fontFamily: 'system-ui, sans-serif' }}>
-        <h1>Weekend Poker</h1>
+        <h1>Weekend Casino</h1>
         <p>Creating session...</p>
       </div>
     )

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import type { Card } from '@weekend-poker/shared'
+import type { Card } from '@weekend-casino/shared'
 import {
   RANK_NAMES,
   SUIT_NAMES,

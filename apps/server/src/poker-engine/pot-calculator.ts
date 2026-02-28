@@ -9,7 +9,7 @@
  *
  * All functions are pure — no mutation, no side effects.
  */
-import type { PokerPlayer, SidePot } from '@weekend-poker/shared'
+import type { PokerPlayer, SidePot } from '@weekend-casino/shared'
 
 /** Statuses that disqualify a player from winning a pot. */
 const INELIGIBLE_STATUSES = new Set(['folded', 'sitting_out', 'busted'])

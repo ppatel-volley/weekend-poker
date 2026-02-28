@@ -1,5 +1,5 @@
-import type { Card } from '@weekend-poker/shared'
-import { rankToNumeric } from '@weekend-poker/shared'
+import type { Card } from '@weekend-casino/shared'
+import { rankToNumeric } from '@weekend-casino/shared'
 
 // ── Types ────────────────────────────────────────────────────────
 

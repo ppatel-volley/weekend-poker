@@ -1,6 +1,6 @@
 import { useEffect, useRef, useMemo } from 'react'
 import * as THREE from 'three'
-import type { Card } from '@weekend-poker/shared'
+import type { Card } from '@weekend-casino/shared'
 import { useStateSyncSelector } from '../hooks/useVGFHooks.js'
 import { useCardDeck } from './CardDeck.js'
 import { cardToMeshName } from '../utils/cardUtils.js'

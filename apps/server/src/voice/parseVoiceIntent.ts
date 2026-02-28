@@ -1,4 +1,4 @@
-import type { VoiceIntent, ParsedVoiceCommand } from '@weekend-poker/shared'
+import type { VoiceIntent, ParsedVoiceCommand } from '@weekend-casino/shared'
 
 // ── Word-to-number mapping for common poker amounts ──────────
 
