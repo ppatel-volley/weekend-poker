@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@volley/recognition-client-sdk": "^0.1.424",
-    "@volley/vgf": "^4.3.1",
+    "@volley/vgf": "^4.8.0",
     "@weekend-poker/shared": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
