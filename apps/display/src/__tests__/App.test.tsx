@@ -29,15 +29,30 @@ vi.mock('@react-three/postprocessing', () => ({
  * Full render tests require a mocked VGFProvider and transport,
  * so for the initial scaffold we verify that the component modules
  * export correctly and are callable functions.
- *
- * TODO: Add proper render tests with a mocked VGFProvider
- * TODO: Add React Three Fibre render tests using @react-three/test-renderer
  */
 describe('Display components', () => {
-  it('exports PhaseRouter as a function component', async () => {
-    const { PhaseRouter } = await import('../components/PhaseRouter.js')
-    expect(PhaseRouter).toBeDefined()
-    expect(typeof PhaseRouter).toBe('function')
+  it('exports SceneRouter as a function component', async () => {
+    const { SceneRouter } = await import('../components/scenes/SceneRouter.js')
+    expect(SceneRouter).toBeDefined()
+    expect(typeof SceneRouter).toBe('function')
+  })
+
+  it('exports LobbyScene as a function component', async () => {
+    const { LobbyScene } = await import('../components/scenes/LobbyScene.js')
+    expect(LobbyScene).toBeDefined()
+    expect(typeof LobbyScene).toBe('function')
+  })
+
+  it('exports HoldemScene as a function component', async () => {
+    const { HoldemScene } = await import('../components/scenes/HoldemScene.js')
+    expect(HoldemScene).toBeDefined()
+    expect(typeof HoldemScene).toBe('function')
+  })
+
+  it('exports CasinoHUD as a function component', async () => {
+    const { CasinoHUD } = await import('../components/hud/CasinoHUD.js')
+    expect(CasinoHUD).toBeDefined()
+    expect(typeof CasinoHUD).toBe('function')
   })
 
   it('exports PokerTable as a function component', async () => {
