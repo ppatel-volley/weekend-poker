@@ -69,6 +69,17 @@ function parseAmount(text: string): number | undefined {
 // ── Intent patterns in priority order ────────────────────────
 
 const INTENT_PATTERNS: Array<{ intent: VoiceIntent; pattern: RegExp }> = [
+  // TCP-specific intents (checked first — more specific than generic poker)
+  { intent: 'tcp_pair_plus', pattern: /\b(pair\s*plus|side\s*bet)\b/ },
+  { intent: 'tcp_ante', pattern: /\b(ante\s*(up)?)\b/ },
+  { intent: 'tcp_play', pattern: /\b(play|i'?m\s*in)\b/ },
+  { intent: 'tcp_fold', pattern: /\b(i'?m\s*out)\b/ },
+  { intent: 'tcp_confirm', pattern: /\bconfirm\b/ },
+  // 5-Card Draw intents
+  { intent: 'draw', pattern: /\b(draw\s*(cards?)?)\b/ },
+  { intent: 'stand_pat', pattern: /\b(stand\s*pat|keep\s*(all|them)?|stay)\b/ },
+  { intent: 'discard', pattern: /\b(discard)\b/ },
+  // Generic poker intents
   { intent: 'all_in', pattern: /\b(all\s*in|shove|push)\b/ },
   { intent: 'fold', pattern: /\b(fold|muck)\b/ },
   { intent: 'check', pattern: /\bcheck\b/ },
@@ -93,8 +104,16 @@ export function parseVoiceIntent(transcript: string): ParsedVoiceCommand {
     if (pattern.test(normalised)) {
       const entities: ParsedVoiceCommand['entities'] = {}
 
-      // Extract amount for raise/bet intents
-      if (intent === 'raise' || intent === 'bet') {
+      // Extract amount for raise/bet/ante intents
+      if (intent === 'raise' || intent === 'bet' || intent === 'tcp_ante') {
+        const amount = parseAmount(normalised)
+        if (amount !== undefined) {
+          entities.amount = amount
+        }
+      }
+
+      // Extract discard count for draw intents (e.g. "discard 3")
+      if (intent === 'discard' || intent === 'draw') {
         const amount = parseAmount(normalised)
         if (amount !== undefined) {
           entities.amount = amount

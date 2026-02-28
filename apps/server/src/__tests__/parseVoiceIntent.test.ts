@@ -189,4 +189,58 @@ describe('parseVoiceIntent', () => {
     const result = parseVoiceIntent(original)
     expect(result.rawTranscript).toBe(original)
   })
+
+  // ── 5-Card Draw intents ──────────────────────────────────────
+
+  it('should parse "draw" as draw intent', () => {
+    const result = parseVoiceIntent('draw')
+    expect(result.intent).toBe('draw')
+  })
+
+  it('should parse "draw cards" as draw intent', () => {
+    const result = parseVoiceIntent('draw cards')
+    expect(result.intent).toBe('draw')
+  })
+
+  it('should parse "draw 3" with count', () => {
+    const result = parseVoiceIntent('draw 3')
+    expect(result.intent).toBe('draw')
+    expect(result.entities.amount).toBe(3)
+  })
+
+  it('should parse "stand pat" as stand_pat intent', () => {
+    const result = parseVoiceIntent('stand pat')
+    expect(result.intent).toBe('stand_pat')
+  })
+
+  it('should parse "keep all" as stand_pat intent', () => {
+    const result = parseVoiceIntent('keep all')
+    expect(result.intent).toBe('stand_pat')
+  })
+
+  it('should parse "keep them" as stand_pat intent', () => {
+    const result = parseVoiceIntent('keep them')
+    expect(result.intent).toBe('stand_pat')
+  })
+
+  it('should parse "keep" as stand_pat intent', () => {
+    const result = parseVoiceIntent('keep')
+    expect(result.intent).toBe('stand_pat')
+  })
+
+  it('should parse "stay" as stand_pat intent', () => {
+    const result = parseVoiceIntent('stay')
+    expect(result.intent).toBe('stand_pat')
+  })
+
+  it('should parse "discard" as discard intent', () => {
+    const result = parseVoiceIntent('discard')
+    expect(result.intent).toBe('discard')
+  })
+
+  it('should parse "discard 2" with count', () => {
+    const result = parseVoiceIntent('discard 2')
+    expect(result.intent).toBe('discard')
+    expect(result.entities.amount).toBe(2)
+  })
 })

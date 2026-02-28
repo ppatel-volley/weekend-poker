@@ -4,7 +4,7 @@ import type { CasinoPlayer } from './casino-player.js'
 import type { Wallet } from './casino-wallet.js'
 import type { SessionStats } from './casino-session-stats.js'
 import type { VideoPlayback, BackgroundVideo } from './casino-video.js'
-import type { BlindLevel, TTSMessage } from './game-state.js'
+import type { BlindLevel, TTSMessage, SidePot } from './game-state.js'
 
 /**
  * Root Casino Game State — Multi-game platform unified state (D-002, D-001).
@@ -136,7 +136,26 @@ export interface HoldemGameState {
 /** v1 5-Card Draw game state. Defined in TDD-backend.md Section 5. */
 export interface FiveCardDrawGameState {
   [key: string]: unknown
-  // TBD: Will include players, hole cards, draw phase, discards, pots, etc.
+  /** Player hand cards (playerId -> Card[]) — 5 cards each. */
+  hands: Record<string, Card[]>
+  /** Per-player discard selections (playerId -> card indices 0-4 to discard). */
+  discardSelections: Record<string, number[]>
+  /** Replacement cards dealt after discard (playerId -> Card[]). */
+  replacementCards: Record<string, Card[]>
+  /** Players who have confirmed their discard selection. */
+  confirmedDiscards: Record<string, boolean>
+  /** Whether the draw (discard+replace) phase is complete. */
+  drawComplete: boolean
+  /** Current pot total. */
+  pot: number
+  /** Side pots for all-in scenarios. */
+  sidePots: SidePot[]
+  /** Current highest bet this round. */
+  currentBet: number
+  /** Minimum raise increment. */
+  minRaiseIncrement: number
+  /** Index of the currently active player. */
+  activePlayerIndex: number
 }
 
 /** v1 Blackjack Classic game state. Defined in TDD-backend.md Section 6. */
@@ -157,10 +176,90 @@ export interface RouletteGameState {
   // TBD: Will include bets, wheel result, payout, etc.
 }
 
+/**
+ * Three Card Poker hand rank — 3-card poker uses DIFFERENT rankings from 5-card.
+ * CRITICAL: Straights rank ABOVE flushes (48 straight combos vs 1,096 flush combos).
+ */
+export type TcpHandRank =
+  | 'straight_flush'
+  | 'three_of_a_kind'
+  | 'straight'
+  | 'flush'
+  | 'pair'
+  | 'high_card'
+
+/** Per-player hand state in TCP. */
+export interface TcpPlayerHand {
+  playerId: string
+  /** Player's 3 cards (sent to controller, hidden on TV until showdown) */
+  cards: Card[]
+  /** Ante bet amount */
+  anteBet: number
+  /** Play bet amount (= anteBet if playing, 0 if folded) */
+  playBet: number
+  /** Pair Plus side bet amount (0 if not placed) */
+  pairPlusBet: number
+  /** Decision: play, fold, or undecided */
+  decision: 'undecided' | 'play' | 'fold'
+  /** Evaluated hand rank */
+  handRank: TcpHandRank | null
+  /** Numeric strength for comparison (higher = better) */
+  handStrength: number
+  /** Ante bonus earned (0 if none) */
+  anteBonus: number
+  /** Pair Plus payout (0 if lost or not placed) */
+  pairPlusPayout: number
+  /** Total payout for the round */
+  totalPayout: number
+  /** Net result (total payout minus total wagered) */
+  roundResult: number
+}
+
+/** Dealer's hand state in TCP. */
+export interface TcpDealerHand {
+  /** Dealer's cards (empty/hidden until reveal phase) */
+  cards: Card[]
+  /** Whether cards have been revealed on display */
+  revealed: boolean
+  /** Evaluated hand rank */
+  handRank: TcpHandRank | null
+  /** Numeric strength for comparison */
+  handStrength: number
+}
+
+/** TCP table configuration. */
+export interface TcpConfig {
+  minAnte: number
+  maxAnte: number
+  maxPairPlus: number
+}
+
 /** v2.0 Three Card Poker game state. Defined in TDD-backend.md Section 9. */
 export interface ThreeCardPokerGameState {
   [key: string]: unknown
-  // TBD: Will include players, ante/play bets, hands, etc.
+
+  /** Per-player hand state */
+  playerHands: TcpPlayerHand[]
+
+  /** Dealer's hand (hidden until reveal) */
+  dealerHand: TcpDealerHand
+
+  /** Whether the dealer qualifies (Queen-high or better) */
+  dealerQualifies: boolean | null
+
+  /** Phase transition flags (C1 pattern) */
+  allAntesPlaced: boolean
+  dealComplete: boolean
+  allDecisionsMade: boolean
+  dealerRevealed: boolean
+  payoutComplete: boolean
+  roundCompleteReady: boolean
+
+  /** Round number (for stats) */
+  roundNumber: number
+
+  /** Configuration */
+  config: TcpConfig
 }
 
 /** v2.1 Craps game state. Defined in TDD-backend.md Section 10. */

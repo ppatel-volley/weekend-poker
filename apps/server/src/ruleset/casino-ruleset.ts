@@ -19,6 +19,47 @@ import type { CasinoGameState, CasinoPlayer, Card } from '@weekend-casino/shared
 import { CasinoPhase, MAX_PLAYERS, STARTING_WALLET_BALANCE, STARTING_STACK, BLIND_LEVELS } from '@weekend-casino/shared'
 import { createInitialCasinoState, casinoReducers, casinoThunks } from './casino-state.js'
 import { lobbyPhase, gameSelectPhase } from './casino-phases.js'
+import { tcpReducers } from './tcp-reducers.js'
+import { tcpThunks } from './tcp-thunks.js'
+import {
+  tcpPlaceBetsPhase,
+  tcpDealCardsPhase,
+  tcpPlayerDecisionsPhase,
+  tcpDealerRevealPhase,
+  tcpSettlementPhase,
+  tcpRoundCompletePhase,
+} from './tcp-phases.js'
+import {
+  drawResetHand,
+  drawSetHands,
+  drawSelectDiscard,
+  drawConfirmDiscard,
+  drawReplaceCards,
+  drawMarkComplete,
+  drawSetActivePlayer,
+  drawUpdatePlayerBet,
+  drawFoldPlayer,
+  drawUpdatePot,
+  drawAwardPot,
+  drawSetCurrentBet,
+  drawSetMinRaiseIncrement,
+} from './draw-reducers.js'
+import {
+  drawProcessAction,
+  drawProcessDiscard,
+  drawExecuteReplace,
+  drawEvaluateAndDistribute,
+} from './draw-thunks.js'
+import {
+  drawPostingBlindsPhase,
+  drawDealingPhase,
+  drawBetting1Phase,
+  drawDrawPhasePhase,
+  drawBetting2Phase,
+  drawShowdownPhase,
+  drawPotDistributionPhase,
+  drawHandCompletePhase,
+} from './draw-phases.js'
 import {
   calculateSidePots,
   rotateDealerButton as rotateDealerButtonFn,
@@ -40,6 +81,10 @@ import {
 } from '../poker-engine/index.js'
 import type { HandRank } from '../poker-engine/index.js'
 import { parseVoiceIntent } from '../voice/parseVoiceIntent.js'
+import { BotManager } from '../bot-engine/index.js'
+
+// ── Bot Manager (module-level singleton per server process) ─────
+const botManager = new BotManager()
 
 // ── Type aliases for brevity ──────────────────────────────────────
 
@@ -373,18 +418,47 @@ const holdemThunks = {
   }) as any,
 
   botDecision: (async (ctx: ThunkCtx, botId: string) => {
-    // TODO: Implement bot decision logic
-    // This will be enhanced with Claude AI in future phases
     const state = ctx.getState()
-    const legalActions = getLegalActions(state as any, botId)
+    const bot = state.players.find(p => p.id === botId)
+    if (!bot || !bot.isBot) return
 
+    const legalActions = getLegalActions(state as any, botId)
     if (legalActions.length === 0) return
 
-    // Simple random action for now
-    const action = legalActions[Math.floor(Math.random() * legalActions.length)]!
-    const amount = action === 'bet' || action === 'raise' ? state.currentBet + state.minRaiseIncrement : undefined
+    // Ensure bot is registered in the manager
+    if (!botManager.isBot(botId)) {
+      const difficulty = bot.botConfig?.difficulty ?? 'medium'
+      const personalityId = bot.botConfig?.personalityId ?? 'vincent'
+      botManager.addBot(bot.seatIndex, difficulty as any, personalityId)
+    }
 
-    await ctx.dispatchThunk('processPlayerAction', botId, action, amount)
+    const holeCards = state.holeCards?.[botId]
+      ? (Array.isArray(state.holeCards[botId]) ? state.holeCards[botId] as any[] : [])
+      : []
+
+    const decision = await botManager.requestBotAction({
+      gameType: (state.selectedGame ?? 'holdem') as any,
+      botPlayerId: botId,
+      stack: bot.stack,
+      bet: bot.bet,
+      currentBet: state.currentBet,
+      minRaiseIncrement: state.minRaiseIncrement,
+      pot: state['pot'] as number ?? 0,
+      communityCards: (state['communityCards'] as any[]) ?? [],
+      holeCards,
+      legalActions,
+      activePlayers: state.players.filter(p => p.status === 'active' || p.status === 'all_in').length,
+      positionFromDealer: (state.players.indexOf(bot) - state.dealerIndex + state.players.length) % state.players.length,
+      bigBlind: state.blindLevel.bigBlind,
+      handNumber: state.handNumber,
+    })
+
+    // Set dialogue as dealer message if present
+    if (decision.dialogue) {
+      ctx.dispatch('setDealerMessage', `${bot.name}: ${decision.dialogue}`)
+    }
+
+    await ctx.dispatchThunk('processPlayerAction', botId, decision.action, decision.amount)
   }) as any,
 
   sitOutPlayer: (async (ctx: ThunkCtx, playerId: string) => {
@@ -828,6 +902,24 @@ const phases = {
   [CasinoPhase.Showdown]: showdownPhase,
   [CasinoPhase.PotDistribution]: potDistributionPhase,
   [CasinoPhase.HandComplete]: handCompletePhase,
+
+  // 5-Card Draw phases (DRAW_ prefix per D-003)
+  [CasinoPhase.DrawPostingBlinds]: drawPostingBlindsPhase,
+  [CasinoPhase.DrawDealing]: drawDealingPhase,
+  [CasinoPhase.DrawBetting1]: drawBetting1Phase,
+  [CasinoPhase.DrawDrawPhase]: drawDrawPhasePhase,
+  [CasinoPhase.DrawBetting2]: drawBetting2Phase,
+  [CasinoPhase.DrawShowdown]: drawShowdownPhase,
+  [CasinoPhase.DrawPotDistribution]: drawPotDistributionPhase,
+  [CasinoPhase.DrawHandComplete]: drawHandCompletePhase,
+
+  // Three Card Poker phases (TCP_ prefix per D-003)
+  [CasinoPhase.TcpPlaceBets]: tcpPlaceBetsPhase,
+  [CasinoPhase.TcpDealCards]: tcpDealCardsPhase,
+  [CasinoPhase.TcpPlayerDecisions]: tcpPlayerDecisionsPhase,
+  [CasinoPhase.TcpDealerReveal]: tcpDealerRevealPhase,
+  [CasinoPhase.TcpSettlement]: tcpSettlementPhase,
+  [CasinoPhase.TcpRoundComplete]: tcpRoundCompletePhase,
 }
 
 // ── Connection handlers ────────────────────────────────────────────
@@ -900,10 +992,31 @@ export const casinoRuleset = {
   reducers: {
     ...casinoReducers,
     ...holdemReducers,
+    ...tcpReducers,
+    // 5-Card Draw reducers
+    drawResetHand,
+    drawSetHands,
+    drawSelectDiscard,
+    drawConfirmDiscard,
+    drawReplaceCards,
+    drawMarkComplete,
+    drawSetActivePlayer,
+    drawUpdatePlayerBet,
+    drawFoldPlayer,
+    drawUpdatePot,
+    drawAwardPot,
+    drawSetCurrentBet,
+    drawSetMinRaiseIncrement,
   },
   thunks: {
     ...casinoThunks,
     ...holdemThunks,
+    ...tcpThunks,
+    // 5-Card Draw thunks
+    drawProcessAction,
+    drawProcessDiscard,
+    drawExecuteReplace,
+    drawEvaluateAndDistribute,
   },
   phases,
   actions: {},

@@ -16,5 +16,10 @@ export {
   BLIND_LEVELS,
   DEFAULT_BLIND_LEVEL,
   DEALER_CHARACTERS,
+  TCP_MIN_ANTE,
+  TCP_MAX_ANTE,
+  TCP_MAX_PAIR_PLUS,
+  TCP_BET_TIMEOUT_MS,
+  TCP_DECISION_TIMEOUT_MS,
 } from './constants/poker.js'
 export type { DealerCharacter } from './constants/poker.js'
