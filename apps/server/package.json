@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@types/cors": "^2.8.19",
-    "@volley/vgf": "^4.3.1",
+    "@volley/vgf": "^4.8.0",
     "@weekend-poker/shared": "workspace:*",
     "cors": "^2.8.6",
     "express": "^4.21.2",
