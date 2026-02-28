@@ -24,7 +24,19 @@ When documents conflict, defer to whichever is higher in this list:
 4. **`docs/CASINO-PRD.md`** — product requirements authority
 5. **Everything else** — reference / proposal / historical
 
-All six review documents (`REVIEW-*.md`, `FINAL-REVIEW-*.md`) are marked **Superseded** and retained for historical reference only.
+Legacy review artifacts may exist in archived or research locations and are non-authoritative unless explicitly referenced by this register.
+
+### Authority Matrix
+
+| Document | Authoritative For | NOT Authoritative For | On Conflict |
+|----------|------------------|----------------------|-------------|
+| `CANONICAL-DECISIONS.md` | All registered decisions (D-001–D-019); governance hierarchy | Implementation detail; UX copy | Wins against everything |
+| `CASINO-V2-ROADMAP-FINAL.md` | Release scope, timing, phasing; feature-to-release assignment | Game mechanics; technical architecture | Wins against all below |
+| `CASINO-GAME-DESIGN.md` | Game rules, state schemas, phase definitions, UI specs | Release timing; product priorities | Wins against PRD |
+| `CASINO-PRD.md` | v1 product requirements, user stories, acceptance criteria | Release timing (defers to roadmap) | Baseline; defers to all above |
+| `CASINO-V2-PRD.md` | v2 product requirements, feature specs, acceptance criteria | Release timing (defers to roadmap) | Defers to roadmap + canonical |
+| `CASINO-TDD-*.md` | Technical architecture, implementation design, interfaces | Product scope; release timing | Conforms to all above |
+| Legacy `PRD.md`, `TDD-*.md` | Nothing (superseded) | Everything | Do not cite as authority |
 
 ---
 
@@ -238,16 +250,16 @@ All six review documents (`REVIEW-*.md`, `FINAL-REVIEW-*.md`) are marked **Super
 
 ---
 
-### D-017: DAU Target — v2 = 200-500K, 1M = v3
+### D-017: DAU Target — Phased v2 Targets, 1M = v3
 
 | Field | Value |
 |-------|-------|
 | **ID** | D-017 |
-| **Date** | 2026-02-27 |
-| **Decision** | The v2 DAU target is 200-500K. The 1M DAU target moves to v3, contingent on online multiplayer breaking the TV-first co-location ceiling. |
+| **Date** | 2026-02-28 (updated) |
+| **Decision** | v2 DAU targets are phased: **50-100K DAU at 6 months post-v2.0** (realistic milestone), scaling to **200-500K DAU across the full v2 lifecycle** (v2.0 through v2.2+ with retention systems active). The **1M DAU** target moves to **v3**, contingent on online multiplayer breaking the TV-first co-location ceiling. |
 | **Owner** | PM (consolidated in `CASINO-V2-ROADMAP-FINAL.md`) |
 | **Applies to** | All docs referencing DAU targets |
-| **Supersedes** | Any language claiming 1M DAU is a v1 or v2 target. 1M is only referenced as a v3 aspirational target. |
+| **Supersedes** | Any language citing a single unphased v2 DAU number. The phased interpretation (50-100K milestone → 200-500K lifecycle) is canonical. 1M is only referenced as a v3 aspirational target. |
 
 ---
 

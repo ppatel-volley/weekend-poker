@@ -1,9 +1,13 @@
+> **⚠️ Status: SUPERSEDED — Historical Reference Only**
+> **Superseded By:** `CASINO-TDD-architecture.md` (full casino architecture TDD)
+> This document is retained for historical context. It is NOT authoritative for any current implementation decisions. ADRs 001-008 defined here remain valid as referenced by the superseding document.
+
 # Weekend Poker — Technical Design Document: Architecture Decisions, Cross-Cutting Concerns & Integration
 
 > **Version:** 1.0
 > **Date:** 2026-02-09
 > **Author:** Principal Software Engineer
-> **Status:** Draft for Review
+> **Status:** Superseded (historical reference only)
 
 ---
 
