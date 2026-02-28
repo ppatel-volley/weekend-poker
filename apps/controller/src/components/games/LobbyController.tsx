@@ -3,7 +3,7 @@ import type { CasinoGame, CasinoGameState } from '@weekend-casino/shared'
 import { CASINO_GAME_LABELS, CASINO_GAME_DESCRIPTIONS, V1_GAMES } from '@weekend-casino/shared'
 import {
   useClientActions,
-  useSessionMember,
+  useSessionMemberSafe,
   useDispatch,
   useStateSync,
 } from '../../hooks/useVGFHooks.js'
@@ -18,9 +18,9 @@ export function LobbyController() {
   const [name, setName] = useState('')
   const { toggleReady, updateState } = useClientActions()
   const dispatch = useDispatch()
-  const member = useSessionMember()
+  const member = useSessionMemberSafe()
   const state = useStateSync() as CasinoGameState | null
-  const isReady = member.isReady
+  const isReady = member?.isReady ?? false
   const selectedGame = state?.selectedGame ?? null
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -33,7 +33,7 @@ export function LobbyController() {
     toggleReady()
     if (name.trim()) {
       ;(dispatch as (name: string, ...args: unknown[]) => void)(
-        'updatePlayerName', member.sessionMemberId, name.trim(),
+        'updatePlayerName', member?.sessionMemberId, name.trim(),
       )
     }
     ;(dispatch as (name: string, ...args: unknown[]) => void)(

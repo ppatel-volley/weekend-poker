@@ -26,8 +26,20 @@ export const usePhase = hooks.usePhase
 /** Lobby actions for controller clients (toggle ready, update state). */
 export { useClientActions }
 
-/** Current client's session member. */
+/** Current client's session member (throws if not yet registered). */
 export { useSessionMember }
+
+/**
+ * Safe version of useSessionMember — returns null instead of throwing
+ * when the member is not yet registered during the VGF handshake.
+ */
+export function useSessionMemberSafe() {
+  try {
+    return useSessionMember()
+  } catch {
+    return null
+  }
+}
 
 /** All session members. */
 export { useSessionMembers }

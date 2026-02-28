@@ -5,7 +5,7 @@ import { WalletDisplay } from '../components/shared/WalletDisplay.js'
 const mockState = vi.fn<() => Record<string, unknown> | null>()
 
 vi.mock('../hooks/useVGFHooks.js', () => ({
-  useSessionMember: () => ({ sessionMemberId: 'player-1' }),
+  useSessionMemberSafe: () => ({ sessionMemberId: 'player-1' }),
   useStateSync: () => mockState(),
 }))
 

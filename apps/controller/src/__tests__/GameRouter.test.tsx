@@ -10,6 +10,7 @@ vi.mock('../hooks/useVGFHooks.js', () => ({
   usePhase: () => mockPhase(),
   useStateSync: () => mockState(),
   useSessionMember: () => ({ sessionMemberId: 'p1', displayName: 'Test', isReady: false }),
+  useSessionMemberSafe: () => ({ sessionMemberId: 'p1', displayName: 'Test', isReady: false }),
   useClientActions: () => ({ toggleReady: vi.fn(), updateState: vi.fn() }),
   useDispatch: () => vi.fn(),
   useDispatchThunk: () => vi.fn(),

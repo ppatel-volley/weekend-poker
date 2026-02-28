@@ -1,12 +1,12 @@
 import type { CasinoGameState } from '@weekend-casino/shared'
 import { getWalletBalance } from '@weekend-casino/shared'
-import { useSessionMember, useStateSync } from '../../hooks/useVGFHooks.js'
+import { useSessionMemberSafe, useStateSync } from '../../hooks/useVGFHooks.js'
 
 /**
  * Displays the player's chip balance from the shared wallet state.
  */
 export function WalletDisplay() {
-  const member = useSessionMember()
+  const member = useSessionMemberSafe()
   const state = useStateSync() as CasinoGameState | null
   const playerId = member?.sessionMemberId ?? ''
   const balance = state?.wallet ? getWalletBalance(state.wallet, playerId) : 0

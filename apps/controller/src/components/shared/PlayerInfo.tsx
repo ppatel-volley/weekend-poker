@@ -1,11 +1,11 @@
-import { useSessionMember } from '../../hooks/useVGFHooks.js'
+import { useSessionMemberSafe } from '../../hooks/useVGFHooks.js'
 
 /**
  * Player name, avatar placeholder, and connection status display.
  */
 export function PlayerInfo() {
-  const member = useSessionMember()
-  const name = member?.displayName ?? 'Player'
+  const member = useSessionMemberSafe()
+  const name = (member?.state?.displayName as string) || 'Player'
   const isConnected = !!member
 
   return (
