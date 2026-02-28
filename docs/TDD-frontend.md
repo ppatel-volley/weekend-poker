@@ -7,7 +7,7 @@
 > **Version:** 1.0
 > **Date:** 2026-02-09
 > **Author:** Staff SWE 2 (Frontend / 3D Rendering)
-> **Status:** Draft for Review
+> **Status:** Superseded (historical reference only)
 
 ---
 

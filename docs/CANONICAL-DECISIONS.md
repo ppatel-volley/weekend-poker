@@ -24,7 +24,7 @@ When documents conflict, defer to whichever is higher in this list:
 4. **`docs/CASINO-PRD.md`** — product requirements authority
 5. **Everything else** — reference / proposal / historical
 
-All six review documents (`REVIEW-*.md`, `FINAL-REVIEW-*.md`) are marked **Superseded** and retained for historical reference only.
+Legacy review artifacts may exist in archived or research locations and are non-authoritative unless explicitly referenced by this register.
 
 ### Authority Matrix
 
