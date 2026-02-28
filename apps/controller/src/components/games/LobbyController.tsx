@@ -8,6 +8,15 @@ import {
   useStateSync,
 } from '../../hooks/useVGFHooks.js'
 
+/** Suit icons to decorate game cards. */
+const gameCardSuits: Record<string, string> = {
+  HOLDEM: '♠',
+  FIVE_CARD_DRAW: '♦',
+  BLACKJACK_CLASSIC: '♣',
+  BLACKJACK_COMPETITIVE: '♥',
+  THREE_CARD_POKER: '♠',
+}
+
 /**
  * Lobby controller — game selection + ready-up UI.
  *
@@ -53,19 +62,66 @@ export function LobbyController() {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        padding: '24px',
+        padding: '20px 20px 40px',
         color: 'white',
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: "'Georgia', 'Garamond', 'Times New Roman', serif",
         minHeight: '100vh',
-        background: '#1a1a2e',
+        background:
+          'radial-gradient(ellipse at 50% 0%, rgba(0, 60, 40, 0.3) 0%, transparent 60%), ' +
+          'linear-gradient(180deg, #0d1a2a 0%, #0a0f18 50%, #060a10 100%)',
       }}
     >
-      <h1 style={{ fontSize: '24px', marginBottom: '24px' }}>Weekend Casino</h1>
+      {/* Keyframe animations */}
+      <style>{`
+        @keyframes readyBtnPulse {
+          0%, 100% { box-shadow: 0 4px 20px rgba(74, 222, 128, 0.3); }
+          50% { box-shadow: 0 4px 30px rgba(74, 222, 128, 0.6), 0 0 50px rgba(74, 222, 128, 0.15); }
+        }
+        @keyframes inputFocusGlow {
+          0%, 100% { box-shadow: 0 0 8px rgba(212, 175, 55, 0.3); }
+          50% { box-shadow: 0 0 16px rgba(212, 175, 55, 0.5); }
+        }
+        @keyframes selectedCardShine {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
+      `}</style>
+
+      {/* Logo */}
+      <img
+        src="/weekend-casino-logo.png"
+        alt="Weekend Casino"
+        style={{
+          width: 'min(200px, 55vw)',
+          height: 'auto',
+          marginBottom: '6px',
+          filter: 'drop-shadow(0 2px 12px rgba(212, 175, 55, 0.4))',
+        }}
+      />
+
+      {/* Gold divider */}
+      <div
+        style={{
+          width: '120px',
+          height: '1px',
+          background: 'linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.5), transparent)',
+          marginBottom: '20px',
+        }}
+      />
 
       {/* Name input */}
       <label
         htmlFor="player-name"
-        style={{ alignSelf: 'flex-start', marginBottom: '8px', fontSize: '14px' }}
+        style={{
+          alignSelf: 'flex-start',
+          marginBottom: '6px',
+          fontSize: '11px',
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          color: 'rgba(212, 175, 55, 0.6)',
+          fontWeight: 400,
+          fontFamily: 'system-ui, sans-serif',
+        }}
       >
         Your Name
       </label>
@@ -78,18 +134,42 @@ export function LobbyController() {
         maxLength={20}
         style={{
           width: '100%',
-          padding: '14px',
-          fontSize: '18px',
-          borderRadius: '8px',
-          border: '1px solid #444',
-          background: '#2a2a3e',
+          padding: '14px 16px',
+          fontSize: '16px',
+          borderRadius: '12px',
+          border: '1px solid rgba(212, 175, 55, 0.25)',
+          background: 'linear-gradient(135deg, rgba(20, 30, 50, 0.9) 0%, rgba(15, 22, 40, 0.9) 100%)',
           color: 'white',
           marginBottom: '24px',
+          outline: 'none',
+          transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
+          fontFamily: 'system-ui, sans-serif',
+          boxSizing: 'border-box',
+          letterSpacing: '0.02em',
+        }}
+        onFocus={(e) => {
+          e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.6)'
+          e.currentTarget.style.boxShadow = '0 0 12px rgba(212, 175, 55, 0.3)'
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.25)'
+          e.currentTarget.style.boxShadow = 'none'
         }}
       />
 
       {/* Game selection grid */}
-      <p style={{ alignSelf: 'flex-start', fontSize: '14px', marginBottom: '12px' }}>
+      <p
+        style={{
+          alignSelf: 'flex-start',
+          fontSize: '11px',
+          marginBottom: '10px',
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          color: 'rgba(212, 175, 55, 0.6)',
+          fontWeight: 400,
+          fontFamily: 'system-ui, sans-serif',
+        }}
+      >
         Choose a game
       </p>
       <div
@@ -101,51 +181,127 @@ export function LobbyController() {
           marginBottom: '24px',
         }}
       >
-        {V1_GAMES.map((game) => (
-          <button
-            key={game}
-            onClick={() => handleSelectGame(game)}
-            style={{
-              padding: '14px 8px',
-              fontSize: '14px',
-              fontWeight: 600,
-              borderRadius: '10px',
-              border: selectedGame === game ? '2px solid #4ade80' : '1px solid #444',
-              background: selectedGame === game ? 'rgba(74, 222, 128, 0.15)' : '#2a2a3e',
-              color: 'white',
-              cursor: 'pointer',
-            }}
-          >
-            <span>{CASINO_GAME_LABELS[game]}</span>
-            <span style={{ fontSize: '11px', fontWeight: 400, color: '#aaa', display: 'block', marginTop: '4px' }}>
-              {CASINO_GAME_DESCRIPTIONS[game]}
-            </span>
-          </button>
-        ))}
+        {V1_GAMES.map((game) => {
+          const isSelected = selectedGame === game
+          const suitChar = gameCardSuits[game] ?? '♠'
+          const isRedSuit = suitChar === '♥' || suitChar === '♦'
+
+          return (
+            <button
+              key={game}
+              onClick={() => handleSelectGame(game)}
+              style={{
+                position: 'relative',
+                padding: '16px 10px 14px',
+                fontSize: '13px',
+                fontWeight: 600,
+                borderRadius: '14px',
+                border: isSelected
+                  ? '2px solid rgba(74, 222, 128, 0.6)'
+                  : '1px solid rgba(255, 255, 255, 0.1)',
+                background: isSelected
+                  ? 'linear-gradient(145deg, rgba(74, 222, 128, 0.15) 0%, rgba(74, 222, 128, 0.05) 100%)'
+                  : 'linear-gradient(145deg, rgba(30, 40, 60, 0.8) 0%, rgba(20, 28, 45, 0.8) 100%)',
+                color: 'white',
+                cursor: 'pointer',
+                overflow: 'hidden',
+                transition: 'all 0.25s ease',
+                boxShadow: isSelected
+                  ? '0 4px 16px rgba(74, 222, 128, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05)'
+                  : '0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.03)',
+                fontFamily: 'system-ui, sans-serif',
+                textAlign: 'center',
+              }}
+            >
+              {/* Decorative suit watermark */}
+              <span
+                style={{
+                  position: 'absolute',
+                  top: '4px',
+                  right: '8px',
+                  fontSize: '28px',
+                  opacity: isSelected ? 0.2 : 0.07,
+                  color: isRedSuit ? '#b83030' : '#ffffff',
+                  pointerEvents: 'none',
+                  transition: 'opacity 0.25s ease',
+                  lineHeight: 1,
+                }}
+              >
+                {suitChar}
+              </span>
+              <span style={{ position: 'relative', zIndex: 1 }}>
+                {CASINO_GAME_LABELS[game]}
+              </span>
+              <span
+                style={{
+                  position: 'relative',
+                  zIndex: 1,
+                  fontSize: '10px',
+                  fontWeight: 400,
+                  color: isSelected ? 'rgba(74, 222, 128, 0.7)' : 'rgba(255, 255, 255, 0.4)',
+                  display: 'block',
+                  marginTop: '5px',
+                  transition: 'color 0.25s ease',
+                }}
+              >
+                {CASINO_GAME_DESCRIPTIONS[game]}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
-      <p style={{ color: '#888', marginBottom: '24px' }}>
+      <p
+        style={{
+          color: 'rgba(255, 255, 255, 0.25)',
+          marginBottom: '20px',
+          fontSize: '12px',
+          fontStyle: 'italic',
+          fontFamily: 'system-ui, sans-serif',
+        }}
+      >
         Avatar selection coming soon
       </p>
 
+      {/* Ready button — prominent with pulse when not yet ready */}
       <button
         style={{
           width: '100%',
           padding: '18px',
-          fontSize: '20px',
+          fontSize: '18px',
           fontWeight: 'bold',
-          borderRadius: '12px',
-          border: 'none',
+          borderRadius: '14px',
+          border: isReady
+            ? '2px solid rgba(74, 222, 128, 0.4)'
+            : '2px solid rgba(74, 222, 128, 0.3)',
           cursor: 'pointer',
-          background: isReady ? '#2E7D32' : '#4CAF50',
+          background: isReady
+            ? 'linear-gradient(135deg, #1a5c2a 0%, #1e4d28 100%)'
+            : 'linear-gradient(135deg, #2d8a42 0%, #25733a 50%, #1f6030 100%)',
           color: 'white',
+          letterSpacing: '0.15em',
+          textTransform: 'uppercase',
+          animation: isReady ? 'none' : 'readyBtnPulse 2.5s ease-in-out infinite',
+          boxShadow: isReady
+            ? '0 2px 10px rgba(74, 222, 128, 0.15)'
+            : '0 4px 20px rgba(74, 222, 128, 0.3)',
+          transition: 'all 0.3s ease',
+          fontFamily: 'system-ui, sans-serif',
         }}
         onClick={handleReady}
       >
-        {isReady ? 'READY \u2713' : 'READY'}
+        {isReady ? 'READY ✓' : 'READY'}
       </button>
 
-      <p style={{ marginTop: '24px', color: '#888' }}>
+      <p
+        style={{
+          marginTop: '20px',
+          color: 'rgba(255, 255, 255, 0.35)',
+          fontSize: '13px',
+          fontFamily: 'system-ui, sans-serif',
+          letterSpacing: '0.03em',
+        }}
+      >
         {isReady ? 'Waiting for host to start...' : 'Enter your name and tap READY'}
       </p>
     </div>

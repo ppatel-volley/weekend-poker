@@ -89,7 +89,7 @@ describe('GameRouter', () => {
     mockState.mockReturnValue(null)
 
     render(<GameRouter />)
-    expect(screen.getByText('Weekend Casino')).toBeDefined()
+    expect(screen.getByAltText('Weekend Casino')).toBeDefined()
   })
 
   it('renders LobbyController for GAME_SELECT phase', () => {
@@ -97,7 +97,7 @@ describe('GameRouter', () => {
     mockState.mockReturnValue(null)
 
     render(<GameRouter />)
-    expect(screen.getByText('Weekend Casino')).toBeDefined()
+    expect(screen.getByAltText('Weekend Casino')).toBeDefined()
   })
 
   it('renders HoldemController for Hold\'em gameplay phase', () => {
