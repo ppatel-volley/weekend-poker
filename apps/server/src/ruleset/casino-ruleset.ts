@@ -871,6 +871,7 @@ const handCompletePhase = makePhase({
   endIf: () => true,
   next: (ctx: any) => {
     const state: CasinoGameState = ctx.session.state
+    if (state.gameChangeRequested) return CasinoPhase.GameSelect
     const playablePlayers = state.players.filter(
       p => p.status !== 'busted' && p.status !== 'sitting_out',
     )

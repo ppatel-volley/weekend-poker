@@ -1,18 +1,21 @@
 /**
  * 5-Card Draw discard and replacement mechanics.
  *
- * Players can discard 0-5 cards ("stand pat" = 0 discards).
+ * Players can discard 0-3 cards ("stand pat" = 0 discards).
  * Discarded cards are replaced from the deck.
  * All functions are pure — no mutation, no side effects.
  */
 import type { Card } from '@weekend-casino/shared'
 
+/** Maximum cards a player can discard per draw round. */
+export const MAX_DISCARD = 3
+
 /**
  * Validates a discard selection.
- * Indices must be 0-4, unique, and between 0 and 5 total.
+ * Indices must be 0-4, unique, and no more than MAX_DISCARD (3) total.
  */
 export function validateDiscardIndices(indices: number[], handSize: number): boolean {
-  if (indices.length > handSize) return false
+  if (indices.length > MAX_DISCARD) return false
   if (indices.some(i => i < 0 || i >= handSize || !Number.isInteger(i))) return false
   if (new Set(indices).size !== indices.length) return false
   return true

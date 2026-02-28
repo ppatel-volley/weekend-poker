@@ -33,8 +33,16 @@ describe('validateDiscardIndices', () => {
     expect(validateDiscardIndices([2], 5)).toBe(true)
   })
 
-  it('should accept all 5 indices', () => {
-    expect(validateDiscardIndices([0, 1, 2, 3, 4], 5)).toBe(true)
+  it('should accept maximum 3 indices (per spec: 0-3 discard limit)', () => {
+    expect(validateDiscardIndices([0, 1, 2], 5)).toBe(true)
+  })
+
+  it('should reject 4 discards (exceeds MAX_DISCARD of 3)', () => {
+    expect(validateDiscardIndices([0, 1, 2, 3], 5)).toBe(false)
+  })
+
+  it('should reject 5 discards (exceeds MAX_DISCARD of 3)', () => {
+    expect(validateDiscardIndices([0, 1, 2, 3, 4], 5)).toBe(false)
   })
 
   it('should reject negative index', () => {

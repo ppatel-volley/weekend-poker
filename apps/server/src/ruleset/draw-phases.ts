@@ -302,11 +302,12 @@ export const drawHandCompletePhase = makePhase({
   endIf: () => true,
   next: (ctx: any) => {
     const state: CasinoGameState = ctx.session.state
+    if (state.gameChangeRequested) return CasinoPhase.GameSelect
     const playablePlayers = state.players.filter(
       p => p.status !== 'busted' && p.status !== 'sitting_out',
     )
     if (playablePlayers.length < 2) {
-      return CasinoPhase.GameSelect
+      return CasinoPhase.Lobby
     }
     return CasinoPhase.DrawPostingBlinds
   },
