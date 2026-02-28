@@ -4,13 +4,15 @@
 
 | Task Type | Relevant Learnings |
 |---|---|
-| Three.js / R3F components | 001, 002 |
+| Three.js / R3F components | 001, 002, 005 |
 | React context / state | 001 |
 | TDD compliance | 002 |
 | Refactoring / Module replacement | 003 |
 | Test failures from interface changes | 003 |
 | Wallet / stack / chip mutations | 004 |
 | New game implementation | 004 |
+| Dependencies / pnpm install | 005 |
+| React 19 compatibility | 005 |
 
 ## Summaries
 
@@ -34,6 +36,11 @@ When replacing a module with a new version aliased to the old name, the new stat
 **Category:** Game Logic, Wallet Integrity
 Every reducer/thunk that modifies wallet balances or player stacks must enforce `Math.max(0, ...)`. Every chip division must use `Math.floor()`. Every deduction must validate sufficient balance first. Failure to do so allows negative balances and fractional chips.
 
+### 005 — React Three Fiber + React 19 reconciler incompatibility
+**Severity:** Critical
+**Category:** React, Three.js, Dependencies
+R3F v8 uses `react-reconciler@0.27.0` which is incompatible with React 19.2+ (missing `ReactCurrentOwner` internal). Fatal runtime error at module import time. Fix: upgrade R3F to v9+, drei to v10+. Never use R3F v8 with React 19.
+
 ## Cross-Reference
 
 | Topic | Learnings |
@@ -50,3 +57,6 @@ Every reducer/thunk that modifies wallet balances or player stacks must enforce 
 | Chip floor-of-zero | 004 |
 | Fractional chips | 004 |
 | Balance validation | 004 |
+| R3F + React 19 | 005 |
+| react-reconciler | 005 |
+| pnpm lockfile changes | 005 |
