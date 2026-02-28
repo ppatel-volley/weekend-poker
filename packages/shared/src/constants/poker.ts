@@ -22,3 +22,10 @@ export const DEFAULT_BLIND_LEVEL = BLIND_LEVELS[0]!
 
 export const DEALER_CHARACTERS = ['vincent', 'maya', 'remy', 'jade'] as const
 export type DealerCharacter = typeof DEALER_CHARACTERS[number]
+
+// ── Three Card Poker Constants ──────────────────────────────────────
+export const TCP_MIN_ANTE = 10
+export const TCP_MAX_ANTE = 500
+export const TCP_MAX_PAIR_PLUS = 100
+export const TCP_BET_TIMEOUT_MS = 20_000
+export const TCP_DECISION_TIMEOUT_MS = 15_000

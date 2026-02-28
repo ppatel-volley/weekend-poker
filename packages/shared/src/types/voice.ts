@@ -1,4 +1,5 @@
 import { PokerPhase } from './phases.js'
+import { CasinoPhase } from './casino-phases.js'
 
 /**
  * Slot map entries for the recognition service.
@@ -10,7 +11,23 @@ export type SlotMap = Record<string, string[]>
  * Returns the recognition service slot map for the given game phase.
  * Used to boost poker vocabulary accuracy during voice recognition.
  */
-export function getSlotMapForPhase(phase: PokerPhase): SlotMap {
+export function getSlotMapForPhase(phase: PokerPhase | CasinoPhase | string): SlotMap {
+  // TCP-specific slot maps
+  if (phase === CasinoPhase.TcpPlaceBets) {
+    return {
+      action: ['ante', 'ante up', 'pair plus', 'side bet', 'confirm', 'deal'],
+      amount: [
+        'ten', '10', 'twenty five', '25', 'fifty', '50',
+        'hundred', '100', 'two hundred fifty', '250', 'five hundred', '500',
+      ],
+    }
+  }
+  if (phase === CasinoPhase.TcpPlayerDecisions) {
+    return {
+      action: ['play', 'fold', "i'm in", "i'm out", 'call'],
+    }
+  }
+
   switch (phase) {
     case PokerPhase.Lobby:
       return {

@@ -6,6 +6,10 @@ import type { PlayerAction } from './game-state.js'
 export type VoiceIntent =
   | 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'all_in'
   | 'ready' | 'start' | 'settings'
+  // 5-Card Draw intents
+  | 'draw' | 'stand_pat' | 'discard'
+  // TCP-specific intents
+  | 'tcp_ante' | 'tcp_pair_plus' | 'tcp_play' | 'tcp_fold' | 'tcp_confirm'
   | 'unknown'
 
 export interface ParsedVoiceCommand {
