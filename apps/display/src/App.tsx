@@ -8,6 +8,7 @@ import { ClientType } from '@volley/vgf/types'
 import { Canvas } from '@react-three/fiber'
 import { ACESFilmicToneMapping, PCFShadowMap, SRGBColorSpace } from 'three'
 import { SceneRouter } from './components/scenes/index.js'
+import { LobbyScene } from './components/scenes/LobbyScene.js'
 import { CasinoHUD } from './components/hud/CasinoHUD.js'
 import { LobbyView } from './components/LobbyView.js'
 import { SessionIdContext } from './hooks/useSessionId.js'
@@ -20,10 +21,21 @@ const SERVER_URL =
   (import.meta.env['VITE_SERVER_URL'] as string | undefined) ??
   'http://localhost:3000'
 
+/** Shared Canvas GL configuration — reused for lobby and game scenes. */
+const CANVAS_GL_CONFIG = {
+  antialias: true,
+  toneMapping: ACESFilmicToneMapping,
+  outputColorSpace: SRGBColorSpace,
+  powerPreference: 'high-performance' as const,
+}
+
 /**
- * Decides whether to show the 2D lobby overlay or the 3D canvas.
- * The 2D LobbyView handles QR code display and player list when
- * there's no 3D lobby scene to show that info in.
+ * Decides whether to show the 3D lobby (with 2D overlay) or the game canvas.
+ *
+ * In lobby mode, the R3F Canvas renders the atmospheric LobbyScene as a
+ * 3D background, with the 2D LobbyView (QR code, player list, etc.)
+ * absolutely positioned on top with a semi-transparent background so
+ * the 3D scene shows through.
  */
 function DisplayRouter() {
   const phase = usePhase()
@@ -31,19 +43,30 @@ function DisplayRouter() {
   const isLobby = !phase || phase === 'LOBBY' || phase === 'GAME_SELECT'
 
   if (isLobby) {
-    return <LobbyView />
+    return (
+      <>
+        <Canvas
+          shadows={{ type: PCFShadowMap }}
+          gl={CANVAS_GL_CONFIG}
+          dpr={1}
+          camera={{ fov: 45, near: 0.1, far: 100, position: [0, 8, 10] }}
+          style={{ position: 'absolute', inset: 0 }}
+        >
+          <Suspense fallback={null}>
+            <LobbyScene />
+          </Suspense>
+        </Canvas>
+        {/* 2D overlay on top of the 3D lobby scene */}
+        <LobbyView />
+      </>
+    )
   }
 
   return (
     <>
       <Canvas
         shadows={{ type: PCFShadowMap }}
-        gl={{
-          antialias: true,
-          toneMapping: ACESFilmicToneMapping,
-          outputColorSpace: SRGBColorSpace,
-          powerPreference: 'high-performance',
-        }}
+        gl={CANVAS_GL_CONFIG}
         dpr={1}
         camera={{ fov: 45, near: 0.1, far: 100, position: [0, 8, 10] }}
         style={{ position: 'absolute', inset: 0 }}

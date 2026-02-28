@@ -71,11 +71,20 @@ export function LobbyController() {
           'linear-gradient(180deg, #0d1a2a 0%, #0a0f18 50%, #060a10 100%)',
       }}
     >
-      {/* Keyframe animations */}
+      {/* Keyframe animations — glow, shimmer, and pulse effects */}
       <style>{`
         @keyframes readyBtnPulse {
-          0%, 100% { box-shadow: 0 4px 20px rgba(74, 222, 128, 0.3); }
-          50% { box-shadow: 0 4px 30px rgba(74, 222, 128, 0.6), 0 0 50px rgba(74, 222, 128, 0.15); }
+          0%, 100% {
+            box-shadow: 0 4px 20px rgba(74, 222, 128, 0.3),
+                        0 0 40px rgba(74, 222, 128, 0.1),
+                        inset 0 0 20px rgba(74, 222, 128, 0.05);
+          }
+          50% {
+            box-shadow: 0 4px 35px rgba(74, 222, 128, 0.6),
+                        0 0 60px rgba(74, 222, 128, 0.2),
+                        0 0 100px rgba(74, 222, 128, 0.08),
+                        inset 0 0 30px rgba(74, 222, 128, 0.1);
+          }
         }
         @keyframes inputFocusGlow {
           0%, 100% { box-shadow: 0 0 8px rgba(212, 175, 55, 0.3); }
@@ -85,27 +94,86 @@ export function LobbyController() {
           0% { background-position: -200% center; }
           100% { background-position: 200% center; }
         }
+        @keyframes gameCardGlow {
+          0%, 100% {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.03),
+                        0 0 15px rgba(212, 175, 55, 0.06);
+          }
+          50% {
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.03),
+                        0 0 25px rgba(212, 175, 55, 0.15),
+                        0 0 50px rgba(212, 175, 55, 0.05);
+          }
+        }
+        @keyframes selectedCardGlow {
+          0%, 100% {
+            box-shadow: 0 4px 16px rgba(74, 222, 128, 0.2),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                        0 0 20px rgba(74, 222, 128, 0.15),
+                        0 0 40px rgba(0, 204, 102, 0.08);
+          }
+          50% {
+            box-shadow: 0 4px 20px rgba(74, 222, 128, 0.35),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                        0 0 35px rgba(74, 222, 128, 0.25),
+                        0 0 60px rgba(0, 204, 102, 0.12);
+          }
+        }
+        @keyframes titleShimmer {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
+        @keyframes dividerGlow {
+          0%, 100% {
+            opacity: 0.5;
+            box-shadow: 0 0 8px rgba(212, 175, 55, 0.2);
+          }
+          50% {
+            opacity: 1;
+            box-shadow: 0 0 16px rgba(212, 175, 55, 0.4), 0 0 30px rgba(212, 175, 55, 0.1);
+          }
+        }
+        @keyframes readyCheckGlow {
+          0%, 100% { text-shadow: 0 0 8px rgba(74, 222, 128, 0.4); }
+          50% { text-shadow: 0 0 20px rgba(74, 222, 128, 0.8), 0 0 40px rgba(74, 222, 128, 0.3); }
+        }
       `}</style>
 
-      {/* Logo */}
-      <img
-        src="/weekend-casino-logo.png"
-        alt="Weekend Casino"
-        style={{
-          width: 'min(200px, 55vw)',
-          height: 'auto',
-          marginBottom: '6px',
-          filter: 'drop-shadow(0 2px 12px rgba(212, 175, 55, 0.4))',
-        }}
-      />
+      {/* Logo with shimmer overlay */}
+      <div style={{ position: 'relative', marginBottom: '6px' }}>
+        <img
+          src="/weekend-casino-logo.png"
+          alt="Weekend Casino"
+          style={{
+            width: 'min(200px, 55vw)',
+            height: 'auto',
+            filter: 'drop-shadow(0 2px 16px rgba(212, 175, 55, 0.5))',
+          }}
+        />
+        {/* Shimmer overlay — animated gradient sweep across the logo area */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(110deg, transparent 30%, rgba(212, 175, 55, 0.12) 45%, rgba(255, 255, 255, 0.15) 50%, rgba(212, 175, 55, 0.12) 55%, transparent 70%)',
+            backgroundSize: '200% 100%',
+            animation: 'titleShimmer 4s ease-in-out infinite',
+            pointerEvents: 'none',
+            borderRadius: '4px',
+          }}
+        />
+      </div>
 
-      {/* Gold divider */}
+      {/* Gold divider with animated glow */}
       <div
         style={{
           width: '120px',
           height: '1px',
-          background: 'linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.5), transparent)',
+          background: 'linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.6), transparent)',
           marginBottom: '20px',
+          animation: 'dividerGlow 3s ease-in-out infinite',
         }}
       />
 
@@ -206,9 +274,9 @@ export function LobbyController() {
                 cursor: 'pointer',
                 overflow: 'hidden',
                 transition: 'all 0.25s ease',
-                boxShadow: isSelected
-                  ? '0 4px 16px rgba(74, 222, 128, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05)'
-                  : '0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.03)',
+                animation: isSelected
+                  ? 'selectedCardGlow 2s ease-in-out infinite'
+                  : 'gameCardGlow 3s ease-in-out infinite',
                 fontFamily: 'system-ui, sans-serif',
                 textAlign: 'center',
               }}
@@ -290,7 +358,11 @@ export function LobbyController() {
         }}
         onClick={handleReady}
       >
-        {isReady ? 'READY ✓' : 'READY'}
+        {isReady ? (
+          <span style={{ animation: 'readyCheckGlow 1.5s ease-in-out infinite' }}>
+            READY ✓
+          </span>
+        ) : 'READY'}
       </button>
 
       <p

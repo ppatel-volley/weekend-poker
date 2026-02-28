@@ -13,6 +13,9 @@ vi.mock('@react-three/drei', () => ({
   OrbitControls: vi.fn(() => null),
   Environment: vi.fn(() => null),
   Text: vi.fn(() => null),
+  Float: vi.fn(({ children }) => children),
+  MeshReflectorMaterial: vi.fn(() => null),
+  Sparkles: vi.fn(() => null),
   useGLTF: Object.assign(vi.fn(() => ({ scene: { traverse: vi.fn() } })), {
     preload: vi.fn(),
   }),
