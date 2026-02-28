@@ -1,46 +1,8 @@
-// Types
-export type {
-  Card,
-  Rank,
-  Suit,
-} from './types/cards.js'
-
-export type {
-  PokerGameState,
-  PokerPlayer,
-  PlayerStatus,
-  PlayerAction,
-  BotConfig,
-  BotDifficulty,
-  BlindLevel,
-  SidePot,
-  HandAction,
-  TTSMessage,
-  TTSPriority,
-  SessionStats,
-  PlayerSessionStats,
-  HandHighlight,
-} from './types/game-state.js'
-
-export type {
-  VoiceIntent,
-  ParsedVoiceCommand,
-  DealerCharacterId,
-  ControllerMemberState,
-  ServerToClientEvents,
-  ControllerActions,
-} from './types/events.js'
-
-export type {
-  SlotMap,
-} from './types/voice.js'
-
-// Enums and values
-export { PokerPhase, BETTING_PHASES, DEALING_PHASES } from './types/phases.js'
-export { RANKS, SUITS, rankToNumeric } from './types/cards.js'
-export { getSlotMapForPhase } from './types/voice.js'
-
-// Constants
+// ────────────────────────────────────────────────────────────────────
+// Re-export all casino + poker + shared types from ./types
+// ────────────────────────────────────────────────────────────────────
+export * from './types/index.js'
+export type * from './types/index.js'
 export {
   MAX_PLAYERS,
   MIN_PLAYERS_TO_START,
