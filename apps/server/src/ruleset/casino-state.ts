@@ -123,7 +123,7 @@ export const casinoUpdateWallet: Reducer<[string, number]> = (state, playerId, d
   ...state,
   wallet: {
     ...state.wallet,
-    [playerId]: (state.wallet[playerId] ?? 0) + delta,
+    [playerId]: Math.max(0, (state.wallet[playerId] ?? 0) + delta),
   },
 })
 
@@ -134,7 +134,7 @@ export const casinoSetWalletBalance: Reducer<[string, number]> = (state, playerI
   ...state,
   wallet: {
     ...state.wallet,
-    [playerId]: amount,
+    [playerId]: Math.max(0, amount),
   },
 })
 

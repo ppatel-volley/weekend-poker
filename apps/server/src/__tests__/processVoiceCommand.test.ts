@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { pokerRuleset, createInitialState } from '../ruleset/index.js'
 import type { PokerGameState } from '@weekend-casino/shared'
+import { CasinoPhase } from '@weekend-casino/shared'
 
 // ── Mock ThunkCtx ─────────────────────────────────────────────
 
@@ -38,7 +39,8 @@ describe('processVoiceCommand thunk', () => {
   let baseState: PokerGameState
 
   beforeEach(() => {
-    baseState = createInitialState({ players: [mockPlayer] })
+    // Set phase to a betting phase so voice actions are accepted
+    baseState = createInitialState({ players: [mockPlayer], phase: CasinoPhase.PreFlopBetting as any })
   })
 
   it('should dispatch setPlayerLastAction with fold for "I fold"', async () => {

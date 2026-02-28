@@ -191,6 +191,16 @@ export const bjHandCompletePhase = {
   thunks: {},
   onBegin: async (ctx: any) => {
     const adapted = adaptPhaseCtx(ctx)
+
+    // Check for busted players (wallet depleted) — matching Hold'em's pattern
+    const state = adapted.getState()
+    for (const player of state.players) {
+      const walletBalance = state.wallet[player.id] ?? 0
+      if (walletBalance === 0 && player.status !== 'busted') {
+        adapted.dispatch('markPlayerBusted', player.id)
+      }
+    }
+
     await adapted.dispatchThunk('bjCompleteRound')
     return adapted.getState()
   },

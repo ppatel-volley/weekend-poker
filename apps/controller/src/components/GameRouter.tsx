@@ -5,6 +5,7 @@ import { LobbyController } from './games/LobbyController.js'
 import { HoldemController } from './games/HoldemController.js'
 import { FiveCardDrawController } from './games/FiveCardDrawController.js'
 import { BlackjackController } from './games/BlackjackController.js'
+import { CompetitiveBlackjackController } from './games/CompetitiveBlackjackController.js'
 import { ThreeCardPokerController } from './games/ThreeCardPokerController.js'
 
 /**
@@ -56,8 +57,9 @@ export function GameRouter() {
     case 'five_card_draw':
       return <FiveCardDrawController />
     case 'blackjack_classic':
-    case 'blackjack_competitive':
       return <BlackjackController />
+    case 'blackjack_competitive':
+      return <CompetitiveBlackjackController />
     case 'three_card_poker':
       return <ThreeCardPokerController />
     default:

@@ -273,10 +273,48 @@ export interface BlackjackConfig {
   maxSplits: number
 }
 
+/** Per-player state in competitive blackjack (no splits, no insurance, no surrender). */
+export interface BjcPlayerState {
+  playerId: string
+  /** Single hand (no splits per D-007). */
+  hand: BlackjackHand
+  /** Whether this player has finished their turn (stood or busted). */
+  turnComplete: boolean
+}
+
 /** v1 Blackjack Competitive game state. Defined in TDD-backend.md Section 7. */
 export interface BlackjackCompetitiveGameState {
   [key: string]: unknown
-  // TBD: Will include players, hands, dealer hand, sequential turns, etc.
+  /** Per-player state (single hand each, no splits per D-007). */
+  playerStates: BjcPlayerState[]
+  /** Total pot (sum of all antes + raises). */
+  pot: number
+  /** Order of player turns (sequential per D-007). */
+  turnOrder: string[]
+  /** Index into turnOrder of the currently acting player. */
+  currentTurnIndex: number
+  /** Whether all antes have been placed (phase transition flag). */
+  allAntesPlaced: boolean
+  /** Whether the initial deal is complete (phase transition flag). */
+  dealComplete: boolean
+  /** Whether all player turns are complete (phase transition flag). */
+  playerTurnsComplete: boolean
+  /** Whether showdown reveal is complete (phase transition flag). */
+  showdownComplete: boolean
+  /** Whether settlement is complete (phase transition flag). */
+  settlementComplete: boolean
+  /** Whether the round is ready for next hand or game switch. */
+  roundCompleteReady: boolean
+  /** Round number (for stats). */
+  roundNumber: number
+  /** Shoe penetration percentage (0-100). */
+  shoePenetration: number
+  /** Ante amount for this round (derived from blind level). */
+  anteAmount: number
+  /** Winner IDs from showdown (empty until settlement). */
+  winnerIds: string[]
+  /** Result message for display. */
+  resultMessage: string
 }
 
 /** v2.0 Roulette game state. Defined in TDD-backend.md Section 8. */

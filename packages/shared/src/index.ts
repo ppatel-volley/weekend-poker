@@ -34,3 +34,4 @@ export {
   BJ_INSURANCE_TIMEOUT_MS,
 } from './constants/poker.js'
 export type { DealerCharacter } from './constants/poker.js'
+export { PHASE_LABELS, getPhaseLabel } from './constants/phase-labels.js'

@@ -4,6 +4,7 @@ import { LobbyScene } from './LobbyScene.js'
 import { HoldemScene } from './HoldemScene.js'
 import { FiveCardDrawScene } from './FiveCardDrawScene.js'
 import { BlackjackScene } from './BlackjackScene.js'
+import { CompetitiveBlackjackScene } from './CompetitiveBlackjackScene.js'
 import { ThreeCardPokerScene } from './ThreeCardPokerScene.js'
 import { SceneLoadingFallback } from './SceneLoadingFallback.js'
 import type { CasinoGame } from '@weekend-casino/shared'
@@ -13,7 +14,7 @@ const SCENE_MAP: Record<CasinoGame, React.ComponentType> = {
   holdem: HoldemScene,
   five_card_draw: FiveCardDrawScene,
   blackjack_classic: BlackjackScene,
-  blackjack_competitive: BlackjackScene,
+  blackjack_competitive: CompetitiveBlackjackScene,
   roulette: FiveCardDrawScene,       // reuse placeholder until Roulette scene built
   three_card_poker: ThreeCardPokerScene,
   craps: FiveCardDrawScene,          // reuse placeholder until Craps scene built

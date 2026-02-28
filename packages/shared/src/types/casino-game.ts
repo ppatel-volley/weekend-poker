@@ -35,6 +35,19 @@ export const CASINO_GAME_LABELS: Record<CasinoGame, string> = {
 }
 
 /**
+ * Short one-line descriptions for lobby display.
+ */
+export const CASINO_GAME_DESCRIPTIONS: Record<CasinoGame, string> = {
+  holdem: 'Classic poker — 2 cards + 5 community',
+  five_card_draw: 'Draw poker — swap up to 3 cards',
+  blackjack_classic: 'Beat the dealer to 21',
+  blackjack_competitive: 'Beat your friends to 21',
+  roulette: 'Spin the wheel — pick your numbers',
+  three_card_poker: 'Fast — 3 cards vs the dealer',
+  craps: 'Roll the dice — bet on the outcome',
+}
+
+/**
  * v1 games only (shipped in initial release).
  */
 export const V1_GAMES: CasinoGame[] = [

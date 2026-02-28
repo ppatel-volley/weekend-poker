@@ -70,13 +70,13 @@ function parseAmount(text: string): number | undefined {
 
 const INTENT_PATTERNS: Array<{ intent: VoiceIntent; pattern: RegExp }> = [
   // Multi-word / compound intents first (most specific)
-  { intent: 'bj_double', pattern: /\b(double\s*(down)?)\b/ },
+  { intent: 'bj_double', pattern: /\b(double\s*(down|me)?)\b/ },
   { intent: 'bj_insurance', pattern: /\b(insurance|even\s*money)\b/ },
   { intent: 'bj_surrender', pattern: /\b(surrender|give\s*up)\b/ },
   { intent: 'stand_pat', pattern: /\b(stand\s*pat|keep\s*(all|them)?)\b/ },
   // Blackjack single-word intents (after stand_pat to avoid "stand" matching "stand pat")
   { intent: 'bj_split', pattern: /\bsplit\b/ },
-  { intent: 'bj_hit', pattern: /\b(hit\s*(me)?|card)\b/ },
+  { intent: 'bj_hit', pattern: /\b(hit\s*(me)?|gimme\s*a?\s*card|card)\b/ },
   { intent: 'bj_stand', pattern: /\b(stand|stay|hold)\b/ },
   // TCP-specific intents
   { intent: 'tcp_pair_plus', pattern: /\b(pair\s*plus|side\s*bet)\b/ },
@@ -94,7 +94,7 @@ const INTENT_PATTERNS: Array<{ intent: VoiceIntent; pattern: RegExp }> = [
   { intent: 'raise', pattern: /\braise\b/ },
   { intent: 'bet', pattern: /\bbet\b/ },
   { intent: 'call', pattern: /\bcall\b/ },
-  { intent: 'ready', pattern: /\bready\b/ },
+  { intent: 'ready', pattern: /\b(ready|deal\s*me\s*in)\b/ },
   { intent: 'start', pattern: /\b(start|deal)\b/ },
   { intent: 'settings', pattern: /\b(settings|options)\b/ },
 ]

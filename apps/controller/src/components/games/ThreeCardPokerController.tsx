@@ -267,6 +267,9 @@ function ResultsView({
           }}>
             {tcp.dealerQualifies ? 'DEALER QUALIFIES' : 'DEALER DOES NOT QUALIFY'}
           </div>
+          <p style={{ fontSize: '12px', color: '#999', marginTop: '6px' }}>
+            Dealer needs Queen-high or better to qualify
+          </p>
         </div>
       )}
 

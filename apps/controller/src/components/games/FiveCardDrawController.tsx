@@ -4,9 +4,9 @@ import { useSessionMember } from '../../hooks/useVGFHooks.js'
 /**
  * 5-Card Draw controller — card selection for discard + betting controls.
  *
- * Players tap cards to toggle discard selection (dimmed/raised visual).
- * Discard button sends selected card indices to server.
- * Bet/Check/Fold/Raise controls match Hold'em pattern.
+ * Phase-driven button visibility:
+ *   betting: FOLD, CHECK/CALL, RAISE, ALL IN (matches Hold'em pattern)
+ *   discard: KEEP ALL CARDS, DRAW (with selected card count)
  */
 export function FiveCardDrawController() {
   const member = useSessionMember()
@@ -34,10 +34,13 @@ export function FiveCardDrawController() {
     setSelectedIndices(new Set())
   }, [])
 
-  const handleStandPat = useCallback(() => {
-    // Discard 0 cards — "stand pat"
+  const handleKeepAll = useCallback(() => {
+    // Discard 0 cards — keep all
     setSelectedIndices(new Set())
   }, [])
+
+  const isBetting = phase === 'betting'
+  const isDiscard = phase === 'discard'
 
   return (
     <div
@@ -53,10 +56,12 @@ export function FiveCardDrawController() {
     >
       <h2 style={{ textAlign: 'center', marginBottom: '8px' }}>5-Card Draw</h2>
       <p style={{ textAlign: 'center', color: '#aaa', marginBottom: '16px', fontSize: '14px' }}>
-        {playerName}, tap cards to select for discard
+        {isDiscard
+          ? `${playerName}, tap cards to select for discard`
+          : `${playerName}, place your bet`}
       </p>
 
-      {/* Card hand — tappable cards */}
+      {/* Card hand — tappable cards (only interactive during discard) */}
       <div
         style={{
           display: 'flex',
@@ -72,7 +77,7 @@ export function FiveCardDrawController() {
           return (
             <button
               key={i}
-              onClick={() => toggleCard(i)}
+              onClick={() => isDiscard && toggleCard(i)}
               aria-label={`Card ${i + 1}${isSelected ? ' (selected for discard)' : ''}`}
               style={{
                 width: '56px',
@@ -85,9 +90,10 @@ export function FiveCardDrawController() {
                 justifyContent: 'center',
                 fontSize: '18px',
                 color: isSelected ? '#e74c3c' : '#fff',
-                cursor: 'pointer',
+                cursor: isDiscard ? 'pointer' : 'default',
                 transform: isSelected ? 'translateY(-8px)' : 'none',
                 transition: 'all 0.2s ease',
+                opacity: isDiscard ? 1 : 0.6,
               }}
             >
               {isSelected ? 'X' : '?'}
@@ -96,29 +102,39 @@ export function FiveCardDrawController() {
         })}
       </div>
 
-      {/* Discard info */}
-      <p style={{ textAlign: 'center', color: '#888', marginBottom: '16px', fontSize: '13px' }}>
-        {selectedIndices.size === 0
-          ? 'No cards selected (stand pat)'
-          : `${selectedIndices.size} card${selectedIndices.size > 1 ? 's' : ''} selected for discard`}
-      </p>
+      {/* Discard info — only during discard phase */}
+      {isDiscard && (
+        <p style={{ textAlign: 'center', color: '#888', marginBottom: '16px', fontSize: '13px' }}>
+          {selectedIndices.size === 0
+            ? 'No cards selected'
+            : `${selectedIndices.size} card${selectedIndices.size > 1 ? 's' : ''} selected for discard`}
+        </p>
+      )}
 
-      {/* Action buttons — 2x2 grid */}
+      {/* Action buttons — context-sensitive per phase */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-        <button
-          onClick={handleDiscard}
-          disabled={selectedIndices.size === 0}
-          style={actionBtnStyle('#3498db', selectedIndices.size === 0)}
-        >
-          DRAW ({selectedIndices.size})
-        </button>
-        <button onClick={handleStandPat} style={actionBtnStyle('#2ecc71')}>
-          STAND PAT
-        </button>
-        <button style={actionBtnStyle('#e74c3c')}>FOLD</button>
-        <button style={actionBtnStyle('#f39c12')}>CHECK</button>
-        <button style={actionBtnStyle('#9b59b6')}>CALL</button>
-        <button style={actionBtnStyle('#e91e63')}>ALL IN</button>
+        {isDiscard && (
+          <>
+            <button
+              onClick={handleDiscard}
+              disabled={selectedIndices.size === 0}
+              style={actionBtnStyle('#3498db', selectedIndices.size === 0)}
+            >
+              DRAW ({selectedIndices.size})
+            </button>
+            <button onClick={handleKeepAll} style={actionBtnStyle('#2ecc71')}>
+              KEEP ALL CARDS
+            </button>
+          </>
+        )}
+        {isBetting && (
+          <>
+            <button style={actionBtnStyle('#e74c3c')}>FOLD</button>
+            <button style={actionBtnStyle('#f39c12')}>CHECK</button>
+            <button style={actionBtnStyle('#9b59b6')}>CALL</button>
+            <button style={actionBtnStyle('#e91e63')}>ALL IN</button>
+          </>
+        )}
       </div>
     </div>
   )

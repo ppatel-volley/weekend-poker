@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import type { PokerPhase, PlayerAction, PokerGameState, Card } from '@weekend-casino/shared'
-import { BETTING_PHASES } from '@weekend-casino/shared'
+import { BETTING_PHASES, getPhaseLabel, CasinoPhase } from '@weekend-casino/shared'
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition.js'
 import { useDispatchThunk, useSessionMember, useStateSync } from '../hooks/useVGFHooks.js'
 
@@ -75,7 +75,7 @@ export function ControllerGameplay({ phase }: { phase: PokerPhase }) {
           opacity: 0.8,
         }}
       >
-        <span>{phase}</span>
+        <span>{getPhaseLabel(phase as CasinoPhase)}</span>
         <span>Stack: ${myStack}</span>
       </div>
 
@@ -160,7 +160,7 @@ export function ControllerGameplay({ phase }: { phase: PokerPhase }) {
             ) : null}
             {canRaise && (
               <button style={actionButtonStyle('#f39c12')} onClick={handleRaise}>
-                RAISE
+                RAISE TO ${currentBet + (raiseAmount > 0 ? raiseAmount : minRaise)}
               </button>
             )}
             <button style={actionButtonStyle('#e91e63')} onClick={handleAllIn}>

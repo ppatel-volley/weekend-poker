@@ -50,8 +50,23 @@ vi.mock('@weekend-casino/shared', () => ({
     blackjack_classic: 'Blackjack',
     blackjack_competitive: 'Competitive Blackjack',
   },
+  CASINO_GAME_DESCRIPTIONS: {
+    holdem: 'Classic poker — 2 cards + 5 community',
+    five_card_draw: 'Draw poker — swap up to 3 cards',
+    blackjack_classic: 'Beat the dealer to 21',
+    blackjack_competitive: 'Beat your friends to 21',
+  },
   V1_GAMES: ['holdem', 'five_card_draw', 'blackjack_classic', 'blackjack_competitive'],
   getWalletBalance: () => 10000,
+  getPhaseLabel: (phase: string) => {
+    const labels: Record<string, string> = {
+      PRE_FLOP_BETTING: 'Pre-Flop',
+      DRAW_BETTING_1: 'First Bet',
+      LOBBY: 'Lobby',
+      GAME_SELECT: 'Game Select',
+    }
+    return labels[phase] ?? phase
+  },
 }))
 
 describe('GameRouter', () => {
@@ -89,8 +104,8 @@ describe('GameRouter', () => {
     mockState.mockReturnValue({ selectedGame: 'holdem', players: [], holeCards: {} })
 
     render(<GameRouter />)
-    // HoldemController renders ControllerGameplay which shows phase name and stack
-    expect(screen.getByText('PRE_FLOP_BETTING')).toBeDefined()
+    // HoldemController renders ControllerGameplay which shows translated phase label
+    expect(screen.getByText('Pre-Flop')).toBeDefined()
   })
 
   it('renders FiveCardDrawController for Draw phase', () => {
@@ -130,7 +145,7 @@ describe('GameRouter', () => {
     mockState.mockReturnValue({ selectedGame: null })
 
     render(<GameRouter />)
-    expect(screen.getByText('Blackjack')).toBeDefined()
+    expect(screen.getByText('Blackjack Arena')).toBeDefined()
   })
 
   it('shows loading for unknown game', () => {

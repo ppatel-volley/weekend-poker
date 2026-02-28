@@ -16,7 +16,7 @@
 import type { GameRuleset, IConnectionLifeCycleContext } from '@volley/vgf/types'
 import { ClientType } from '@volley/vgf/types'
 import type { CasinoGameState, CasinoPlayer, Card } from '@weekend-casino/shared'
-import { CasinoPhase, MAX_PLAYERS, STARTING_WALLET_BALANCE, STARTING_STACK, BLIND_LEVELS } from '@weekend-casino/shared'
+import { CasinoPhase, MAX_PLAYERS, STARTING_WALLET_BALANCE, STARTING_STACK, BLIND_LEVELS, BETTING_PHASES } from '@weekend-casino/shared'
 import { createInitialCasinoState, casinoReducers, casinoThunks } from './casino-state.js'
 import { lobbyPhase, gameSelectPhase } from './casino-phases.js'
 import { tcpReducers } from './tcp-reducers.js'
@@ -40,6 +40,16 @@ import {
   bjSettlementPhase,
   bjHandCompletePhase,
 } from './bj-phases.js'
+import { bjcReducers } from './bjc-reducers.js'
+import { bjcThunks } from './bjc-thunks.js'
+import {
+  bjcPlaceBetsPhase,
+  bjcDealInitialPhase,
+  bjcPlayerTurnsPhase,
+  bjcShowdownPhase,
+  bjcSettlementPhase,
+  bjcHandCompletePhase,
+} from './bjc-phases.js'
 import {
   drawResetHand,
   drawSetHands,
@@ -114,7 +124,7 @@ const holdemReducers = {
       players: state.players.map(p => {
         if (p.id !== playerId) return p
         const additionalChips = amount - p.bet
-        const newStack = p.stack - additionalChips
+        const newStack = Math.max(0, p.stack - additionalChips)
         return {
           ...p,
           bet: amount,
@@ -386,7 +396,11 @@ const holdemThunks = {
 
     const actionIntents = ['fold', 'check', 'call', 'bet', 'raise', 'all_in']
     if (actionIntents.includes(result.intent)) {
-      ctx.dispatch('setPlayerLastAction', ctx.getClientId(), result.intent)
+      // Only dispatch if current phase accepts betting/wagering actions
+      const state = ctx.getState()
+      if ((BETTING_PHASES as readonly string[]).includes(state.phase)) {
+        ctx.dispatch('setPlayerLastAction', ctx.getClientId(), result.intent)
+      }
     }
   }) as any,
 
@@ -447,22 +461,36 @@ const holdemThunks = {
       ? (Array.isArray(state.holeCards[botId]) ? state.holeCards[botId] as any[] : [])
       : []
 
-    const decision = await botManager.requestBotAction({
-      gameType: (state.selectedGame ?? 'holdem') as any,
-      botPlayerId: botId,
-      stack: bot.stack,
-      bet: bot.bet,
-      currentBet: state.currentBet,
-      minRaiseIncrement: state.minRaiseIncrement,
-      pot: state['pot'] as number ?? 0,
-      communityCards: (state['communityCards'] as any[]) ?? [],
-      holeCards,
-      legalActions,
-      activePlayers: state.players.filter(p => p.status === 'active' || p.status === 'all_in').length,
-      positionFromDealer: (state.players.indexOf(bot) - state.dealerIndex + state.players.length) % state.players.length,
-      bigBlind: state.blindLevel.bigBlind,
-      handNumber: state.handNumber,
-    })
+    const BOT_TIMEOUT_MS = 10_000
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Bot decision timeout')), BOT_TIMEOUT_MS),
+    )
+
+    let decision: Awaited<ReturnType<typeof botManager.requestBotAction>>
+    try {
+      decision = await Promise.race([
+        botManager.requestBotAction({
+          gameType: (state.selectedGame ?? 'holdem') as any,
+          botPlayerId: botId,
+          stack: bot.stack,
+          bet: bot.bet,
+          currentBet: state.currentBet,
+          minRaiseIncrement: state.minRaiseIncrement,
+          pot: state['pot'] as number ?? 0,
+          communityCards: (state['communityCards'] as any[]) ?? [],
+          holeCards,
+          legalActions,
+          activePlayers: state.players.filter(p => p.status === 'active' || p.status === 'all_in').length,
+          positionFromDealer: (state.players.indexOf(bot) - state.dealerIndex + state.players.length) % state.players.length,
+          bigBlind: state.blindLevel.bigBlind,
+          handNumber: state.handNumber,
+        }),
+        timeoutPromise,
+      ])
+    } catch {
+      // Timeout or error — default to fold
+      decision = { action: 'fold', amount: undefined, dialogue: undefined } as any
+    }
 
     // Set dialogue as dealer message if present
     if (decision.dialogue) {
@@ -612,6 +640,16 @@ function bettingNextPhase(ctx: any, normalNext: string): string {
   return normalNext
 }
 
+/** Auto-fold any disconnected active player whose turn it is. */
+function autoFoldIfDisconnected(ctx: any): void {
+  const state: CasinoGameState = ctx.getState()
+  const activeIdx = state['activePlayerIndex'] as number ?? -1
+  const activePlayer = state.players[activeIdx]
+  if (activePlayer && !activePlayer.isConnected && activePlayer.status === 'active') {
+    ctx.dispatchThunk('autoFoldPlayer', activePlayer.id)
+  }
+}
+
 function postFlopBettingOnBegin(ctx: any): void {
   const state: CasinoGameState = ctx.getState()
   const firstToAct = findFirstActivePlayerLeftOfButton(state.players, state.dealerIndex)
@@ -623,6 +661,7 @@ function postFlopBettingOnBegin(ctx: any): void {
       ctx.dispatch('setPlayerLastAction', player.id, null)
     }
   }
+  autoFoldIfDisconnected(ctx)
 }
 
 function dealCommunityOnBegin(ctx: any, cardCount: number): void {
@@ -729,6 +768,7 @@ const preFlopBettingPhase = makePhase({
     const firstToAct = findFirstActivePlayerLeftOfBB(state.players, state.dealerIndex)
     ctx.dispatch('setActivePlayer', firstToAct)
     ctx.dispatch('setCurrentBet', state.blindLevel.bigBlind)
+    autoFoldIfDisconnected(ctx)
     return ctx.getState()
   },
   onEnd: (ctx: any) => {
@@ -832,14 +872,26 @@ const allInRunoutPhase = makePhase({
     if (!serverState) return ctx.getState()
 
     const deck = [...serverState.deck]
-    const cardsNeeded = 5 - ((state['communityCards'] as Card[] ?? []).length)
+    const currentCount = (state['communityCards'] as Card[] ?? []).length
 
-    for (let i = 0; i < cardsNeeded; i++) {
-      deck.shift()
-      const card = deck.shift()
-      if (card) {
-        ctx.dispatch('dealCommunityCards', [card])
-      }
+    // Standard poker burn logic per street:
+    // Flop (0→3): burn 1, deal 3
+    // Turn (3→4): burn 1, deal 1
+    // River (4→5): burn 1, deal 1
+    if (currentCount < 3) {
+      deck.shift() // burn before flop
+      const flopCards = deck.splice(0, 3)
+      ctx.dispatch('dealCommunityCards', flopCards)
+    }
+    if (currentCount < 4) {
+      deck.shift() // burn before turn
+      const turnCard = deck.shift()
+      if (turnCard) ctx.dispatch('dealCommunityCards', [turnCard])
+    }
+    if (currentCount < 5) {
+      deck.shift() // burn before river
+      const riverCard = deck.shift()
+      if (riverCard) ctx.dispatch('dealCommunityCards', [riverCard])
     }
 
     setServerHandState(sessionId, { ...serverState, deck })
@@ -934,6 +986,14 @@ const phases = {
   [CasinoPhase.BjSettlement]: bjSettlementPhase,
   [CasinoPhase.BjHandComplete]: bjHandCompletePhase,
 
+  // Blackjack Competitive phases (BJC_ prefix per D-003, D-007)
+  [CasinoPhase.BjcPlaceBets]: bjcPlaceBetsPhase,
+  [CasinoPhase.BjcDealInitial]: bjcDealInitialPhase,
+  [CasinoPhase.BjcPlayerTurns]: bjcPlayerTurnsPhase,
+  [CasinoPhase.BjcShowdown]: bjcShowdownPhase,
+  [CasinoPhase.BjcSettlement]: bjcSettlementPhase,
+  [CasinoPhase.BjcHandComplete]: bjcHandCompletePhase,
+
   // Three Card Poker phases (TCP_ prefix per D-003)
   [CasinoPhase.TcpPlaceBets]: tcpPlaceBetsPhase,
   [CasinoPhase.TcpDealCards]: tcpDealCardsPhase,
@@ -1015,6 +1075,7 @@ export const casinoRuleset = {
     ...holdemReducers,
     ...tcpReducers,
     ...bjReducers,
+    ...bjcReducers,
     // 5-Card Draw reducers
     drawResetHand,
     drawSetHands,
@@ -1035,6 +1096,7 @@ export const casinoRuleset = {
     ...holdemThunks,
     ...tcpThunks,
     ...bjThunks,
+    ...bjcThunks,
     // 5-Card Draw thunks
     drawProcessAction,
     drawProcessDiscard,

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   CasinoGame,
   CASINO_GAME_LABELS,
+  CASINO_GAME_DESCRIPTIONS,
   V1_GAMES,
   V2_0_GAMES,
   V2_1_GAMES,
@@ -116,6 +117,24 @@ describe('isCasinoGame type guard', () => {
     expect(isCasinoGame(42)).toBe(false)
     expect(isCasinoGame({})).toBe(false)
     expect(isCasinoGame([])).toBe(false)
+  })
+})
+
+describe('CASINO_GAME_DESCRIPTIONS', () => {
+  it('should have descriptions for all games', () => {
+    ALL_GAMES.forEach((game) => {
+      expect(CASINO_GAME_DESCRIPTIONS[game]).toBeDefined()
+      expect(typeof CASINO_GAME_DESCRIPTIONS[game]).toBe('string')
+      expect(CASINO_GAME_DESCRIPTIONS[game].length).toBeGreaterThan(0)
+    })
+  })
+
+  it('should have the correct lobby descriptions', () => {
+    expect(CASINO_GAME_DESCRIPTIONS.holdem).toContain('2 cards')
+    expect(CASINO_GAME_DESCRIPTIONS.five_card_draw).toContain('swap')
+    expect(CASINO_GAME_DESCRIPTIONS.three_card_poker).toContain('3 cards')
+    expect(CASINO_GAME_DESCRIPTIONS.blackjack_classic).toContain('21')
+    expect(CASINO_GAME_DESCRIPTIONS.blackjack_competitive).toContain('21')
   })
 })
 

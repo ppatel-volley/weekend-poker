@@ -483,8 +483,8 @@ export const bjThunks = {
       // Hand payouts
       for (const hand of ps.hands) {
         if (ps.surrendered) {
-          // Surrender: get half bet back
-          totalPayout += hand.bet / 2
+          // Surrender: get half bet back (floored to avoid fractional chips)
+          totalPayout += Math.floor(hand.bet / 2)
         } else {
           const result = calculateHandPayout(
             hand.cards as Card[],

@@ -213,6 +213,11 @@ export const drawDrawPhasePhase = makePhase({
     // Stand pat (discard 0) is the default — players must confirm
     return ctx.getState()
   },
+  onEnd: (ctx: any) => {
+    // Apply card replacements before moving to betting round 2
+    ctx.dispatchThunk('drawExecuteReplace')
+    return ctx.getState()
+  },
   endIf: (ctx: any) => {
     const state: CasinoGameState = ctx.session.state
     if (!state.fiveCardDraw) return true

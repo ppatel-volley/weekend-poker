@@ -87,9 +87,9 @@ describe('pokerRuleset', () => {
     }
   })
 
-  it('should have 36 phases in total (2 shared + 13 Hold\'em + 8 Draw + 6 TCP + 7 BJ)', () => {
+  it('should have 42 phases in total (2 shared + 13 Hold\'em + 8 Draw + 6 TCP + 7 BJ + 6 BJC)', () => {
     const phaseKeys = Object.keys(pokerRuleset.phases)
-    expect(phaseKeys).toHaveLength(36)
+    expect(phaseKeys).toHaveLength(42)
   })
 
   it('each phase should have reducers, thunks, onBegin, endIf, and next', () => {

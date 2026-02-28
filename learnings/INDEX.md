@@ -9,6 +9,8 @@
 | TDD compliance | 002 |
 | Refactoring / Module replacement | 003 |
 | Test failures from interface changes | 003 |
+| Wallet / stack / chip mutations | 004 |
+| New game implementation | 004 |
 
 ## Summaries
 
@@ -27,6 +29,11 @@ Agent used `PCFSoftShadowMap` instead of TDD-specified `PCFShadowMap`. Soft shad
 **Category:** Architecture, Testing, Refactoring
 When replacing a module with a new version aliased to the old name, the new state factory must be a strict superset of the old interface. Missing fields, changed reducer signatures, and stub reducers cause cascading test failures.
 
+### 004 — Wallet and stack floor-of-zero guards
+**Severity:** Critical
+**Category:** Game Logic, Wallet Integrity
+Every reducer/thunk that modifies wallet balances or player stacks must enforce `Math.max(0, ...)`. Every chip division must use `Math.floor()`. Every deduction must validate sufficient balance first. Failure to do so allows negative balances and fractional chips.
+
 ## Cross-Reference
 
 | Topic | Learnings |
@@ -39,3 +46,7 @@ When replacing a module with a new version aliased to the old name, the new stat
 | Backward compatibility | 003 |
 | Module replacement | 003 |
 | Reducer signatures | 003 |
+| Wallet integrity | 004 |
+| Chip floor-of-zero | 004 |
+| Fractional chips | 004 |
+| Balance validation | 004 |

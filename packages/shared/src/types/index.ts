@@ -23,6 +23,7 @@ export {
 export type { CasinoGame } from './casino-game.js'
 export {
   CASINO_GAME_LABELS,
+  CASINO_GAME_DESCRIPTIONS,
   V1_GAMES,
   V2_0_GAMES,
   V2_1_GAMES,
@@ -75,6 +76,7 @@ export type {
   BlackjackDifficulty,
   BlackjackGameState,
   BlackjackConfig,
+  BjcPlayerState,
   BlackjackCompetitiveGameState,
   RouletteGameState,
   ThreeCardPokerGameState,

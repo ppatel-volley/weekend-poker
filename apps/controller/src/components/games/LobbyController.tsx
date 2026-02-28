@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { CasinoGame, CasinoGameState } from '@weekend-casino/shared'
-import { CASINO_GAME_LABELS, V1_GAMES } from '@weekend-casino/shared'
+import { CASINO_GAME_LABELS, CASINO_GAME_DESCRIPTIONS, V1_GAMES } from '@weekend-casino/shared'
 import {
   useClientActions,
   useSessionMember,
@@ -116,7 +116,10 @@ export function LobbyController() {
               cursor: 'pointer',
             }}
           >
-            {CASINO_GAME_LABELS[game]}
+            <span>{CASINO_GAME_LABELS[game]}</span>
+            <span style={{ fontSize: '11px', fontWeight: 400, color: '#aaa', display: 'block', marginTop: '4px' }}>
+              {CASINO_GAME_DESCRIPTIONS[game]}
+            </span>
           </button>
         ))}
       </div>

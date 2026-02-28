@@ -1,4 +1,5 @@
 import { ClientType } from '@volley/vgf/client'
+import { QRCodeSVG } from 'qrcode.react'
 import { useSessionMembers } from '../hooks/useVGFHooks.js'
 import { useSessionId } from '../hooks/useSessionId.js'
 import { MAX_PLAYERS } from '@weekend-casino/shared'
@@ -37,36 +38,19 @@ export function LobbyView() {
     >
       <h1 style={{ fontSize: '3rem', marginBottom: '1rem' }}>Weekend Casino</h1>
 
-      {/* TODO: Replace with actual QR code component (e.g. qrcode.react) */}
       <div
         style={{
-          width: 200,
-          height: 200,
-          border: '2px dashed rgba(255,255,255,0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          padding: 16,
+          background: 'white',
           borderRadius: 12,
-          marginBottom: '2rem',
+          marginBottom: '1rem',
         }}
       >
-        <a
-          href={controllerUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            opacity: 0.7,
-            textAlign: 'center',
-            padding: '1rem',
-            fontSize: '0.875rem',
-            color: 'white',
-            textDecoration: 'underline',
-            cursor: 'pointer',
-          }}
-        >
-          {controllerUrl}
-        </a>
+        <QRCodeSVG value={controllerUrl} size={180} />
       </div>
+      <p style={{ opacity: 0.6, fontSize: '0.8rem', marginBottom: '2rem' }}>
+        {controllerUrl}
+      </p>
 
       {/* Connected players */}
       <div style={{ marginBottom: '2rem', minWidth: 260 }}>

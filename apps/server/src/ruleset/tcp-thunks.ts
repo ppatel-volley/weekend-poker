@@ -131,11 +131,18 @@ export const tcpThunks = {
     const hand = tcp.playerHands.find(h => h.playerId === playerId)
     if (!hand || hand.decision !== 'undecided') return
 
-    ctx.dispatch('tcpSetPlayerDecision', playerId, decision)
-
-    // If playing, deduct the play bet from wallet
+    // If playing, validate wallet can cover the play bet before committing
     if (decision === 'play') {
-      ctx.dispatch('updateWallet', playerId, -hand.anteBet)
+      const walletBalance = state.wallet[playerId] ?? 0
+      if (walletBalance < hand.anteBet) {
+        // Insufficient funds — auto-fold instead
+        ctx.dispatch('tcpSetPlayerDecision', playerId, 'fold')
+      } else {
+        ctx.dispatch('tcpSetPlayerDecision', playerId, 'play')
+        ctx.dispatch('updateWallet', playerId, -hand.anteBet)
+      }
+    } else {
+      ctx.dispatch('tcpSetPlayerDecision', playerId, decision)
     }
 
     // Check if all players have decided
