@@ -66,9 +66,24 @@ export function LobbyView() {
       >
         <QRCodeSVG value={controllerUrl} size={180} />
       </div>
-      <p style={{ opacity: 0.6, fontSize: '0.8rem', marginBottom: '2rem' }}>
+      <a
+        href={controllerUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          opacity: 0.6,
+          fontSize: '0.8rem',
+          marginBottom: '2rem',
+          color: '#8bb4ff',
+          textDecoration: 'underline',
+          cursor: 'pointer',
+          wordBreak: 'break-all',
+          maxWidth: '90vw',
+          textAlign: 'center',
+        }}
+      >
         {controllerUrl}
-      </p>
+      </a>
 
       {/* Connected players */}
       <div style={{ marginBottom: '2rem', minWidth: 260 }}>
