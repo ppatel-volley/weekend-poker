@@ -1,3 +1,7 @@
+> **⚠️ Status: SUPERSEDED — Historical Reference Only**
+> **Superseded By:** `CASINO-TDD-backend.md` (full casino backend TDD)
+> This document is retained for historical context. It is NOT authoritative for any current implementation decisions. Hold'em-specific infrastructure detail defined here remains valid as referenced by the superseding document.
+
 # Weekend Poker — Technical Design Document: Backend Systems
 
 > **Version:** 1.0

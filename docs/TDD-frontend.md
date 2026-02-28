@@ -1,3 +1,7 @@
+> **⚠️ Status: SUPERSEDED — Historical Reference Only**
+> **Superseded By:** `CASINO-TDD-frontend.md` (full casino frontend TDD)
+> This document is retained for historical context. It is NOT authoritative for any current implementation decisions.
+
 # Technical Design Document — Frontend, 3D Rendering & Mobile Controller
 
 > **Version:** 1.0
