@@ -4,7 +4,10 @@ import {
   createSocketIOClientTransport,
 } from '@volley/vgf/client'
 import { ClientType } from '@volley/vgf/types'
-import { ControllerPhaseRouter } from './components/ControllerPhaseRouter.js'
+import { GameRouter } from './components/GameRouter.js'
+import { WalletDisplay } from './components/shared/WalletDisplay.js'
+import { PlayerInfo } from './components/shared/PlayerInfo.js'
+import { VoiceButton } from './components/shared/VoiceButton.js'
 
 const SERVER_URL =
   (import.meta.env['VITE_SERVER_URL'] as string | undefined) ??
@@ -72,7 +75,40 @@ export function App() {
 
   return (
     <VGFProvider transport={transport}>
-      <ControllerPhaseRouter />
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: '100vh',
+          background: '#1a1a2e',
+          color: 'white',
+          fontFamily: 'system-ui, sans-serif',
+        }}
+      >
+        {/* Top bar: player info + wallet */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '12px 16px',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+          }}
+        >
+          <PlayerInfo />
+          <WalletDisplay />
+        </div>
+
+        {/* Game-specific content */}
+        <div style={{ flex: 1 }}>
+          <GameRouter />
+        </div>
+
+        {/* Voice button footer */}
+        <div style={{ padding: '12px 16px 16px' }}>
+          <VoiceButton />
+        </div>
+      </div>
     </VGFProvider>
   )
 }

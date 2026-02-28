@@ -12,6 +12,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@deepgram/sdk": "^4.11.3",
     "@volley/recognition-client-sdk": "^0.1.424",
     "@volley/vgf": "^4.8.0",
     "@weekend-casino/shared": "workspace:*",
