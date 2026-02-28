@@ -29,6 +29,17 @@ import {
   tcpSettlementPhase,
   tcpRoundCompletePhase,
 } from './tcp-phases.js'
+import { bjReducers } from './bj-reducers.js'
+import { bjThunks } from './bj-thunks.js'
+import {
+  bjPlaceBetsPhase,
+  bjDealInitialPhase,
+  bjInsurancePhase,
+  bjPlayerTurnsPhase,
+  bjDealerTurnPhase,
+  bjSettlementPhase,
+  bjHandCompletePhase,
+} from './bj-phases.js'
 import {
   drawResetHand,
   drawSetHands,
@@ -914,6 +925,15 @@ const phases = {
   [CasinoPhase.DrawPotDistribution]: drawPotDistributionPhase,
   [CasinoPhase.DrawHandComplete]: drawHandCompletePhase,
 
+  // Blackjack Classic phases (BJ_ prefix per D-003)
+  [CasinoPhase.BjPlaceBets]: bjPlaceBetsPhase,
+  [CasinoPhase.BjDealInitial]: bjDealInitialPhase,
+  [CasinoPhase.BjInsurance]: bjInsurancePhase,
+  [CasinoPhase.BjPlayerTurns]: bjPlayerTurnsPhase,
+  [CasinoPhase.BjDealerTurn]: bjDealerTurnPhase,
+  [CasinoPhase.BjSettlement]: bjSettlementPhase,
+  [CasinoPhase.BjHandComplete]: bjHandCompletePhase,
+
   // Three Card Poker phases (TCP_ prefix per D-003)
   [CasinoPhase.TcpPlaceBets]: tcpPlaceBetsPhase,
   [CasinoPhase.TcpDealCards]: tcpDealCardsPhase,
@@ -994,6 +1014,7 @@ export const casinoRuleset = {
     ...casinoReducers,
     ...holdemReducers,
     ...tcpReducers,
+    ...bjReducers,
     // 5-Card Draw reducers
     drawResetHand,
     drawSetHands,
@@ -1013,6 +1034,7 @@ export const casinoRuleset = {
     ...casinoThunks,
     ...holdemThunks,
     ...tcpThunks,
+    ...bjThunks,
     // 5-Card Draw thunks
     drawProcessAction,
     drawProcessDiscard,

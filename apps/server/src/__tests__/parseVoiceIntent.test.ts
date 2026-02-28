@@ -228,9 +228,11 @@ describe('parseVoiceIntent', () => {
     expect(result.intent).toBe('stand_pat')
   })
 
-  it('should parse "stay" as stand_pat intent', () => {
+  // "stay" now matches bj_stand (higher priority) since blackjack was added.
+  // "stand pat" still works for draw context.
+  it('should parse "stay" as bj_stand intent', () => {
     const result = parseVoiceIntent('stay')
-    expect(result.intent).toBe('stand_pat')
+    expect(result.intent).toBe('bj_stand')
   })
 
   it('should parse "discard" as discard intent', () => {

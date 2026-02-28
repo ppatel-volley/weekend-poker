@@ -158,10 +158,119 @@ export interface FiveCardDrawGameState {
   activePlayerIndex: number
 }
 
+/**
+ * A single blackjack hand (players can have multiple via splits).
+ */
+export interface BlackjackHand {
+  cards: Card[]
+  /** Whether this hand has stood. */
+  stood: boolean
+  /** Whether this hand has busted (value > 21). */
+  busted: boolean
+  /** Whether this hand is a natural blackjack (first two cards = 21). */
+  isBlackjack: boolean
+  /** Whether the player doubled down on this hand. */
+  doubled: boolean
+  /** Bet amount for this hand. */
+  bet: number
+  /** Computed hand value (best non-bust value, or bust value). */
+  value: number
+  /** Whether the hand value is soft (contains an Ace counted as 11). */
+  isSoft: boolean
+}
+
+/**
+ * Blackjack dealer hand.
+ */
+export interface BlackjackDealerHand {
+  cards: Card[]
+  /** Whether the hole card has been revealed. */
+  holeCardRevealed: boolean
+  /** Computed hand value (after reveal). */
+  value: number
+  /** Whether the value is soft. */
+  isSoft: boolean
+  /** Whether the dealer has busted. */
+  busted: boolean
+  /** Whether the dealer has a natural blackjack. */
+  isBlackjack: boolean
+}
+
+/** Per-player blackjack state. */
+export interface BlackjackPlayerState {
+  playerId: string
+  /** Array of hands (normally 1; more if split). */
+  hands: BlackjackHand[]
+  /** Index of the currently active hand (for splits). */
+  activeHandIndex: number
+  /** Insurance bet amount (0 if not placed). */
+  insuranceBet: number
+  /** Whether insurance has been offered and resolved for this player. */
+  insuranceResolved: boolean
+  /** Whether this player has surrendered. */
+  surrendered: boolean
+  /** Total payout for this round (set during settlement). */
+  totalPayout: number
+  /** Net result for this round. */
+  roundResult: number
+}
+
+/** Blackjack difficulty (affects dealer soft-17 rule per D-009). */
+export type BlackjackDifficulty = 'easy' | 'normal' | 'hard'
+
 /** v1 Blackjack Classic game state. Defined in TDD-backend.md Section 6. */
 export interface BlackjackGameState {
   [key: string]: unknown
-  // TBD: Will include players, hands, dealer hand, shoe, insurance bets, etc.
+  /** Per-player state (hands, bets, insurance). */
+  playerStates: BlackjackPlayerState[]
+  /** Dealer's hand. */
+  dealerHand: BlackjackDealerHand
+  /** Order of player turns. */
+  turnOrder: string[]
+  /** Index into turnOrder of the player currently acting. */
+  currentTurnIndex: number
+  /** Whether all bets have been placed (phase transition flag). */
+  allBetsPlaced: boolean
+  /** Whether the initial deal is complete (phase transition flag). */
+  dealComplete: boolean
+  /** Whether insurance has been offered (phase transition flag). */
+  insuranceComplete: boolean
+  /** Whether all player turns are complete (phase transition flag). */
+  playerTurnsComplete: boolean
+  /** Whether the dealer turn is complete (phase transition flag). */
+  dealerTurnComplete: boolean
+  /** Whether settlement is complete (phase transition flag). */
+  settlementComplete: boolean
+  /** Whether the round is ready for next hand or game switch. */
+  roundCompleteReady: boolean
+  /** Round number (for stats). */
+  roundNumber: number
+  /** Shoe penetration percentage (0-100). */
+  shoePenetration: number
+  /** Configuration. */
+  config: BlackjackConfig
+}
+
+/** Blackjack table configuration. */
+export interface BlackjackConfig {
+  minBet: number
+  maxBet: number
+  /** Dealer hits on soft 17 (D-009: false by default, configurable). */
+  dealerHitsSoft17: boolean
+  /** Number of decks in the shoe. */
+  numberOfDecks: number
+  /** Shoe reshuffle penetration threshold (0-1). */
+  reshuffleThreshold: number
+  /** Blackjack payout ratio (default 1.5 = 3:2). */
+  blackjackPaysRatio: number
+  /** Whether insurance is offered. */
+  insuranceEnabled: boolean
+  /** Whether surrender is allowed. */
+  surrenderEnabled: boolean
+  /** Whether splits are allowed. */
+  splitEnabled: boolean
+  /** Max number of splits allowed. */
+  maxSplits: number
 }
 
 /** v1 Blackjack Competitive game state. Defined in TDD-backend.md Section 7. */

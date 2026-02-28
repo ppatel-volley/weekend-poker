@@ -28,6 +28,27 @@ export function getSlotMapForPhase(phase: PokerPhase | CasinoPhase | string): Sl
     }
   }
 
+  // Blackjack-specific slot maps
+  if (phase === CasinoPhase.BjPlaceBets) {
+    return {
+      action: ['bet', 'deal'],
+      amount: [
+        'ten', '10', 'twenty five', '25', 'fifty', '50',
+        'hundred', '100', 'two hundred fifty', '250', 'five hundred', '500',
+      ],
+    }
+  }
+  if (phase === CasinoPhase.BjInsurance) {
+    return {
+      action: ['insurance', 'even money', 'yes', 'no'],
+    }
+  }
+  if (phase === CasinoPhase.BjPlayerTurns) {
+    return {
+      action: ['hit', 'hit me', 'card', 'stand', 'stay', 'hold', 'double', 'double down', 'split', 'surrender', 'give up'],
+    }
+  }
+
   switch (phase) {
     case PokerPhase.Lobby:
       return {

@@ -10,6 +10,8 @@ export type VoiceIntent =
   | 'draw' | 'stand_pat' | 'discard'
   // TCP-specific intents
   | 'tcp_ante' | 'tcp_pair_plus' | 'tcp_play' | 'tcp_fold' | 'tcp_confirm'
+  // Blackjack intents
+  | 'bj_hit' | 'bj_stand' | 'bj_double' | 'bj_split' | 'bj_insurance' | 'bj_surrender'
   | 'unknown'
 
 export interface ParsedVoiceCommand {

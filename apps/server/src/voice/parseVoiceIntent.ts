@@ -69,7 +69,16 @@ function parseAmount(text: string): number | undefined {
 // ── Intent patterns in priority order ────────────────────────
 
 const INTENT_PATTERNS: Array<{ intent: VoiceIntent; pattern: RegExp }> = [
-  // TCP-specific intents (checked first — more specific than generic poker)
+  // Multi-word / compound intents first (most specific)
+  { intent: 'bj_double', pattern: /\b(double\s*(down)?)\b/ },
+  { intent: 'bj_insurance', pattern: /\b(insurance|even\s*money)\b/ },
+  { intent: 'bj_surrender', pattern: /\b(surrender|give\s*up)\b/ },
+  { intent: 'stand_pat', pattern: /\b(stand\s*pat|keep\s*(all|them)?)\b/ },
+  // Blackjack single-word intents (after stand_pat to avoid "stand" matching "stand pat")
+  { intent: 'bj_split', pattern: /\bsplit\b/ },
+  { intent: 'bj_hit', pattern: /\b(hit\s*(me)?|card)\b/ },
+  { intent: 'bj_stand', pattern: /\b(stand|stay|hold)\b/ },
+  // TCP-specific intents
   { intent: 'tcp_pair_plus', pattern: /\b(pair\s*plus|side\s*bet)\b/ },
   { intent: 'tcp_ante', pattern: /\b(ante\s*(up)?)\b/ },
   { intent: 'tcp_play', pattern: /\b(play|i'?m\s*in)\b/ },
@@ -77,7 +86,6 @@ const INTENT_PATTERNS: Array<{ intent: VoiceIntent; pattern: RegExp }> = [
   { intent: 'tcp_confirm', pattern: /\bconfirm\b/ },
   // 5-Card Draw intents
   { intent: 'draw', pattern: /\b(draw\s*(cards?)?)\b/ },
-  { intent: 'stand_pat', pattern: /\b(stand\s*pat|keep\s*(all|them)?|stay)\b/ },
   { intent: 'discard', pattern: /\b(discard)\b/ },
   // Generic poker intents
   { intent: 'all_in', pattern: /\b(all\s*in|shove|push)\b/ },

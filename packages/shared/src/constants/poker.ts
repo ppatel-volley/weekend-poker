@@ -29,3 +29,16 @@ export const TCP_MAX_ANTE = 500
 export const TCP_MAX_PAIR_PLUS = 100
 export const TCP_BET_TIMEOUT_MS = 20_000
 export const TCP_DECISION_TIMEOUT_MS = 15_000
+
+// ── Blackjack Classic Constants (D-006, D-009) ─────────────────────
+export const BJ_MIN_BET = 10
+export const BJ_MAX_BET = 500             // D-006
+export const BJ_NUMBER_OF_DECKS = 6
+export const BJ_RESHUFFLE_THRESHOLD = 0.75  // Reshuffle at 75% penetration
+export const BJ_BLACKJACK_PAYS_RATIO = 1.5  // 3:2
+export const BJ_INSURANCE_PAYS_RATIO = 2    // 2:1
+export const BJ_DEALER_HITS_SOFT_17 = false  // D-009: stands on soft 17 by default
+export const BJ_MAX_SPLITS = 3
+export const BJ_BET_TIMEOUT_MS = 20_000
+export const BJ_ACTION_TIMEOUT_MS = 30_000
+export const BJ_INSURANCE_TIMEOUT_MS = 10_000
