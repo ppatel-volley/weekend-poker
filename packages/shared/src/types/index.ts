@@ -131,3 +131,17 @@ export {
   RANKS,
   rankToNumeric,
 } from './cards.js'
+
+// ────────────────────────────────────────────────────────────────────
+// Platform Types — TV Platform Integration
+// ────────────────────────────────────────────────────────────────────
+
+export type {
+  PlatformType,
+  InputMode,
+  PlatformDetectionResult,
+} from './platform.js'
+export {
+  TV_PLATFORMS,
+  isTVPlatform,
+} from './platform.js'

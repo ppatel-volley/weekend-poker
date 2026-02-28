@@ -3,9 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "electron/main.ts",
   "scripts": {
     "dev": "vite --port 5173",
+    "dev:electron": "electron .",
     "build": "tsc && vite build",
+    "build:electron": "electron-builder build --win",
     "preview": "vite preview",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
@@ -20,15 +23,28 @@
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "@noriginmedia/norigin-spatial-navigation": "^2.1.0",
     "three": "^0.172.0"
+  },
+  "peerDependencies": {
+    "@volley/platform-sdk": "*"
+  },
+  "peerDependenciesMeta": {
+    "@volley/platform-sdk": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@testing-library/react": "^16.2.0",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "@types/three": "^0.172.0",
+    "@vitejs/plugin-legacy": "^6.0.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.0",
     "jsdom": "^26.0.0",
+    "terser": "^5.37.0",
     "typescript": "^5.7.3",
     "vite": "^6.1.0",
     "vitest": "^3.0.5"

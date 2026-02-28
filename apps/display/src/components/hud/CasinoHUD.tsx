@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { CASINO_GAME_LABELS } from '@weekend-casino/shared'
 import type { CasinoGame } from '@weekend-casino/shared'
+import { useFocusable } from '@noriginmedia/norigin-spatial-navigation'
 import { useCurrentGame, useStateSyncSelector } from '../../hooks/useVGFHooks.js'
+import { useInputMode } from '../../platform/InputModeProvider.js'
 
 /** Formats seconds as HH:MM:SS. */
 function formatSessionTime(totalSeconds: number): string {
@@ -13,6 +15,10 @@ function formatSessionTime(totalSeconds: number): string {
     ? `${pad(hrs)}:${pad(mins)}:${pad(secs)}`
     : `${pad(mins)}:${pad(secs)}`
 }
+
+/** Focus indicator styles for TV remote navigation. */
+const focusOutline = '2px solid #60a5fa'
+const focusShadow = '0 0 10px rgba(96, 165, 250, 0.5)'
 
 const overlayStyle: React.CSSProperties = {
   position: 'absolute',
@@ -52,12 +58,21 @@ const bottomBarStyle: React.CSSProperties = {
  *
  * Shows: current game indicator, wallet balance, session timer.
  * Visible during all game scenes, hidden in lobby.
+ * When in remote mode, HUD elements show focus indicators for D-pad navigation.
  */
 export function CasinoHUD() {
   const currentGame = useCurrentGame()
   const wallet = useStateSyncSelector((s) => s.wallet)
   const players = useStateSyncSelector((s) => s.players)
   const dealerMessage = useStateSyncSelector((s) => s.dealerMessage)
+  const { inputMode } = useInputMode()
+  const isRemote = inputMode === 'remote'
+
+  const { ref: hudRef } = useFocusable({
+    focusKey: 'CASINO_HUD',
+    trackChildren: true,
+    focusable: isRemote,
+  })
 
   const [sessionSeconds, setSessionSeconds] = useState(0)
 
@@ -74,12 +89,14 @@ export function CasinoHUD() {
   const gameLabel = CASINO_GAME_LABELS[currentGame as CasinoGame] ?? currentGame
 
   return (
-    <div style={overlayStyle} data-testid="casino-hud">
+    <div ref={hudRef} style={overlayStyle} data-testid="casino-hud">
       {/* Top bar */}
       <div style={topBarStyle}>
-        <span style={{ fontSize: '1rem', fontWeight: 600 }}>
-          {gameLabel}
-        </span>
+        <FocusableHUDItem focusKey="HUD_GAME_LABEL" isRemote={isRemote}>
+          <span style={{ fontSize: '1rem', fontWeight: 600 }}>
+            {gameLabel}
+          </span>
+        </FocusableHUDItem>
         <span style={{ fontSize: '0.875rem', opacity: 0.8 }}>
           {formatSessionTime(sessionSeconds)}
         </span>
@@ -103,13 +120,45 @@ export function CasinoHUD() {
       {players && players.length > 0 && wallet && (
         <div style={bottomBarStyle}>
           {players.map((p) => (
-            <span key={p.id}>
-              {p.name || p.id.slice(0, 8)}:{' '}
-              <strong>${wallet[p.id]?.toLocaleString() ?? 0}</strong>
-            </span>
+            <FocusableHUDItem key={p.id} focusKey={`HUD_WALLET_${p.id}`} isRemote={isRemote}>
+              <span>
+                {p.name || p.id.slice(0, 8)}:{' '}
+                <strong>${wallet[p.id]?.toLocaleString() ?? 0}</strong>
+              </span>
+            </FocusableHUDItem>
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function FocusableHUDItem({
+  children,
+  focusKey,
+  isRemote,
+}: {
+  children: React.ReactNode
+  focusKey: string
+  isRemote: boolean
+}) {
+  const { ref, focused } = useFocusable({
+    focusKey,
+    focusable: isRemote,
+  })
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        borderRadius: 4,
+        padding: '2px 6px',
+        outline: focused ? focusOutline : 'none',
+        boxShadow: focused ? focusShadow : 'none',
+        transition: 'outline 0.15s ease, box-shadow 0.15s ease',
+      }}
+    >
+      {children}
     </div>
   )
 }

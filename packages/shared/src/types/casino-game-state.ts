@@ -5,6 +5,7 @@ import type { Wallet } from './casino-wallet.js'
 import type { SessionStats } from './casino-session-stats.js'
 import type { VideoPlayback, BackgroundVideo } from './casino-video.js'
 import type { BlindLevel, TTSMessage, SidePot } from './game-state.js'
+import type { InputMode } from './platform.js'
 
 /**
  * Root Casino Game State — Multi-game platform unified state (D-002, D-001).
@@ -85,6 +86,11 @@ export interface CasinoGameState {
   // ───────────────────────────────────────────────────────────────
   videoPlayback?: VideoPlayback                 // foreground video state (dealer intro, hand results, etc.)
   backgroundVideo?: BackgroundVideo             // ambient loops (separate from foreground)
+
+  // ───────────────────────────────────────────────────────────────
+  // Input Mode (TV platform integration)
+  // ───────────────────────────────────────────────────────────────
+  inputMode?: InputMode
 
   // ───────────────────────────────────────────────────────────────
   // Transient UI State

@@ -5,14 +5,13 @@ import { VGFServer, MemoryStorage, SocketIOTransport } from '@volley/vgf/server'
 import type { PokerGameState } from '@weekend-casino/shared'
 import { pokerRuleset } from './ruleset/index.js'
 import { logger } from './logger.js'
+import { parseAllowedOrigins } from './cors-config.js'
 
 const PORT = Number(process.env['PORT']) || 3000
 
 const app = express()
 
-const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production'
-  ? ['https://your-production-domain.com']
-  : [/^http:\/\/localhost:\d+$/, /^http:\/\/192\.168\.\d+\.\d+:\d+$/, /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/]
+const ALLOWED_ORIGINS = parseAllowedOrigins()
 
 app.use(cors({
   origin: ALLOWED_ORIGINS,
@@ -28,7 +27,10 @@ app.get('/health', (_req, res) => {
 const httpServer = createServer(app)
 
 // ── VGF storage ───────────────────────────────────────────────
-// TODO: Replace MemoryStorage with RedisPersistence for production deployments
+// TODO: When REDIS_URL is set, wire in RedisStorage from VGF's Redis adapter
+// e.g. const storage = process.env['REDIS_URL']
+//        ? new RedisStorage({ url: process.env['REDIS_URL'] })
+//        : new MemoryStorage({ ttlInSeconds: 14400 })
 const storage = new MemoryStorage({ ttlInSeconds: 14400 })
 
 // ── VGF transport ──────────────────────────────────────────────

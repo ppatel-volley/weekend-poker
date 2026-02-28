@@ -12,6 +12,9 @@ import { CasinoHUD } from './components/hud/CasinoHUD.js'
 import { LobbyView } from './components/LobbyView.js'
 import { SessionIdContext } from './hooks/useSessionId.js'
 import { usePhase } from './hooks/useVGFHooks.js'
+import { MaybePlatformProvider, InputModeProvider } from './platform/index.js'
+import { getDisplayUserId } from './utils/getDisplayUserId.js'
+import { getDevParams } from './utils/getDevParams.js'
 
 const SERVER_URL =
   (import.meta.env['VITE_SERVER_URL'] as string | undefined) ??
@@ -54,18 +57,18 @@ function DisplayRouter() {
   )
 }
 
-function ConnectedApp({ sessionId }: { sessionId: string }) {
+function ConnectedApp({ sessionId, serverUrl }: { sessionId: string; serverUrl: string }) {
   const transport = useMemo(
     () => createSocketIOClientTransport({
-      url: SERVER_URL,
+      url: serverUrl,
       query: {
         sessionId,
-        userId: 'display-1',
+        userId: getDisplayUserId(),
         clientType: ClientType.Display,
       },
       socketOptions: { transports: ['polling', 'websocket'] },
     }),
-    [sessionId],
+    [sessionId, serverUrl],
   )
 
   return (
@@ -78,14 +81,22 @@ function ConnectedApp({ sessionId }: { sessionId: string }) {
 }
 
 export function App() {
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  const devParams = useMemo(() => getDevParams(), [])
+  const effectiveServerUrl = devParams.serverUrl ?? SERVER_URL
+
+  const [sessionId, setSessionId] = useState<string | null>(
+    devParams.sessionId ?? null,
+  )
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    createSession(SERVER_URL)
+    // Skip session creation when a sessionId was provided via URL param
+    if (devParams.sessionId) return
+
+    createSession(effectiveServerUrl)
       .then((id) => setSessionId(id))
       .catch((err) => setError(String(err)))
-  }, [])
+  }, [devParams.sessionId, effectiveServerUrl])
 
   if (error) {
     return (
@@ -105,5 +116,11 @@ export function App() {
     )
   }
 
-  return <ConnectedApp sessionId={sessionId} />
+  return (
+    <MaybePlatformProvider>
+      <InputModeProvider>
+        <ConnectedApp sessionId={sessionId} serverUrl={effectiveServerUrl} />
+      </InputModeProvider>
+    </MaybePlatformProvider>
+  )
 }

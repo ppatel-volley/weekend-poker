@@ -55,7 +55,7 @@ export default defineConfig({
         viewport: { width: 1920, height: 1080 },
         baseURL: 'http://localhost:5173',
       },
-      testMatch: /\b(lobby|holdem)\b.*\.test\.ts$/,
+      testMatch: /\b(lobby|holdem|tv-platform)\b.*\.test\.ts$/,
     },
   ],
 

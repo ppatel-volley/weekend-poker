@@ -4,7 +4,7 @@
  * Per TDD-backend Section 3.1-3.3 and D-001, D-002, D-005.
  */
 
-import type { CasinoGameState, CasinoGame, CasinoPlayer, TTSMessage, HandHighlight } from '@weekend-casino/shared'
+import type { CasinoGameState, CasinoGame, CasinoPlayer, TTSMessage, HandHighlight, InputMode } from '@weekend-casino/shared'
 import { CasinoPhase, DEFAULT_BLIND_LEVEL, STARTING_WALLET_BALANCE, STARTING_STACK, BLIND_LEVELS } from '@weekend-casino/shared'
 import type { GameReducer, GameThunk, IThunkContext } from '@volley/vgf/types'
 
@@ -263,6 +263,14 @@ export const casinoSetLobbyReady: Reducer<[boolean]> = (state, ready) => ({
   lobbyReady: ready,
 })
 
+/**
+ * Set the input mode on game state.
+ */
+export const casinoSetInputMode: Reducer<[InputMode]> = (state, mode) => ({
+  ...state,
+  inputMode: mode,
+})
+
 // ── Global Thunks (Mock/Stub) ────────────────────────────────────
 
 /**
@@ -334,6 +342,14 @@ export const casinoCompleteVideo: Thunk = async (ctx) => {
   }
 }
 
+/**
+ * Activate remote mode — sets inputMode to 'remote' on the game state.
+ * Uses explicit reducer dispatch per endIf Rule 3 (no implicit phase changes).
+ */
+export const casinoActivateRemoteMode: Thunk = async (ctx) => {
+  ctx.dispatch('setInputMode', 'remote')
+}
+
 // ── Exports ────────────────────────────────────────────────────────
 
 export const casinoReducers = {
@@ -357,6 +373,7 @@ export const casinoReducers = {
   setBetError: casinoSetBetError,
   clearBetError: casinoClearBetError,
   setLobbyReady: casinoSetLobbyReady,
+  setInputMode: casinoSetInputMode,
 }
 
 export const casinoThunks = {
@@ -365,4 +382,5 @@ export const casinoThunks = {
   handleRebuy: casinoHandleRebuy,
   triggerVideo: casinoTriggerVideo,
   completeVideo: casinoCompleteVideo,
+  activateRemoteMode: casinoActivateRemoteMode,
 }
