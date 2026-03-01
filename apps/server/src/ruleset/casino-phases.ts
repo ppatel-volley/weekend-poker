@@ -23,6 +23,20 @@ export const lobbyPhase: Phase<CasinoGameState> = {
       ...state,
       lobbyReady: ready,
     }),
+    selectGame: (state, game: CasinoGame) => ({
+      ...state,
+      selectedGame: game,
+      gameSelectConfirmed: false,
+    }),
+    setSelectedGame: (state, game: CasinoGame) => ({
+      ...state,
+      selectedGame: game,
+      gameSelectConfirmed: false,
+    }),
+    checkLobbyReady: (state) => ({
+      ...state,
+      lobbyReady: true,
+    }),
   },
 
   thunks: {},
@@ -62,6 +76,11 @@ export const lobbyPhase: Phase<CasinoGameState> = {
 export const gameSelectPhase: Phase<CasinoGameState> = {
   reducers: {
     setSelectedGame: (state, game: CasinoGame) => ({
+      ...state,
+      selectedGame: game,
+      gameSelectConfirmed: false,
+    }),
+    selectGame: (state, game: CasinoGame) => ({
       ...state,
       selectedGame: game,
       gameSelectConfirmed: false,
