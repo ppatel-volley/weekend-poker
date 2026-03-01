@@ -1090,6 +1090,12 @@ export const casinoRuleset = {
     drawAwardPot,
     drawSetCurrentBet,
     drawSetMinRaiseIncrement,
+    // Controller dispatch aliases (controller uses short names)
+    selectGame: casinoReducers.setSelectedGame,
+    checkLobbyReady: ((state: CasinoGameState): CasinoGameState => ({
+      ...state,
+      lobbyReady: true,
+    })) as any,
   },
   thunks: {
     ...casinoThunks,

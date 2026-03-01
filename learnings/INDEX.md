@@ -13,6 +13,8 @@
 | New game implementation | 004 |
 | Dependencies / pnpm install | 005 |
 | React 19 compatibility | 005 |
+| VGF dispatch / reducers | 006 |
+| Controller-server integration | 006 |
 
 ## Summaries
 
@@ -41,6 +43,11 @@ Every reducer/thunk that modifies wallet balances or player stacks must enforce 
 **Category:** React, Three.js, Dependencies
 R3F v8 uses `react-reconciler@0.27.0` which is incompatible with React 19.2+ (missing `ReactCurrentOwner` internal). Fatal runtime error at module import time. Fix: upgrade R3F to v9+, drei to v10+. Never use R3F v8 with React 19.
 
+### 006 — Controller dispatch names must match server reducer registration
+**Severity:** Critical
+**Category:** VGF, State Management, Client-Server
+Controller dispatches actions by string name; VGF looks them up in the ruleset's `reducers`/`thunks` objects. Mismatched names cause silent `DispatchTimeoutError` (no "reducer not found" error). Always verify dispatch names match server registration exactly.
+
 ## Cross-Reference
 
 | Topic | Learnings |
@@ -60,3 +67,6 @@ R3F v8 uses `react-reconciler@0.27.0` which is incompatible with React 19.2+ (mi
 | R3F + React 19 | 005 |
 | react-reconciler | 005 |
 | pnpm lockfile changes | 005 |
+| Dispatch name mismatch | 006 |
+| DispatchTimeoutError | 006 |
+| Button does nothing | 006 |
