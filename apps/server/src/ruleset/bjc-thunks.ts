@@ -9,7 +9,6 @@
  */
 
 import type { CasinoGameState, Card } from '@weekend-casino/shared'
-import { BJ_MIN_BET, BJ_MAX_BET } from '@weekend-casino/shared'
 import {
   evaluateBlackjackHand,
   isNaturalBlackjack,

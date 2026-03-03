@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
-import type { PokerPhase, PlayerAction, PokerGameState, Card } from '@weekend-casino/shared'
-import { BETTING_PHASES, getPhaseLabel, CasinoPhase } from '@weekend-casino/shared'
+import type { PlayerAction, PokerGameState, Card } from '@weekend-casino/shared'
+import { CasinoPhase, BETTING_PHASES, getPhaseLabel } from '@weekend-casino/shared'
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition.js'
 import { useDispatchThunk, useSessionMember, useStateSync } from '../hooks/useVGFHooks.js'
 
@@ -10,13 +10,14 @@ import { useDispatchThunk, useSessionMember, useStateSync } from '../hooks/useVG
  * Shows hole cards, action buttons during betting phases,
  * and a push-to-talk button for voice commands.
  */
-export function ControllerGameplay({ phase }: { phase: PokerPhase }) {
+export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
   const isBettingPhase = (BETTING_PHASES as readonly string[]).includes(phase)
   const { status, pendingTranscript, finalTranscript, startRecording, stopRecording } = useVoiceRecognition()
 
   const dispatchThunk = useDispatchThunk() as (name: string, ...args: unknown[]) => void
   const member = useSessionMember()
-  const state = useStateSync() as PokerGameState | null
+  // Hold'em-specific view: cast to PokerGameState for Hold'em field access
+  const state = useStateSync() as unknown as PokerGameState | null
 
   const playerId = member?.sessionMemberId ?? ''
   const player = state?.players.find(p => p.id === playerId)
@@ -75,7 +76,7 @@ export function ControllerGameplay({ phase }: { phase: PokerPhase }) {
           opacity: 0.8,
         }}
       >
-        <span>{getPhaseLabel(phase as CasinoPhase)}</span>
+        <span>{getPhaseLabel(phase)}</span>
         <span>Stack: ${myStack}</span>
       </div>
 

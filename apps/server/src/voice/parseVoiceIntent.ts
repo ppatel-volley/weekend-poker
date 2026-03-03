@@ -74,6 +74,8 @@ const INTENT_PATTERNS: Array<{ intent: VoiceIntent; pattern: RegExp }> = [
   { intent: 'bj_insurance', pattern: /\b(insurance|even\s*money)\b/ },
   { intent: 'bj_surrender', pattern: /\b(surrender|give\s*up)\b/ },
   { intent: 'stand_pat', pattern: /\b(stand\s*pat|keep\s*(all|them)?)\b/ },
+  // Roulette split (before bj_split — more specific, requires numbers)
+  { intent: 'roulette_split', pattern: /\bsplit\s+\d+\s*(and|&)\s*\d+\b/ },
   // Blackjack single-word intents (after stand_pat to avoid "stand" matching "stand pat")
   { intent: 'bj_split', pattern: /\bsplit\b/ },
   { intent: 'bj_hit', pattern: /\b(hit\s*(me)?|gimme\s*a?\s*card|card)\b/ },
@@ -87,6 +89,19 @@ const INTENT_PATTERNS: Array<{ intent: VoiceIntent; pattern: RegExp }> = [
   // 5-Card Draw intents
   { intent: 'draw', pattern: /\b(draw\s*(cards?)?)\b/ },
   { intent: 'discard', pattern: /\b(discard)\b/ },
+  // Roulette intents
+  { intent: 'roulette_repeat', pattern: /\b(repeat|same\s*again|repeat\s*last)\b/ },
+  { intent: 'roulette_clear', pattern: /\b(clear\s*(all)?|remove\s*all)\b/ },
+  { intent: 'roulette_confirm', pattern: /\b(confirm|done|that'?s\s*it)\b/ },
+  { intent: 'roulette_no_bet', pattern: /\b(no\s*bet|skip)\b/ },
+  { intent: 'roulette_red', pattern: /\b(on\s*)?red\b/ },
+  { intent: 'roulette_black', pattern: /\b(on\s*)?black\b/ },
+  { intent: 'roulette_odd', pattern: /\bodd\b/ },
+  { intent: 'roulette_even', pattern: /\beven\b/ },
+  { intent: 'roulette_high', pattern: /\b(high|19\s*to\s*36)\b/ },
+  { intent: 'roulette_low', pattern: /\b(low|1\s*to\s*18)\b/ },
+  { intent: 'roulette_dozen', pattern: /\b(first|second|third)\s*dozen\b/ },
+  { intent: 'roulette_straight', pattern: /\b(number\s*\d+|straight\s*up\s*\d+)\b/ },
   // Generic poker intents
   { intent: 'all_in', pattern: /\b(all\s*in|shove|push)\b/ },
   { intent: 'fold', pattern: /\b(fold|muck)\b/ },
@@ -126,6 +141,30 @@ export function parseVoiceIntent(transcript: string): ParsedVoiceCommand {
         if (amount !== undefined) {
           entities.amount = amount
         }
+      }
+
+      // Extract number for roulette straight-up bets (e.g. "number 17")
+      if (intent === 'roulette_straight') {
+        const numMatch = normalised.match(/\b(\d+)\b/)
+        if (numMatch) {
+          entities.amount = Number(numMatch[1])
+        }
+      }
+
+      // Extract numbers for roulette split bets (e.g. "split 17 and 20")
+      if (intent === 'roulette_split') {
+        const splitMatch = normalised.match(/split\s+(\d+)\s*(?:and|&)\s*(\d+)/)
+        if (splitMatch) {
+          entities.amount = Number(splitMatch[1])
+          entities.splitTarget = Number(splitMatch[2])
+        }
+      }
+
+      // Extract dozen number for roulette dozen bets
+      if (intent === 'roulette_dozen') {
+        if (normalised.includes('first')) entities.amount = 1
+        else if (normalised.includes('second')) entities.amount = 2
+        else if (normalised.includes('third')) entities.amount = 3
       }
 
       return {

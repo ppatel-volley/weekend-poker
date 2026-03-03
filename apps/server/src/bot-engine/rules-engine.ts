@@ -230,7 +230,7 @@ function easyDecision(
   context: BotDecisionContext,
   random: () => number,
 ): { action: PlayerAction; amount?: number } {
-  const { legalActions, currentBet, bet, minRaiseIncrement } = context
+  const { legalActions, currentBet, minRaiseIncrement } = context
   const roll = random()
 
   // Easy bot: random with fold bias, calls too much, rarely raises

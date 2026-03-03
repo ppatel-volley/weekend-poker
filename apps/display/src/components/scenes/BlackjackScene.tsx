@@ -8,7 +8,7 @@
  */
 
 import { useStateSyncSelector } from '../../hooks/useVGFHooks.js'
-import type { BlackjackGameState, BlackjackHand, BlackjackPlayerState, Card } from '@weekend-casino/shared'
+import type { BlackjackGameState, BlackjackPlayerState } from '@weekend-casino/shared'
 
 /** Card placeholder — face-down or face-up 3D card. */
 function CardPlaceholder({
@@ -51,11 +51,10 @@ function ChipStack({
 /** Status indicator (bust/blackjack/push). */
 function StatusIndicator({
   position,
-  text,
   colour,
 }: {
   position: [number, number, number]
-  text: string
+  text?: string
   colour: string
 }) {
   return (

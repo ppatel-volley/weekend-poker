@@ -5,35 +5,33 @@
  * and game selection before transitioning to game-specific phases.
  */
 
-import type { Phase, IThunkContext } from '@volley/vgf/types'
 import type { CasinoGameState, CasinoGame } from '@weekend-casino/shared'
 import { CasinoPhase, GAME_FIRST_PHASE } from '@weekend-casino/shared'
 import { switchGameServerState } from '../server-game-state.js'
-
-type ThunkCtx = IThunkContext<CasinoGameState>
 
 /**
  * LOBBY phase: Players join, ready up, host confirms start.
  *
  * Transitions to GAME_SELECT when host confirms and minimum players are met.
  */
-export const lobbyPhase: Phase<CasinoGameState> = {
+export const lobbyPhase = {
+  actions: {} as Record<string, never>,
   reducers: {
-    setLobbyReady: (state, ready: boolean) => ({
+    setLobbyReady: (state: CasinoGameState, ready: boolean) => ({
       ...state,
       lobbyReady: ready,
     }),
-    selectGame: (state, game: CasinoGame) => ({
+    selectGame: (state: CasinoGameState, game: CasinoGame) => ({
       ...state,
       selectedGame: game,
       gameSelectConfirmed: false,
     }),
-    setSelectedGame: (state, game: CasinoGame) => ({
+    setSelectedGame: (state: CasinoGameState, game: CasinoGame) => ({
       ...state,
       selectedGame: game,
       gameSelectConfirmed: false,
     }),
-    checkLobbyReady: (state) => ({
+    checkLobbyReady: (state: CasinoGameState) => ({
       ...state,
       lobbyReady: true,
     }),
@@ -41,14 +39,14 @@ export const lobbyPhase: Phase<CasinoGameState> = {
 
   thunks: {},
 
-  onBegin: async (ctx: ThunkCtx) => {
-    const state = ctx.getState()
-    console.log('[LOBBY] Phase started. Players:', state.players.length)
+  onBegin: async (ctx: any) => {
+    const lobbyState: CasinoGameState = ctx.getState()
+    console.log('[LOBBY] Phase started. Players:', lobbyState.players.length)
     ctx.dispatch('setDealerMessage', 'Welcome to Casino Night! Waiting for players...')
   },
 
-  endIf: (ctx: ThunkCtx) => {
-    const state = ctx.getState()
+  endIf: (ctx: any) => {
+    const state: CasinoGameState = ctx.session.state
     // Transition to GAME_SELECT when:
     // 1. Host (dealer) confirms, AND
     // 2. At least 2 players are ready (minimum for multi-player)
@@ -58,8 +56,7 @@ export const lobbyPhase: Phase<CasinoGameState> = {
 
   next: () => CasinoPhase.GameSelect,
 
-  onEnd: async (ctx: ThunkCtx) => {
-    const state = ctx.getState()
+  onEnd: async (ctx: any) => {
     console.log('[LOBBY] Ending. Transitioning to GAME_SELECT.')
     ctx.dispatch('setDealerMessage', 'Choose your first game!')
   },
@@ -73,20 +70,21 @@ export const lobbyPhase: Phase<CasinoGameState> = {
  *
  * Transitions to the selected game's first phase when confirmed.
  */
-export const gameSelectPhase: Phase<CasinoGameState> = {
+export const gameSelectPhase = {
+  actions: {} as Record<string, never>,
   reducers: {
-    setSelectedGame: (state, game: CasinoGame) => ({
+    setSelectedGame: (state: CasinoGameState, game: CasinoGame) => ({
       ...state,
       selectedGame: game,
       gameSelectConfirmed: false,
     }),
-    selectGame: (state, game: CasinoGame) => ({
+    selectGame: (state: CasinoGameState, game: CasinoGame) => ({
       ...state,
       selectedGame: game,
       gameSelectConfirmed: false,
     }),
 
-    confirmGameSelection: (state) => ({
+    confirmGameSelection: (state: CasinoGameState) => ({
       ...state,
       gameSelectConfirmed: true,
     }),
@@ -94,8 +92,7 @@ export const gameSelectPhase: Phase<CasinoGameState> = {
 
   thunks: {},
 
-  onBegin: async (ctx: ThunkCtx) => {
-    const state = ctx.getState()
+  onBegin: async (ctx: any) => {
     console.log('[GAME_SELECT] Phase started.')
     ctx.dispatch('setGameChangeRequested', false)
     // Reset game-specific sub-states (server-side)
@@ -103,25 +100,25 @@ export const gameSelectPhase: Phase<CasinoGameState> = {
     ctx.dispatch('setDealerMessage', 'Select a game from the menu.')
   },
 
-  endIf: (ctx: ThunkCtx) => {
-    const state = ctx.getState()
+  endIf: (ctx: any) => {
+    const state: CasinoGameState = ctx.session.state
     // Transition when:
     // 1. A game is selected, AND
     // 2. Selection is confirmed by host
     return state.selectedGame !== null && state.gameSelectConfirmed === true
   },
 
-  next: (ctx: ThunkCtx) => {
-    const state = ctx.getState()
+  next: (ctx: any) => {
+    const state: CasinoGameState = ctx.session.state
     const selectedGame = state.selectedGame!
     const firstPhase = GAME_FIRST_PHASE[selectedGame]
     console.log(`[GAME_SELECT] Transitioning to ${selectedGame}:${firstPhase}`)
     return firstPhase
   },
 
-  onEnd: async (ctx: ThunkCtx) => {
-    const state = ctx.getState()
-    const selectedGame = state.selectedGame!
+  onEnd: async (ctx: any) => {
+    const endState: CasinoGameState = ctx.getState()
+    const selectedGame = endState.selectedGame!
     console.log(`[GAME_SELECT] Initializing server state for ${selectedGame}.`)
     // Initialize server-side game state
     switchGameServerState(ctx.getSessionId(), selectedGame)

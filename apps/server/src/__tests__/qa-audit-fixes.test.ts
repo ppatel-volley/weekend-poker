@@ -5,15 +5,17 @@
  * and is now fixed. Grouped by finding ID.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { CasinoGameState, CasinoPlayer, Card } from '@weekend-casino/shared'
-import { CasinoPhase, STARTING_WALLET_BALANCE, STARTING_STACK } from '@weekend-casino/shared'
+import { describe, it, expect } from 'vitest'
+import type { CasinoGameState, Card } from '@weekend-casino/shared'
+import { CasinoPhase, STARTING_STACK } from '@weekend-casino/shared'
 import { createInitialCasinoState, casinoReducers } from '../ruleset/casino-state.js'
 import { casinoRuleset } from '../ruleset/casino-ruleset.js'
 
 // ── Helpers ────────────────────────────────────────────────────
 
-function makeCasinoPlayer(overrides: Partial<CasinoPlayer> = {}): CasinoPlayer {
+// The actual runtime players have poker-compat fields (stack, bet, etc.)
+// that are not on the CasinoPlayer type. Use `any` for the return.
+function makeCasinoPlayer(overrides: Record<string, any> = {}): any {
   return {
     id: 'player-1',
     name: 'Alice',
@@ -25,6 +27,10 @@ function makeCasinoPlayer(overrides: Partial<CasinoPlayer> = {}): CasinoPlayer {
     isBot: false,
     isConnected: true,
     sittingOutHandCount: 0,
+    avatarId: 'default',
+    isHost: false,
+    isReady: false,
+    currentGameStatus: 'active',
     ...overrides,
   }
 }

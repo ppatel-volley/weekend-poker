@@ -10,8 +10,8 @@ test.describe('Game switching', () => {
   test('controller shows all v1 game buttons', async ({ controllerPage }) => {
     await expect(controllerPage.getByRole('button', { name: "Texas Hold'em" })).toBeVisible()
     await expect(controllerPage.getByRole('button', { name: '5-Card Draw' })).toBeVisible()
-    await expect(controllerPage.getByRole('button', { name: 'Blackjack' })).toBeVisible()
-    await expect(controllerPage.getByRole('button', { name: 'Competitive Blackjack' })).toBeVisible()
+    await expect(controllerPage.getByRole('button', { name: /Blackjack Beat the dealer/ })).toBeVisible()
+    await expect(controllerPage.getByRole('button', { name: /Competitive Blackjack/ })).toBeVisible()
   })
 
   test('selecting a game highlights the button', async ({ controllerPage, selectGame }) => {
@@ -20,8 +20,8 @@ test.describe('Game switching', () => {
     // The selected button should have a green border (visual check via style)
     const holdemButton = controllerPage.getByRole('button', { name: "Texas Hold'em" })
     await expect(holdemButton).toBeVisible()
-    // Check it got the selected style (green border)
-    await expect(holdemButton).toHaveCSS('border-color', 'rgb(74, 222, 128)')
+    // Check it got the selected style (green border — rgba with 0.6 alpha)
+    await expect(holdemButton).toHaveCSS('border-color', 'rgba(74, 222, 128, 0.6)')
   })
 
   test('can switch game selection', async ({ controllerPage, selectGame }) => {
@@ -33,6 +33,6 @@ test.describe('Game switching', () => {
 
     // The 5-Card Draw button should be highlighted
     const drawButton = controllerPage.getByRole('button', { name: '5-Card Draw' })
-    await expect(drawButton).toHaveCSS('border-color', 'rgb(74, 222, 128)')
+    await expect(drawButton).toHaveCSS('border-color', 'rgba(74, 222, 128, 0.6)')
   })
 })

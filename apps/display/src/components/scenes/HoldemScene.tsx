@@ -1,4 +1,3 @@
-import { Suspense } from 'react'
 import { PokerTable } from '../PokerTable.js'
 import { Lighting } from '../Lighting.js'
 import { CameraRig } from '../CameraRig.js'
@@ -9,7 +8,7 @@ import { PlayerSeats } from '../PlayerSeats.js'
 import { PotDisplay } from '../PotDisplay.js'
 import { DealerSpeechBubble } from '../DealerSpeechBubble.js'
 import { usePhase } from '../../hooks/useVGFHooks.js'
-import type { CasinoPhase } from '@weekend-casino/shared'
+import type { PokerPhase } from '@weekend-casino/shared'
 
 /**
  * Hold'em scene — "The Vault".
@@ -22,7 +21,7 @@ export function HoldemScene() {
   return (
     <group>
       <Lighting />
-      <CameraRig phase={phase as CasinoPhase} />
+      <CameraRig phase={phase as unknown as PokerPhase} />
 
       <CardDeckProvider>
         <PokerTable />

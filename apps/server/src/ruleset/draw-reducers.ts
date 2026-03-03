@@ -5,7 +5,7 @@
  * Per VGF constraints: immutable state, Object.freeze compatible.
  */
 import type { CasinoGameState } from '@weekend-casino/shared'
-import type { Card, SidePot } from '@weekend-casino/shared'
+import type { Card } from '@weekend-casino/shared'
 import { calculateSidePots } from '../poker-engine/pot-calculator.js'
 
 /**

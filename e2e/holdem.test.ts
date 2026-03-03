@@ -20,7 +20,7 @@ test.describe('Hold\'em', () => {
 
   test('display shows player count', async ({ displayPage }) => {
     // Display lobby should show the player count header
-    await expect(displayPage.locator('text=Players')).toBeVisible({ timeout: 10_000 })
+    await expect(displayPage.getByRole('heading', { name: /Players/ })).toBeVisible({ timeout: 10_000 })
   })
 
   test('controller shows action buttons text during game', async ({ controllerPage }) => {

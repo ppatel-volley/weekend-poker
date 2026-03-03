@@ -1,12 +1,12 @@
 import { getVGFHooks, useClientActions, useSessionMember, useSessionMembers } from '@volley/vgf/client'
-import type { PokerGameState } from '@weekend-casino/shared'
-import type { PokerPhase } from '@weekend-casino/shared'
+import type { CasinoGameState } from '@weekend-casino/shared'
+import type { CasinoPhase } from '@weekend-casino/shared'
 
 // TODO: Pass the actual ruleset type parameter once server types are shared.
 // For now, we use `any` for the ruleset generic and supply the concrete
 // game-state and phase types so that selectors and phase checks are typed.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const hooks = getVGFHooks<any, PokerGameState, PokerPhase>()
+const hooks = getVGFHooks<any, CasinoGameState, CasinoPhase>()
 
 /** Full synchronised game state. */
 export const useStateSync = hooks.useStateSync

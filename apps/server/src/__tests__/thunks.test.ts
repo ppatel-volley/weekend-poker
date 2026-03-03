@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { PokerGameState, PokerPlayer, Card } from '@weekend-casino/shared'
+import type { PokerPlayer, Card } from '@weekend-casino/shared'
 import { PokerPhase, STARTING_STACK } from '@weekend-casino/shared'
 import { createInitialState, pokerRuleset } from '../ruleset/index.js'
 import { _resetAllServerState, setServerHandState } from '../poker-engine/index.js'
 
 // ── Test helpers ─────────────────────────────────────────────────
+
+type TestState = any
 
 function makePlayer(overrides: Partial<PokerPlayer> = {}): PokerPlayer {
   return {
@@ -22,8 +24,8 @@ function makePlayer(overrides: Partial<PokerPlayer> = {}): PokerPlayer {
   }
 }
 
-function stateWithPlayers(...players: PokerPlayer[]): PokerGameState {
-  return createInitialState({ players })
+function stateWithPlayers(...players: PokerPlayer[]): TestState {
+  return createInitialState({ players } as any)
 }
 
 /**
@@ -33,10 +35,12 @@ function stateWithPlayers(...players: PokerPlayer[]): PokerGameState {
  * and applies reducers to the state so that subsequent getState()
  * calls return the updated state.
  */
-function createMockCtx(initialState: PokerGameState, sessionId = 'test-session') {
+function createMockCtx(initialState: TestState, sessionId = 'test-session') {
   let state = { ...initialState }
   const dispatched: Array<{ name: string; args: unknown[] }> = []
   const thunkDispatched: Array<{ name: string; args: unknown[] }> = []
+
+  const reducers = pokerRuleset.reducers as Record<string, (...args: any[]) => any>
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mock context for testing
   const ctx = {
@@ -46,7 +50,7 @@ function createMockCtx(initialState: PokerGameState, sessionId = 'test-session')
     dispatch: (name: string, ...args: unknown[]) => {
       dispatched.push({ name, args })
       // Apply the reducer to keep state consistent
-      const reducer = pokerRuleset.reducers[name]
+      const reducer = reducers[name]
       if (reducer) {
         state = reducer(state, ...args)
       }
@@ -74,7 +78,7 @@ function createMockCtx(initialState: PokerGameState, sessionId = 'test-session')
 }
 
 function getThunk(name: string) {
-  const t = pokerRuleset.thunks[name]
+  const t = (pokerRuleset.thunks as Record<string, any>)[name]
   if (!t) throw new Error(`Thunk "${name}" not found`)
   return t
 }

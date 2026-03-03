@@ -10,7 +10,7 @@
 
 import { useState } from 'react'
 import { usePhase, useStateSync, useDispatchThunk } from '../../hooks/useVGFHooks.js'
-import type { CasinoGameState, ThreeCardPokerGameState, Card } from '@weekend-casino/shared'
+import type { ThreeCardPokerGameState, Card } from '@weekend-casino/shared'
 
 const ANTE_AMOUNTS = [10, 25, 50, 100, 250, 500]
 
@@ -312,7 +312,7 @@ function ResultsView({
 
 export function ThreeCardPokerController() {
   const phase = usePhase() as string | null
-  const state = useStateSync() as CasinoGameState | null
+  const state = useStateSync()
   const dispatchThunk = useDispatchThunk()
 
   const tcp = state?.threeCardPoker

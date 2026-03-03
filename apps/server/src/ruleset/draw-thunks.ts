@@ -53,7 +53,7 @@ export const drawProcessAction = async (
 
   const bettingState = asBettingState(state)
   const legalActions = getLegalActions(bettingState as any, playerId)
-  if (!legalActions.includes(action)) return
+  if (!legalActions.includes(action as any)) return
 
   switch (action) {
     case 'fold':

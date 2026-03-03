@@ -14,6 +14,9 @@
 | Dependencies / pnpm install | 005 |
 | React 19 compatibility | 005 |
 | VGF dispatch / reducers | 006 |
+| Multi-agent type integration | 007 |
+| Vitest vs typecheck/build | 007 |
+| Shared type changes | 003, 007 |
 | Controller-server integration | 006 |
 
 ## Summaries
@@ -48,6 +51,11 @@ R3F v8 uses `react-reconciler@0.27.0` which is incompatible with React 19.2+ (mi
 **Category:** VGF, State Management, Client-Server
 Controller dispatches actions by string name; VGF looks them up in the ruleset's `reducers`/`thunks` objects. Mismatched names cause silent `DispatchTimeoutError` (no "reducer not found" error). Always verify dispatch names match server registration exactly.
 
+### 007 — Vitest passing does not mean the build passes: type integration failures after multi-agent work
+**Severity:** Critical
+**Category:** Multi-Agent, TypeScript, Build Pipeline
+Vitest strips TypeScript types at transform time and does NOT enforce type correctness. Three parallel agents produced 1,305 passing tests but 80+ TypeScript errors. `pnpm typecheck` and `pnpm build` are MANDATORY verification steps — not optional. After merging multi-agent output, always run all three: typecheck, build, tests.
+
 ## Cross-Reference
 
 | Topic | Learnings |
@@ -70,3 +78,9 @@ Controller dispatches actions by string name; VGF looks them up in the ruleset's
 | Dispatch name mismatch | 006 |
 | DispatchTimeoutError | 006 |
 | Button does nothing | 006 |
+| Multi-agent merge failures | 007 |
+| Vitest vs typecheck | 007 |
+| Build fails, tests pass | 007 |
+| Shared type required fields | 003, 007 |
+| Hook generic migration | 007 |
+| Worktree isolation pitfalls | 007 |

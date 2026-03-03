@@ -56,6 +56,7 @@ function makeState(overrides?: Partial<CasinoGameState>): CasinoGameState {
     lobbyReady: false,
     dealerMessage: null,
     ttsQueue: [],
+    reactions: [],
     sessionStats: { handsPlayed: 0, totalPotDealt: 0, startedAt: Date.now(), playerStats: {}, largestPot: null, biggestBluff: null, worstBeat: null } as any,
     fiveCardDraw: {
       hands: {},
@@ -87,18 +88,18 @@ describe('drawResetHand', () => {
 
   it('should reset player bets and lastAction', () => {
     const state = makeState()
-    state.players[0]!.bet = 50
-    state.players[0]!.lastAction = 'bet' as any
+    ;(state.players[0] as any).bet = 50
+    ;(state.players[0] as any).lastAction = 'bet'
     const result = drawResetHand(state)
-    expect(result.players[0]!.bet).toBe(0)
-    expect(result.players[0]!.lastAction).toBeNull()
+    expect((result.players[0] as any).bet).toBe(0)
+    expect((result.players[0] as any).lastAction).toBeNull()
   })
 
   it('should preserve busted players as busted', () => {
     const state = makeState()
-    state.players[1]!.status = 'busted' as any
+    ;(state.players[1] as any).status = 'busted'
     const result = drawResetHand(state)
-    expect(result.players[1]!.status).toBe('busted')
+    expect((result.players[1] as any).status).toBe('busted')
   })
 })
 
@@ -182,8 +183,8 @@ describe('drawUpdatePlayerBet', () => {
   it('should update player bet and stack', () => {
     const state = makeState()
     const result = drawUpdatePlayerBet(state, 'p1', 50)
-    expect(result.players.find(p => p.id === 'p1')!.bet).toBe(50)
-    expect(result.players.find(p => p.id === 'p1')!.stack).toBe(950)
+    expect((result.players.find(p => p.id === 'p1') as any).bet).toBe(50)
+    expect((result.players.find(p => p.id === 'p1') as any).stack).toBe(950)
   })
 
   it('should update currentBet on fiveCardDraw sub-state', () => {
@@ -195,7 +196,7 @@ describe('drawUpdatePlayerBet', () => {
   it('should mark player all_in when stack reaches 0', () => {
     const state = makeState()
     const result = drawUpdatePlayerBet(state, 'p1', 1000)
-    expect(result.players.find(p => p.id === 'p1')!.status).toBe('all_in')
+    expect((result.players.find(p => p.id === 'p1') as any).status).toBe('all_in')
   })
 })
 
@@ -203,22 +204,22 @@ describe('drawFoldPlayer', () => {
   it('should fold a player', () => {
     const state = makeState()
     const result = drawFoldPlayer(state, 'p1')
-    expect(result.players.find(p => p.id === 'p1')!.status).toBe('folded')
-    expect(result.players.find(p => p.id === 'p1')!.lastAction).toBe('fold')
+    expect((result.players.find(p => p.id === 'p1') as any).status).toBe('folded')
+    expect((result.players.find(p => p.id === 'p1') as any).lastAction).toBe('fold')
   })
 })
 
 describe('drawUpdatePot', () => {
   it('should collect bets into pot', () => {
     const state = makeState()
-    state.players[0]!.bet = 50
-    state.players[1]!.bet = 50
+    ;(state.players[0] as any).bet = 50
+    ;(state.players[1] as any).bet = 50
     state.fiveCardDraw!.currentBet = 50
 
     const result = drawUpdatePot(state)
     expect(result.fiveCardDraw!.pot).toBe(100)
-    expect(result.players[0]!.bet).toBe(0)
-    expect(result.players[1]!.bet).toBe(0)
+    expect((result.players[0] as any).bet).toBe(0)
+    expect((result.players[1] as any).bet).toBe(0)
   })
 
   it('should not change state when no bets', () => {
@@ -233,7 +234,7 @@ describe('drawAwardPot', () => {
     const state = makeState()
     state.fiveCardDraw!.pot = 200
     const result = drawAwardPot(state, ['p1'], [200])
-    expect(result.players.find(p => p.id === 'p1')!.stack).toBe(1200)
+    expect((result.players.find(p => p.id === 'p1') as any).stack).toBe(1200)
     expect(result.fiveCardDraw!.pot).toBe(0)
   })
 
@@ -241,8 +242,8 @@ describe('drawAwardPot', () => {
     const state = makeState()
     state.fiveCardDraw!.pot = 200
     const result = drawAwardPot(state, ['p1', 'p2'], [100, 100])
-    expect(result.players.find(p => p.id === 'p1')!.stack).toBe(1100)
-    expect(result.players.find(p => p.id === 'p2')!.stack).toBe(1100)
+    expect((result.players.find(p => p.id === 'p1') as any).stack).toBe(1100)
+    expect((result.players.find(p => p.id === 'p2') as any).stack).toBe(1100)
   })
 })
 

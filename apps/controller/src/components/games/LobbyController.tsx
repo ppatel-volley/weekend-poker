@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { CasinoGame, CasinoGameState } from '@weekend-casino/shared'
+import type { CasinoGame } from '@weekend-casino/shared'
 import { CASINO_GAME_LABELS, CASINO_GAME_DESCRIPTIONS, V1_GAMES } from '@weekend-casino/shared'
 import {
   useClientActions,
@@ -28,7 +28,7 @@ export function LobbyController() {
   const { toggleReady, updateState } = useClientActions()
   const dispatch = useDispatch()
   const member = useSessionMemberSafe()
-  const state = useStateSync() as CasinoGameState | null
+  const state = useStateSync()
   const isReady = member?.isReady ?? false
   const selectedGame = state?.selectedGame ?? null
 

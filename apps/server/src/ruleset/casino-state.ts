@@ -4,15 +4,15 @@
  * Per TDD-backend Section 3.1-3.3 and D-001, D-002, D-005.
  */
 
-import type { CasinoGameState, CasinoGame, CasinoPlayer, TTSMessage, HandHighlight, InputMode } from '@weekend-casino/shared'
-import { CasinoPhase, DEFAULT_BLIND_LEVEL, STARTING_WALLET_BALANCE, STARTING_STACK, BLIND_LEVELS } from '@weekend-casino/shared'
-import type { GameReducer, GameThunk, IThunkContext } from '@volley/vgf/types'
+import type { CasinoGameState, CasinoGame, CasinoPlayer, TTSMessage, TTSPriority, InputMode, ReactionType, SpeedConfig } from '@weekend-casino/shared'
+import { CasinoPhase, DEFAULT_BLIND_LEVEL, STARTING_WALLET_BALANCE, REACTION_TYPES, REACTION_RATE_LIMIT, MAX_REACTION_QUEUE_SIZE, DEFAULT_QUICK_PLAY_CONFIG } from '@weekend-casino/shared'
+import type { GameReducer, GameThunk } from '@volley/vgf/types'
 
 // ── Type aliases for brevity ──────────────────────────────────────
 
 type Reducer<TArgs extends unknown[] = never[]> = GameReducer<CasinoGameState, TArgs>
 type Thunk<TArgs extends unknown[] = never[]> = GameThunk<CasinoGameState, TArgs>
-type ThunkCtx = IThunkContext<CasinoGameState>
+// ThunkCtx used indirectly via Thunk type alias
 
 // ── Initial State Factory ─────────────────────────────────────────
 
@@ -40,6 +40,9 @@ export function createInitialCasinoState(
     dealerMessage: null,
     ttsQueue: [],
 
+    // Reactions (v2.0 — cosmetic only)
+    reactions: [],
+
     // Hold'em backward-compatible defaults (casino state is a SUPERSET)
     interHandDelaySec: 3,
     autoFillBots: true,
@@ -54,7 +57,10 @@ export function createInitialCasinoState(
     lastAggressor: null,
     dealingComplete: false,
 
-    // Session stats — Poker-specific SessionStats shape (NOT casino cross-game stats)
+    // Session stats — Poker-compatible shape at runtime for backward compat.
+    // CasinoGameState.sessionStats is typed as casino SessionStats, but Hold'em phases
+    // read poker-shaped fields (largestPot, biggestBluff). This cast documents the mismatch
+    // until a unified stats adapter is built (v2.1).
     sessionStats: {
       handsPlayed: 0,
       totalPotDealt: 0,
@@ -63,7 +69,7 @@ export function createInitialCasinoState(
       largestPot: null,
       biggestBluff: null,
       worstBeat: null,
-    },
+    } as unknown as CasinoGameState['sessionStats'],
 
     ...partial,
   }
@@ -271,6 +277,168 @@ export const casinoSetInputMode: Reducer<[InputMode]> = (state, mode) => ({
   inputMode: mode,
 })
 
+/**
+ * Send a reaction (cosmetic only — no game state impact).
+ * Rate-limited: max 3 per player per 10 seconds (server-enforced).
+ * Reactions queue is capped at MAX_REACTION_QUEUE_SIZE (10).
+ */
+export const casinoSendReaction: Reducer<[string, ReactionType]> = (state, playerId, reactionType) => {
+  // Validate player exists
+  if (!state.players.some(p => p.id === playerId)) return state
+
+  // Validate reaction type
+  if (!(REACTION_TYPES as readonly string[]).includes(reactionType)) return state
+
+  const now = Date.now()
+
+  // Rate limit check: count recent reactions from this player within the window
+  const windowStart = now - REACTION_RATE_LIMIT.windowMs
+  const recentCount = state.reactions.filter(
+    r => r.playerId === playerId && r.timestamp >= windowStart,
+  ).length
+
+  if (recentCount >= REACTION_RATE_LIMIT.maxReactions) return state
+
+  const newReaction = { playerId, type: reactionType, timestamp: now }
+  const updatedReactions = [...state.reactions, newReaction].slice(-MAX_REACTION_QUEUE_SIZE)
+
+  return { ...state, reactions: updatedReactions }
+}
+
+// ── Speed Config Reducers (v2.0) ────────────────────────────────
+
+/**
+ * Set speed config for the current game.
+ * Backwards compatible: default is disabled.
+ */
+export const casinoSetSpeedConfig: Reducer<[SpeedConfig]> = (state, config) => ({
+  ...state,
+  speedConfig: config,
+})
+
+/**
+ * Clear speed config (return to standard speed).
+ */
+export const casinoClearSpeedConfig: Reducer = state => ({
+  ...state,
+  speedConfig: undefined,
+})
+
+// ── Quick-Play Reducers (v2.0) ──────────────────────────────────
+
+/**
+ * Enable quick-play mode. Randomly selects next game after each round.
+ */
+export const casinoEnableQuickPlay: Reducer = state => ({
+  ...state,
+  quickPlayMode: {
+    ...DEFAULT_QUICK_PLAY_CONFIG,
+    enabled: true,
+    gamesPlayed: state.selectedGame ? [state.selectedGame] : [],
+  },
+})
+
+/**
+ * Disable quick-play mode.
+ */
+export const casinoDisableQuickPlay: Reducer = state => ({
+  ...state,
+  quickPlayMode: undefined,
+})
+
+/**
+ * Increment the quick-play hand counter.
+ * Called at each hand/round complete phase.
+ */
+export const casinoQuickPlayIncrementHand: Reducer = state => {
+  if (!state.quickPlayMode?.enabled) return state
+  return {
+    ...state,
+    quickPlayMode: {
+      ...state.quickPlayMode,
+      currentHandCount: state.quickPlayMode.currentHandCount + 1,
+    },
+  }
+}
+
+/**
+ * Record a game switch in quick-play history and reset the hand counter.
+ */
+export const casinoQuickPlayRecordGameSwitch: Reducer<[CasinoGame]> = (state, game) => {
+  if (!state.quickPlayMode?.enabled) return state
+  return {
+    ...state,
+    quickPlayMode: {
+      ...state.quickPlayMode,
+      currentHandCount: 0,
+      gamesPlayed: [...state.quickPlayMode.gamesPlayed, game],
+    },
+  }
+}
+
+// ── Casino Crawl Reducers (v2.0) ────────────────────────────────
+
+/**
+ * Start a casino crawl with shuffled game order.
+ * Games are shuffled using a seeded random (seed provided for determinism).
+ */
+export const casinoStartCasinoCrawl: Reducer<[CasinoGame[], number]> = (state, gamesOrder, roundsPerGame) => ({
+  ...state,
+  casinoCrawl: {
+    active: true,
+    gamesOrder,
+    currentIndex: 0,
+    roundsPerGame: roundsPerGame > 0 ? roundsPerGame : 5,
+    roundsPlayed: 0,
+  },
+  selectedGame: gamesOrder[0] ?? null,
+})
+
+/**
+ * Advance the casino crawl: increment roundsPlayed, auto-switch if needed.
+ * Returns state with updated crawl. The next phase logic checks this.
+ */
+export const casinoAdvanceCasinoCrawl: Reducer = state => {
+  if (!state.casinoCrawl?.active) return state
+
+  const newRoundsPlayed = state.casinoCrawl.roundsPlayed + 1
+
+  if (newRoundsPlayed >= state.casinoCrawl.roundsPerGame) {
+    const nextIndex = state.casinoCrawl.currentIndex + 1
+    if (nextIndex >= state.casinoCrawl.gamesOrder.length) {
+      // Crawl complete — deactivate
+      return {
+        ...state,
+        casinoCrawl: { ...state.casinoCrawl, active: false, roundsPlayed: newRoundsPlayed },
+      }
+    }
+    // Advance to next game
+    return {
+      ...state,
+      casinoCrawl: {
+        ...state.casinoCrawl,
+        currentIndex: nextIndex,
+        roundsPlayed: 0,
+      },
+      selectedGame: state.casinoCrawl.gamesOrder[nextIndex] ?? null,
+    }
+  }
+
+  // Same game, increment round counter
+  return {
+    ...state,
+    casinoCrawl: { ...state.casinoCrawl, roundsPlayed: newRoundsPlayed },
+  }
+}
+
+/**
+ * Stop the casino crawl.
+ */
+export const casinoStopCasinoCrawl: Reducer = state => ({
+  ...state,
+  casinoCrawl: undefined,
+})
+
 // ── Global Thunks (Mock/Stub) ────────────────────────────────────
 
 /**
@@ -278,7 +446,6 @@ export const casinoSetInputMode: Reducer<[InputMode]> = (state, mode) => ({
  * Per Kickoff decision: mock TTS entirely.
  */
 export const casinoProcessVoiceCommand: Thunk<[string]> = async (ctx, transcript) => {
-  const state = ctx.getState()
   console.log('[VOICE] Transcript received:', transcript)
   // TODO: Implement voice intent parsing for multi-game (Craps, Roulette, etc.)
   // For now, dispatch a TTS message back
@@ -292,12 +459,11 @@ export const casinoProcessVoiceCommand: Thunk<[string]> = async (ctx, transcript
  * Request TTS message (mock).
  * In production, connects to external TTS service (ElevenLabs, etc.)
  */
-export const casinoRequestTTS: Thunk<[string, string?]> = async (ctx, text, priority) => {
-  const state = ctx.getState()
+export const casinoRequestTTS: Thunk<[string, TTSPriority?]> = async (ctx, text, priority) => {
   console.log('[TTS] Requested:', text)
   ctx.dispatch('enqueueTTS', {
     text,
-    priority: (priority as any) ?? 'normal',
+    priority: priority ?? 'normal',
   })
 }
 
@@ -306,8 +472,7 @@ export const casinoRequestTTS: Thunk<[string, string?]> = async (ctx, text, prio
  * Per D-005, wallet is synced at sync points.
  */
 export const casinoHandleRebuy: Thunk<[string, number]> = async (ctx, playerId, amount) => {
-  const state = ctx.getState()
-  const currentBalance = state.wallet[playerId] ?? 0
+  const currentBalance = ctx.getState().wallet[playerId] ?? 0
   const newBalance = currentBalance + amount
   ctx.dispatch('setWalletBalance', playerId, newBalance)
   ctx.dispatch('setDealerMessage', `${playerId} rebuys for ${amount} chips!`)
@@ -317,7 +482,6 @@ export const casinoHandleRebuy: Thunk<[string, number]> = async (ctx, playerId, 
  * Trigger a video playback (server-authoritative per D-011).
  */
 export const casinoTriggerVideo: Thunk<[any]> = async (ctx, config) => {
-  const state = ctx.getState()
   console.log('[VIDEO] Triggering:', config.assetKey)
   ctx.dispatch('setVideoPlayback', {
     assetKey: config.assetKey,
@@ -336,8 +500,7 @@ export const casinoTriggerVideo: Thunk<[any]> = async (ctx, config) => {
  * Complete video playback.
  */
 export const casinoCompleteVideo: Thunk = async (ctx) => {
-  const state = ctx.getState()
-  if (state.videoPlayback) {
+  if (ctx.getState().videoPlayback) {
     ctx.dispatch('clearVideoPlayback')
   }
 }
@@ -374,6 +537,16 @@ export const casinoReducers = {
   clearBetError: casinoClearBetError,
   setLobbyReady: casinoSetLobbyReady,
   setInputMode: casinoSetInputMode,
+  sendReaction: casinoSendReaction,
+  setSpeedConfig: casinoSetSpeedConfig,
+  clearSpeedConfig: casinoClearSpeedConfig,
+  enableQuickPlay: casinoEnableQuickPlay,
+  disableQuickPlay: casinoDisableQuickPlay,
+  quickPlayIncrementHand: casinoQuickPlayIncrementHand,
+  quickPlayRecordGameSwitch: casinoQuickPlayRecordGameSwitch,
+  startCasinoCrawl: casinoStartCasinoCrawl,
+  advanceCasinoCrawl: casinoAdvanceCasinoCrawl,
+  stopCasinoCrawl: casinoStopCasinoCrawl,
 }
 
 export const casinoThunks = {

@@ -1,5 +1,5 @@
 import { CasinoPhase } from '@weekend-casino/shared'
-import type { CasinoGame, CasinoGameState } from '@weekend-casino/shared'
+import type { CasinoGame } from '@weekend-casino/shared'
 import { usePhase, useStateSync } from '../hooks/useVGFHooks.js'
 import { LobbyController } from './games/LobbyController.js'
 import { HoldemController } from './games/HoldemController.js'
@@ -7,6 +7,7 @@ import { FiveCardDrawController } from './games/FiveCardDrawController.js'
 import { BlackjackController } from './games/BlackjackController.js'
 import { CompetitiveBlackjackController } from './games/CompetitiveBlackjackController.js'
 import { ThreeCardPokerController } from './games/ThreeCardPokerController.js'
+import { RouletteController } from './games/RouletteController.js'
 
 /**
  * Derives the active game from the current phase when selectedGame is null.
@@ -35,7 +36,7 @@ function deriveGameFromPhase(phase: CasinoPhase): CasinoGame | null {
  */
 export function GameRouter() {
   const phase = usePhase()
-  const state = useStateSync() as CasinoGameState | null
+  const state = useStateSync()
 
   if (!phase) {
     return (
@@ -49,7 +50,7 @@ export function GameRouter() {
     return <LobbyController />
   }
 
-  const currentGame = state?.selectedGame ?? deriveGameFromPhase(phase as CasinoPhase)
+  const currentGame = state?.selectedGame ?? deriveGameFromPhase(phase)
 
   switch (currentGame) {
     case 'holdem':
@@ -62,6 +63,8 @@ export function GameRouter() {
       return <CompetitiveBlackjackController />
     case 'three_card_poker':
       return <ThreeCardPokerController />
+    case 'roulette':
+      return <RouletteController />
     default:
       return (
         <div style={{ textAlign: 'center', paddingTop: '40vh', color: 'white' }}>

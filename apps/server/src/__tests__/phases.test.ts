@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { PokerGameState, PokerPlayer, Card } from '@weekend-casino/shared'
+import type { PokerPlayer, Card } from '@weekend-casino/shared'
 import { PokerPhase, STARTING_STACK, DEFAULT_BLIND_LEVEL } from '@weekend-casino/shared'
 import { createInitialState, pokerRuleset } from '../ruleset/index.js'
 import { _resetAllServerState, setServerHandState, getServerHandState } from '../poker-engine/index.js'
 
 // ── Test helpers ─────────────────────────────────────────────────
+
+// The casino state is a superset of poker state. Use `any` for test helpers
+// since createInitialState returns CasinoGameState which includes poker fields.
+type TestState = any
 
 function makePlayer(overrides: Partial<PokerPlayer> = {}): PokerPlayer {
   return {
@@ -22,8 +26,8 @@ function makePlayer(overrides: Partial<PokerPlayer> = {}): PokerPlayer {
   }
 }
 
-function stateWithPlayers(...players: PokerPlayer[]): PokerGameState {
-  return createInitialState({ players })
+function stateWithPlayers(...players: PokerPlayer[]): TestState {
+  return createInitialState({ players } as any)
 }
 
 /**
@@ -31,7 +35,7 @@ function stateWithPlayers(...players: PokerPlayer[]): PokerGameState {
  * Phase hooks receive a different context than thunks — they get
  * getState, dispatch, and must return state from onBegin.
  */
-function createMockPhaseCtx(initialState: PokerGameState, sessionId = 'test-session') {
+function createMockPhaseCtx(initialState: TestState, sessionId = 'test-session') {
   let state = { ...initialState }
   const dispatched: Array<{ name: string; args: unknown[] }> = []
 
@@ -41,12 +45,14 @@ function createMockPhaseCtx(initialState: PokerGameState, sessionId = 'test-sess
     get state() { return state },
   }
 
+  const reducers = pokerRuleset.reducers as Record<string, (...args: any[]) => any>
+
   const ctx = {
     getState: () => state,
     getSessionId: () => sessionId,
     dispatch: (name: string, ...args: unknown[]) => {
       dispatched.push({ name, args })
-      const reducer = pokerRuleset.reducers[name]
+      const reducer = reducers[name]
       if (reducer) {
         state = reducer(state, ...args)
       }
@@ -89,8 +95,8 @@ describe('PostingBlinds phase', () => {
 
     // Dealer rotates from 0 to 1 (p2). With 3 players and dealer now at p2(1):
     // SB = p3 (index 2), BB = p1 (index 0)
-    const sb = next.players.find(p => p.id === 'p3')!
-    const bb = next.players.find(p => p.id === 'p1')!
+    const sb = next.players.find((p: any) => p.id === 'p3')!
+    const bb = next.players.find((p: any) => p.id === 'p1')!
 
     expect(sb.bet).toBe(DEFAULT_BLIND_LEVEL.smallBlind)
     expect(sb.stack).toBe(1000 - DEFAULT_BLIND_LEVEL.smallBlind)
@@ -114,8 +120,8 @@ describe('PostingBlinds phase', () => {
 
     // Dealer rotates from 0 to 1 (p2). Heads-up: button (p2, index 1) is SB,
     // p1 (index 0) is BB
-    const sb = next.players.find(p => p.id === 'p2')!
-    const bb = next.players.find(p => p.id === 'p1')!
+    const sb = next.players.find((p: any) => p.id === 'p2')!
+    const bb = next.players.find((p: any) => p.id === 'p1')!
 
     expect(sb.bet).toBe(DEFAULT_BLIND_LEVEL.smallBlind)
     expect(bb.bet).toBe(DEFAULT_BLIND_LEVEL.bigBlind)
@@ -565,7 +571,7 @@ describe('HandComplete phase', () => {
     phase.onBegin(ctx)
 
     const next = getState()
-    const p1 = next.players.find(p => p.id === 'p1')!
+    const p1 = next.players.find((p: any) => p.id === 'p1')!
     expect(p1.status).toBe('busted')
   })
 

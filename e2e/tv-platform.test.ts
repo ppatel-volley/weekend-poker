@@ -76,7 +76,7 @@ test.describe('D-pad Navigation in Lobby', () => {
     await expect(page.locator('text=Weekend Casino')).toBeVisible({ timeout: 15_000 })
 
     // Verify lobby structure is present
-    await expect(page.locator('text=Players')).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Players/ })).toBeVisible()
   })
 
   test('arrow keys do not crash on BROWSER platform', async ({ page }) => {

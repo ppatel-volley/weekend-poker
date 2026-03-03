@@ -6,11 +6,9 @@
  */
 
 import type { CasinoGameState, Card } from '@weekend-casino/shared'
-import { TCP_MIN_ANTE, TCP_MAX_ANTE, TCP_MAX_PAIR_PLUS } from '@weekend-casino/shared'
 import { evaluateTcpHand, dealerQualifies, calculateTcpPayout } from '../tcp-engine/index.js'
 import { createDeck, shuffleDeck } from '../poker-engine/deck.js'
 import { getServerGameState, setServerGameState } from '../server-game-state.js'
-import type { ServerTCPState } from '../server-game-state.js'
 
 type ThunkCtx = {
   getState: () => CasinoGameState

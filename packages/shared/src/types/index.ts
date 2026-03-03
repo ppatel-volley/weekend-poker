@@ -78,6 +78,11 @@ export type {
   BlackjackConfig,
   BjcPlayerState,
   BlackjackCompetitiveGameState,
+  RouletteBetType,
+  RouletteBet,
+  RoulettePlayerState,
+  RouletteHistoryEntry,
+  RouletteConfig,
   RouletteGameState,
   ThreeCardPokerGameState,
   TcpHandRank,
@@ -86,9 +91,31 @@ export type {
   TcpConfig,
   CrapsGameState,
   GameNightGameState,
+  SpeedConfig,
   QuickPlayConfig,
+  CasinoCrawlConfig,
   ProgressiveJackpot,
 } from './casino-game-state.js'
+
+export {
+  DEFAULT_SPEED_CONFIG,
+  SPEED_HOLDEM_CONFIG,
+  SPEED_DRAW_CONFIG,
+  SPEED_BLACKJACK_CONFIG,
+  DEFAULT_QUICK_PLAY_CONFIG,
+  DEFAULT_CASINO_CRAWL_CONFIG,
+} from './casino-game-state.js'
+
+// ────────────────────────────────────────────────────────────────────
+// Reactions / Emotes (v2.0 — cosmetic only)
+// ────────────────────────────────────────────────────────────────────
+
+export type { ReactionType, ReactionEvent } from './reactions.js'
+export {
+  REACTION_TYPES,
+  REACTION_RATE_LIMIT,
+  MAX_REACTION_QUEUE_SIZE,
+} from './reactions.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Poker Types — Backwards Compatibility (v1 Hold'em)
@@ -145,3 +172,16 @@ export {
   TV_PLATFORMS,
   isTVPlatform,
 } from './platform.js'
+
+// ────────────────────────────────────────────────────────────────────
+// Events / Voice / Dealer
+// ────────────────────────────────────────────────────────────────────
+
+export type {
+  VoiceIntent,
+  ParsedVoiceCommand,
+  DealerCharacterId,
+  ControllerMemberState,
+  ServerToClientEvents,
+  ControllerActions,
+} from './events.js'

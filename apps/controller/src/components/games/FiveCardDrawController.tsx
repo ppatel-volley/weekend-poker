@@ -10,11 +10,11 @@ import { useSessionMember } from '../../hooks/useVGFHooks.js'
  */
 export function FiveCardDrawController() {
   const member = useSessionMember()
-  const playerName = member?.displayName ?? 'Player'
+  const playerName = (member?.state?.name as string) ?? 'Player'
 
   // Local state for discard selection (indices 0-4)
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
-  const [phase, setPhase] = useState<'betting' | 'discard'>('betting')
+  const [phase] = useState<'betting' | 'discard'>('betting')
 
   const toggleCard = useCallback((index: number) => {
     setSelectedIndices(prev => {

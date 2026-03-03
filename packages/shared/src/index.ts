@@ -32,6 +32,13 @@ export {
   BJ_BET_TIMEOUT_MS,
   BJ_ACTION_TIMEOUT_MS,
   BJ_INSURANCE_TIMEOUT_MS,
+  ROULETTE_MIN_BET,
+  ROULETTE_MAX_INSIDE_BET,
+  ROULETTE_MAX_OUTSIDE_BET,
+  ROULETTE_MAX_TOTAL_BET,
+  ROULETTE_BET_TIMEOUT_MS,
+  ROULETTE_SPIN_ANIMATION_TARGET_MS,
+  ROULETTE_SPIN_HARD_TIMEOUT_MS,
 } from './constants/poker.js'
 export type { DealerCharacter } from './constants/poker.js'
 export { PHASE_LABELS, getPhaseLabel } from './constants/phase-labels.js'

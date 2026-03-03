@@ -15,5 +15,15 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     target: 'es2015',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'three': ['three'],
+          'r3f': ['@react-three/fiber'],
+          'drei': ['@react-three/drei'],
+          'postprocessing': ['@react-three/postprocessing'],
+        },
+      },
+    },
   },
 }))

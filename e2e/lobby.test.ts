@@ -8,8 +8,8 @@ import { test, expect } from './fixtures/casino-fixture'
 
 test.describe('Lobby', () => {
   test('controller loads and shows lobby UI', async ({ controllerPage }) => {
-    // The controller should show the lobby with name input
-    await expect(controllerPage.locator('text=Weekend Casino')).toBeVisible()
+    // The controller should show the lobby with logo image
+    await expect(controllerPage.getByAltText('Weekend Casino')).toBeVisible()
     await expect(controllerPage.locator('#player-name')).toBeVisible()
     await expect(controllerPage.getByRole('button', { name: /READY/i })).toBeVisible()
   })
@@ -29,11 +29,11 @@ test.describe('Lobby', () => {
     await joinSession(controllerPage, 'Alice')
 
     // The display lobby should show "Players (1/4)" or similar
-    await expect(displayPage.locator('text=Players')).toBeVisible({ timeout: 10_000 })
+    await expect(displayPage.getByRole('heading', { name: /Players/ })).toBeVisible({ timeout: 10_000 })
   })
 
   test('display shows lobby title', async ({ displayPage }) => {
-    await expect(displayPage.locator('text=Weekend Casino')).toBeVisible()
+    await expect(displayPage.getByAltText('Weekend Casino').or(displayPage.locator('text=Weekend Casino'))).toBeVisible()
   })
 
   test('game selection buttons appear on controller', async ({ controllerPage }) => {

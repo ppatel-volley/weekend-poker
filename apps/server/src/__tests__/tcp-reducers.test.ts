@@ -14,7 +14,7 @@ describe('TCP Reducers', () => {
       players: [
         { id: 'p1', name: 'Alice', seatIndex: 0, stack: 1000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0 },
         { id: 'p2', name: 'Bob', seatIndex: 1, stack: 1000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0 },
-      ],
+      ] as any,
       wallet: { p1: 1000, p2: 1000 },
     })
   })

@@ -332,7 +332,7 @@ function actionBtnStyle(bg: string): React.CSSProperties {
 
 export function CompetitiveBlackjackController() {
   const phase = usePhase() as string | null
-  const state = useStateSync() as CasinoGameState | null
+  const state = useStateSync()
   const dispatchThunk = useDispatchThunk()
 
   const bjc = state?.blackjackCompetitive

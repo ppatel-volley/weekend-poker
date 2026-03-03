@@ -30,11 +30,11 @@ function makePlayer(overrides: Partial<PokerPlayer> = {}): PokerPlayer {
 /** Helper to create a game state with players in a betting phase. */
 function bettingState(overrides: Partial<PokerGameState> = {}): PokerGameState {
   return createInitialState({
-    phase: PokerPhase.FlopBetting,
+    phase: PokerPhase.FlopBetting as any,
     currentBet: 0,
     minRaiseIncrement: DEFAULT_BLIND_LEVEL.bigBlind,
     ...overrides,
-  })
+  } as any) as unknown as PokerGameState
 }
 
 // ── getLegalActions ──────────────────────────────────────────

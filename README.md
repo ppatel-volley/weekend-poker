@@ -9,8 +9,19 @@ A multi-game casino platform built on the Volley Games Framework (VGF). Server-a
 | **Texas Hold'em** | Complete | Classic community-card poker (2-4 players) |
 | **5-Card Draw** | Complete | Draw poker with 0-3 card discard/replace |
 | **Three Card Poker** | Complete | Player vs dealer, 3-card hands (straight > flush) |
-| **Blackjack Classic** | In Progress | Player vs dealer, 6-deck shoe, splits/doubles/insurance |
-| **Blackjack Competitive** | Planned | Player vs player blackjack variant |
+| **Blackjack Classic** | Complete | Player vs dealer, 6-deck shoe, splits/doubles/insurance |
+| **Blackjack Competitive** | Complete | Player vs player blackjack, sequential turns (D-007) |
+| **Roulette** | Complete | European single-zero wheel, two-tab controller (D-007/D-008) |
+
+### v2.0 Features
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Speed Variants** | Complete | Config-driven speed modes for Hold'em, Draw, and Blackjack |
+| **Quick-Play Mode** | Complete | Random game rotation every 10 hands |
+| **Casino Crawl** | Complete | Sequential rotation through all games (scoring in v2.1) |
+| **Reactions/Emotes** | Complete | 6 reactions with server-side rate limiting |
+| **Game Night Prep** | Complete | `wrapWithGameNightCheck` on all round-complete phases (activates in v2.1) |
 
 ## Architecture
 
@@ -24,12 +35,13 @@ weekend-poker/
 │   │   │   ├── draw-engine/      # 5-Card Draw: hand eval, discard mechanics
 │   │   │   ├── tcp-engine/       # Three Card Poker: 3-card eval, payouts
 │   │   │   ├── blackjack-engine/ # Blackjack: shoe, dealer strategy, payouts
+│   │   │   ├── roulette-engine/  # Roulette: wheel, bet types, payouts, near-miss
 │   │   │   ├── bot-engine/       # AI bots: rules engine, Claude LLM, personalities
 │   │   │   └── voice/            # Voice intent parsing (Deepgram STT)
 │   ├── display/          # React + R3F TV display (port 5173)
 │   │   ├── src/
 │   │   │   ├── components/
-│   │   │   │   ├── scenes/       # Per-game 3D scenes (Lobby, Hold'em, Draw, TCP, BJ)
+│   │   │   │   ├── scenes/       # Per-game 3D scenes (Lobby, Hold'em, Draw, TCP, BJ, Roulette)
 │   │   │   │   └── hud/          # Casino HUD overlay (wallet, game info, timer)
 │   │   │   └── hooks/            # VGF state hooks (useCurrentGame, useWallet)
 │   └── controller/       # React mobile controller (port 5174)
@@ -123,20 +135,20 @@ pnpm --filter @weekend-casino/display test
 pnpm --filter @weekend-casino/controller test
 ```
 
-**Current coverage: 787+ tests across 44 test files.**
+**Current coverage: 1,305 tests across 75 test files.**
 
 | Package | Test Files | Tests | Covers |
 |---------|-----------|-------|--------|
-| `@weekend-casino/shared` | 10 | ~124 | Types, phases, wallet, player, session stats |
-| `@weekend-casino/server` | 25+ | ~550 | All game engines, reducers, thunks, phases, voice, bots |
-| `@weekend-casino/display` | 4 | ~25 | Scene router, hooks, App exports |
-| `@weekend-casino/controller` | 5 | ~33 | Game router, wallet display, voice hook |
+| `@weekend-casino/shared` | 10+ | ~130 | Types, phases, wallet, player, session stats, reactions |
+| `@weekend-casino/server` | 55+ | ~1,050 | All game engines, reducers, thunks, phases, voice, bots, roulette, speed variants, game night utils, reducer collision check |
+| `@weekend-casino/display` | 5 | ~30 | Scene router, hooks, platform detection, App exports |
+| `@weekend-casino/controller` | 5 | ~35 | Game router, wallet display, voice hook |
 
 ### E2E Tests (Playwright)
 
 ```bash
-# Install Playwright browsers (first time only)
-npx playwright install
+# Install Playwright browsers (first time only — required before E2E tests will run)
+pnpm exec playwright install
 
 # Run E2E tests (auto-starts dev servers)
 pnpm test:e2e
@@ -148,7 +160,7 @@ npx playwright test --ui
 npx playwright test e2e/lobby.test.ts
 ```
 
-**28 E2E tests** covering: lobby flow, Hold'em hand lifecycle, game switching, wallet persistence, voice button.
+**7 E2E test files** covering: lobby flow, Hold'em hand lifecycle, game switching, wallet persistence, voice button, TV platform detection, smoke tests.
 
 Playwright is configured with:
 - **Controller project**: Chromium mobile viewport (390x844, iPhone 14)
@@ -190,7 +202,8 @@ CasinoRuleset
 ├── 5-Card Draw: DRAW_POSTING_BLINDS, DRAW_DEALING, ...
 ├── Three Card Poker: TCP_PLACE_BETS, TCP_DEAL_CARDS, ...
 ├── Blackjack Classic: BJ_PLACE_BETS, BJ_DEAL_INITIAL, ...
-└── Blackjack Competitive: BJC_PLACE_BETS, BJC_DEAL, ... (planned)
+├── Blackjack Competitive: BJC_PLACE_BETS, BJC_DEAL, ...
+└── Roulette: ROULETTE_PLACE_BETS, ROULETTE_SPIN, ROULETTE_RESULT, ...
 ```
 
 ### State Shape (D-002)
@@ -203,11 +216,15 @@ interface CasinoGameState {
   players: CasinoPlayer[]
   wallet: Record<string, number>    // Shared cross-game wallet
   selectedGame: CasinoGame | null
-  // ... shared fields
+  reactions: ReactionEvent[]        // Recent emote reactions (max 10)
+  // ... shared fields, speed/quickPlay/casinoCrawl configs
   holdem?: HoldemGameState          // Populated when playing Hold'em
   draw?: FiveCardDrawGameState      // Populated when playing Draw
   tcp?: ThreeCardPokerGameState     // Populated when playing TCP
   blackjack?: BlackjackGameState    // Populated when playing BJ
+  blackjackCompetitive?: BlackjackCompetitiveGameState
+  roulette?: RouletteGameState      // Populated when playing Roulette
+  gameNight?: GameNightGameState    // Active during Game Night mode (v2.1)
 }
 ```
 
@@ -224,7 +241,7 @@ Hybrid rules + LLM architecture:
 Player speaks → Deepgram STT → text → parseVoiceIntent() → VGF thunk dispatch → game action
 ```
 
-Supported commands vary per game (fold, check, call, raise, hit, stand, draw, ante, etc.)
+Supported commands vary per game (fold, check, call, raise, hit, stand, draw, ante, red, black, number 17, etc.)
 
 ## Key Constants
 
@@ -237,6 +254,8 @@ Supported commands vary per game (fold, check, call, raise, hit, stand, draw, an
 | TCP min ante | 10 chips | V2 PRD |
 | TCP max ante | 500 chips | V2 PRD |
 | Draw max discard | 3 cards | Game Design |
+| Roulette max total bet | 500 chips | v2 PRD |
+| Roulette wheel | European (single zero, 37 pockets) | D-007 |
 | Action timeout | 30s | PRD |
 | Blind levels | 5/10 up to 100/200 | Constants |
 
@@ -262,6 +281,10 @@ Supported commands vary per game (fold, check, call, raise, hit, stand, draw, an
 | `docs/CASINO-TDD-architecture.md` | System architecture TDD |
 | `docs/CASINO-TDD-backend.md` | Backend implementation TDD |
 | `docs/CASINO-TDD-frontend.md` | Frontend implementation TDD |
+| `docs/CASINO-V2-ROADMAP-FINAL.md` | v2.x release plan (v2.0/v2.1/v2.2 scope and timing) |
+| `docs/CASINO-V2-NEW-GAMES.md` | Roulette, Three Card Poker, Craps specs |
+| `docs/CASINO-V2-EXISTING-GAME-CHANGES.md` | Speed variants, Quick-Play, Casino Crawl |
+| `docs/CASINO-V2-RETENTION.md` | Retention systems (Game Night, challenges, cosmetics) |
 | `docs/RESEARCH-VGF-TYPE-SYSTEM.md` | VGF framework reference |
 | `AGENTS.md` | AI agent guidelines |
 | `AGENTS-PROJECT.md` | Project-specific agent config |

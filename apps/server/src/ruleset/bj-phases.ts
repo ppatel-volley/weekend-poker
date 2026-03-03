@@ -12,6 +12,7 @@
 import type { CasinoGameState } from '@weekend-casino/shared'
 import { CasinoPhase } from '@weekend-casino/shared'
 import { rankToNumeric } from '@weekend-casino/shared'
+import { wrapWithGameNightCheck } from './game-night-utils.js'
 
 type PhaseCtx = {
   getState: () => CasinoGameState
@@ -208,9 +209,9 @@ export const bjHandCompletePhase = {
     const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
     return state.blackjack?.roundCompleteReady === true
   },
-  next: (ctx: any) => {
+  next: wrapWithGameNightCheck((ctx: any) => {
     const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
     if (state.gameChangeRequested) return CasinoPhase.GameSelect
     return CasinoPhase.BjPlaceBets
-  },
+  }),
 }

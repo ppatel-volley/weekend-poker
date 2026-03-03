@@ -15,6 +15,22 @@ import type {
 import { CasinoPhase } from '../types/casino-phases.js'
 import { createSessionStats } from '../types/casino-session-stats.js'
 
+/** Hold'em backward-compat fields required on every CasinoGameState object. */
+const HOLDEM_DEFAULTS: Pick<CasinoGameState, 'interHandDelaySec' | 'autoFillBots' | 'activePlayerIndex' | 'communityCards' | 'pot' | 'sidePots' | 'currentBet' | 'minRaiseIncrement' | 'holeCards' | 'handHistory' | 'lastAggressor' | 'dealingComplete'> = {
+  interHandDelaySec: 3,
+  autoFillBots: true,
+  activePlayerIndex: -1,
+  communityCards: [],
+  pot: 0,
+  sidePots: [],
+  currentBet: 0,
+  minRaiseIncrement: 20,
+  holeCards: {},
+  handHistory: [],
+  lastAggressor: null,
+  dealingComplete: false,
+}
+
 describe('CasinoGameState structure', () => {
   it('should have index signature for VGF compatibility', () => {
     const state: CasinoGameState = {
@@ -34,6 +50,8 @@ describe('CasinoGameState structure', () => {
       dealerMessage: null,
       ttsQueue: [],
       sessionStats: createSessionStats(Date.now()),
+      reactions: [],
+      ...HOLDEM_DEFAULTS,
     }
     expect(state).toBeDefined()
   })
@@ -55,6 +73,8 @@ describe('CasinoGameState structure', () => {
       dealerMessage: null,
       ttsQueue: [],
       sessionStats: createSessionStats(Date.now()),
+      reactions: [],
+      ...HOLDEM_DEFAULTS,
     }
     expect(state.phase).toBe(CasinoPhase.Lobby)
   })
@@ -77,6 +97,8 @@ describe('CasinoGameState structure', () => {
       dealerMessage: 'Deal cards',
       ttsQueue: [],
       sessionStats: createSessionStats(Date.now()),
+      reactions: [],
+      ...HOLDEM_DEFAULTS,
     }
     expect(state.previousPhase).toBe(CasinoPhase.DealingHoleCards)
   })
@@ -101,6 +123,8 @@ describe('CasinoGameState structure', () => {
       dealerMessage: null,
       ttsQueue: [],
       sessionStats: createSessionStats(Date.now()),
+      reactions: [],
+      ...HOLDEM_DEFAULTS,
     }
     expect(state.gameChangeVotes['player-1']).toBe('roulette')
     expect(state.gameChangeVotes['player-2']).toBe('craps')
@@ -123,6 +147,8 @@ describe('CasinoGameState structure', () => {
       dealerMessage: null,
       ttsQueue: [],
       sessionStats: createSessionStats(Date.now()),
+      reactions: [],
+      ...HOLDEM_DEFAULTS,
       holdem: {} as HoldemGameState,
       fiveCardDraw: {} as FiveCardDrawGameState,
       blackjack: {} as BlackjackGameState,
@@ -149,6 +175,8 @@ describe('CasinoGameState structure', () => {
       dealerMessage: null,
       ttsQueue: [],
       sessionStats: createSessionStats(Date.now()),
+      reactions: [],
+      ...HOLDEM_DEFAULTS,
       roulette: {} as RouletteGameState,
       threeCardPoker: {} as ThreeCardPokerGameState,
     }
@@ -173,6 +201,8 @@ describe('CasinoGameState structure', () => {
       dealerMessage: null,
       ttsQueue: [],
       sessionStats: createSessionStats(Date.now()),
+      reactions: [],
+      ...HOLDEM_DEFAULTS,
       craps: {} as CrapsGameState,
     }
     expect(state.craps).toBeDefined()
@@ -195,12 +225,14 @@ describe('CasinoGameState structure', () => {
       dealerMessage: null,
       ttsQueue: [],
       sessionStats: createSessionStats(Date.now()),
+      reactions: [],
+      ...HOLDEM_DEFAULTS,
       gameNight: {} as GameNightGameState,
-      quickPlay: { enabled: true, rotationIntervalMs: 30000 } as QuickPlayConfig,
+      quickPlayMode: { enabled: true, rotationIntervalHands: 10, currentHandCount: 0, gamesPlayed: [] } as QuickPlayConfig,
       jackpot: { currentAmount: 100000, lastWinAmount: 50000, lastWinPlayerName: 'Alice' } as ProgressiveJackpot,
     }
     expect(state.gameNight).toBeDefined()
-    expect(state.quickPlay).toBeDefined()
+    expect(state.quickPlayMode).toBeDefined()
     expect(state.jackpot).toBeDefined()
   })
 
@@ -221,6 +253,8 @@ describe('CasinoGameState structure', () => {
       dealerMessage: null,
       ttsQueue: [],
       sessionStats: createSessionStats(Date.now()),
+      reactions: [],
+      ...HOLDEM_DEFAULTS,
       videoPlayback: {
         assetKey: 'lobby-intro',
         mode: 'full_screen',
@@ -259,6 +293,8 @@ describe('CasinoGameState structure', () => {
       dealerMessage: null,
       ttsQueue: [],
       sessionStats: createSessionStats(Date.now()),
+      reactions: [],
+      ...HOLDEM_DEFAULTS,
       betError: {
         playerId: 'player-1',
         message: 'Insufficient balance',
@@ -277,39 +313,137 @@ describe('Game sub-state placeholder types', () => {
     expect(state).toBeDefined()
   })
 
-  it('FiveCardDrawGameState should have index signature', () => {
+  it('FiveCardDrawGameState should have required fields', () => {
     const state: FiveCardDrawGameState = {
-      [Symbol.toStringTag]: 'FiveCardDrawGameState',
+      hands: {},
+      discardSelections: {},
+      replacementCards: {},
+      confirmedDiscards: {},
+      drawComplete: false,
+      pot: 0,
+      sidePots: [],
+      currentBet: 0,
+      minRaiseIncrement: 10,
+      activePlayerIndex: -1,
     }
     expect(state).toBeDefined()
+    expect(state.hands).toEqual({})
   })
 
-  it('BlackjackGameState should have index signature', () => {
+  it('BlackjackGameState should have required fields', () => {
     const state: BlackjackGameState = {
-      [Symbol.toStringTag]: 'BlackjackGameState',
+      playerStates: [],
+      dealerHand: {
+        cards: [],
+        holeCardRevealed: false,
+        value: 0,
+        isSoft: false,
+        busted: false,
+        isBlackjack: false,
+      },
+      turnOrder: [],
+      currentTurnIndex: 0,
+      allBetsPlaced: false,
+      dealComplete: false,
+      insuranceComplete: false,
+      playerTurnsComplete: false,
+      dealerTurnComplete: false,
+      settlementComplete: false,
+      roundCompleteReady: false,
+      roundNumber: 0,
+      shoePenetration: 0,
+      config: {
+        minBet: 10,
+        maxBet: 1000,
+        dealerHitsSoft17: false,
+        numberOfDecks: 6,
+        reshuffleThreshold: 0.75,
+        blackjackPaysRatio: 1.5,
+        insuranceEnabled: true,
+        surrenderEnabled: true,
+        splitEnabled: true,
+        maxSplits: 3,
+      },
     }
     expect(state).toBeDefined()
+    expect(state.playerStates).toEqual([])
   })
 
-  it('BlackjackCompetitiveGameState should have index signature', () => {
+  it('BlackjackCompetitiveGameState should have required fields', () => {
     const state: BlackjackCompetitiveGameState = {
-      [Symbol.toStringTag]: 'BlackjackCompetitiveGameState',
+      playerStates: [],
+      pot: 0,
+      turnOrder: [],
+      currentTurnIndex: 0,
+      allAntesPlaced: false,
+      dealComplete: false,
+      playerTurnsComplete: false,
+      showdownComplete: false,
+      settlementComplete: false,
+      roundCompleteReady: false,
+      roundNumber: 0,
+      shoePenetration: 0,
+      anteAmount: 10,
+      winnerIds: [],
+      resultMessage: '',
     }
     expect(state).toBeDefined()
+    expect(state.pot).toBe(0)
   })
 
-  it('RouletteGameState should have index signature', () => {
+  it('RouletteGameState should have required fields', () => {
     const state: RouletteGameState = {
-      [Symbol.toStringTag]: 'RouletteGameState',
+      winningNumber: null,
+      winningColour: null,
+      bets: [],
+      players: [],
+      history: [],
+      spinState: 'idle',
+      nearMisses: [],
+      allBetsPlaced: false,
+      bettingClosed: false,
+      spinComplete: false,
+      resultAnnounced: false,
+      payoutComplete: false,
+      roundCompleteReady: false,
+      roundNumber: 0,
+      config: {
+        minBet: 10,
+        maxInsideBet: 500,
+        maxOutsideBet: 1000,
+        maxTotalBet: 5000,
+        laPartage: false,
+      },
     }
     expect(state).toBeDefined()
+    expect(state.spinState).toBe('idle')
   })
 
-  it('ThreeCardPokerGameState should have index signature', () => {
+  it('ThreeCardPokerGameState should have required fields', () => {
     const state: ThreeCardPokerGameState = {
-      [Symbol.toStringTag]: 'ThreeCardPokerGameState',
+      playerHands: [],
+      dealerHand: {
+        cards: [],
+        revealed: false,
+        handRank: null,
+        handStrength: 0,
+      },
+      dealerQualifies: null,
+      allAntesPlaced: false,
+      dealComplete: false,
+      allDecisionsMade: false,
+      dealerRevealed: false,
+      payoutComplete: false,
+      roundCompleteReady: false,
+      roundNumber: 0,
+      config: {
+        minAnte: 10,
+        maxAnte: 500,
+        maxPairPlus: 500,
+      },
     }
     expect(state).toBeDefined()
+    expect(state.dealerQualifies).toBeNull()
   })
 
   it('CrapsGameState should have index signature', () => {
@@ -319,11 +453,15 @@ describe('Game sub-state placeholder types', () => {
     expect(state).toBeDefined()
   })
 
-  it('GameNightGameState should have index signature', () => {
+  it('GameNightGameState should have required fields', () => {
     const state: GameNightGameState = {
-      [Symbol.toStringTag]: 'GameNightGameState',
+      active: false,
+      roundLimit: 10,
+      roundsPlayed: 0,
+      scores: {},
     }
     expect(state).toBeDefined()
+    expect(state.active).toBe(false)
   })
 })
 
@@ -331,10 +469,12 @@ describe('QuickPlayConfig and ProgressiveJackpot', () => {
   it('should allow QuickPlayConfig creation', () => {
     const config: QuickPlayConfig = {
       enabled: true,
-      rotationIntervalMs: 45000,
+      rotationIntervalHands: 10,
+      currentHandCount: 0,
+      gamesPlayed: [],
     }
     expect(config.enabled).toBe(true)
-    expect(config.rotationIntervalMs).toBe(45000)
+    expect(config.rotationIntervalHands).toBe(10)
   })
 
   it('should allow ProgressiveJackpot creation', () => {

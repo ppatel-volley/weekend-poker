@@ -11,16 +11,14 @@ import { CasinoPhase } from '@weekend-casino/shared'
 import {
   isBettingRoundComplete,
   isOnlyOnePlayerRemaining,
-  areAllRemainingPlayersAllIn,
   getSmallBlindIndex,
   getBigBlindIndex,
   findFirstActivePlayerLeftOfButton,
   findFirstActivePlayerLeftOfBB,
-  nextActivePlayer,
-  rotateDealerButton,
 } from '../poker-engine/index.js'
 import { createDeck, shuffleDeck } from '../poker-engine/deck.js'
 import { getServerGameState, setServerGameState } from '../server-game-state.js'
+import { wrapWithGameNightCheck } from './game-night-utils.js'
 
 // ── Phase helpers ────────────────────────────────────────────────
 
@@ -94,8 +92,6 @@ export const drawPostingBlindsPhase = makePhase({
     ctx.dispatch('drawResetHand')
     ctx.dispatch('setHandNumber', state.handNumber + 1)
 
-    const updated: CasinoGameState = ctx.getState()
-    const newDealerIndex = rotateDealerButton(updated.players, updated.dealerIndex)
     // Use holdem's rotateDealerButton reducer since it's shared
     ctx.dispatch('rotateDealerButton')
 
@@ -208,7 +204,6 @@ export const drawBetting1Phase = makePhase({
 export const drawDrawPhasePhase = makePhase({
   onBegin: (ctx: any) => {
     // Reset discard state for new draw
-    const state: CasinoGameState = ctx.getState()
     // Players with 'active' or 'all_in' status participate
     // Stand pat (discard 0) is the default — players must confirm
     return ctx.getState()
@@ -305,7 +300,7 @@ export const drawHandCompletePhase = makePhase({
     return ctx.getState()
   },
   endIf: () => true,
-  next: (ctx: any) => {
+  next: wrapWithGameNightCheck((ctx: any) => {
     const state: CasinoGameState = ctx.session.state
     if (state.gameChangeRequested) return CasinoPhase.GameSelect
     const playablePlayers = state.players.filter(
@@ -315,5 +310,5 @@ export const drawHandCompletePhase = makePhase({
       return CasinoPhase.Lobby
     }
     return CasinoPhase.DrawPostingBlinds
-  },
+  }),
 })

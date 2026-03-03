@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { CasinoGameState, Card } from '@weekend-casino/shared'
-import { CasinoPhase, STARTING_WALLET_BALANCE } from '@weekend-casino/shared'
+import { CasinoPhase } from '@weekend-casino/shared'
 import { bjcReducers } from '../ruleset/bjc-reducers.js'
 
 function card(rank: string, suit: string = 'spades'): Card {
@@ -20,12 +20,13 @@ function createTestState(overrides: Partial<CasinoGameState> = {}): CasinoGameSt
       { id: 'p2', name: 'Player 2', seatIndex: 1, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0 },
     ],
     dealerCharacterId: 'ace_malone',
-    blindLevel: { level: 1, smallBlind: 5, bigBlind: 10 },
+    blindLevel: { level: 1, smallBlind: 5, bigBlind: 10, minBuyIn: 200, maxBuyIn: 2000 },
     handNumber: 1,
     dealerIndex: 0,
     lobbyReady: true,
     dealerMessage: null,
     ttsQueue: [],
+    reactions: [],
     sessionStats: { handsPlayed: 0, gamesPlayed: {}, largestPot: null, playerStats: {} },
     blackjackCompetitive: undefined,
     ...overrides,

@@ -1,11 +1,12 @@
 import { Text } from '@react-three/drei'
+import type { SidePot } from '@weekend-casino/shared'
 import { useStateSyncSelector } from '../hooks/useVGFHooks.js'
 import { ChipPile } from './ChipPile.js'
 
 /** Displays the main pot and up to 2 side pots at the centre of the table. */
 export function PotDisplay() {
-  const pot = useStateSyncSelector((s) => s.pot)
-  const sidePots = useStateSyncSelector((s) => s.sidePots)
+  const pot = useStateSyncSelector((s) => (s.pot ?? 0) as number)
+  const sidePots = useStateSyncSelector((s) => (s.sidePots ?? []) as SidePot[])
 
   if (pot <= 0) return null
 

@@ -108,15 +108,34 @@ describe('evaluateTcpHand', () => {
 
     it('ensures the WEAKEST straight beats the STRONGEST flush', () => {
       const weakestStraight = evaluateTcpHand(hand('As 2h 3d')) // A-2-3 low straight
-      // Note: A-K-Q same suit is a straight flush, not a flush! Use non-consecutive same suit.
-      const strongestFlush = evaluateTcpHand(hand('As 10s 7s')) // A-10-7 flush (not consecutive)
+      // A-K-Q same suit is a straight flush, not a flush. A-K-J suited is strongest flush.
+      const strongestFlush = evaluateTcpHand(hand('As Ks Js')) // A-K-J flush (strongest non-SF)
       expect(weakestStraight.strength).toBeGreaterThan(strongestFlush.strength)
     })
 
     it('ensures the WEAKEST flush beats the STRONGEST pair', () => {
-      const weakestFlush = evaluateTcpHand(hand('2s 3s 5s')) // 5-high flush
+      const weakestFlush = evaluateTcpHand(hand('2s 3s 5s')) // 5-high flush (lowest non-sequential)
       const strongestPair = evaluateTcpHand(hand('As Ah Kd')) // Aces with King kicker
       expect(weakestFlush.strength).toBeGreaterThan(strongestPair.strength)
+    })
+
+    it('ensures the WEAKEST pair beats the STRONGEST high card', () => {
+      const weakestPair = evaluateTcpHand(hand('2s 2h 3d')) // Pair of twos, 3 kicker
+      // A-K-Q is sequential (straight), so strongest HC is A-K-J
+      const strongestHighCard = evaluateTcpHand(hand('As Kh Jd'))
+      expect(weakestPair.strength).toBeGreaterThan(strongestHighCard.strength)
+    })
+
+    it('ensures the WEAKEST three of a kind beats the STRONGEST straight', () => {
+      const weakestTrips = evaluateTcpHand(hand('2s 2h 2d')) // Trip twos
+      const strongestStraight = evaluateTcpHand(hand('Qs Kh Ad')) // Q-K-A straight
+      expect(weakestTrips.strength).toBeGreaterThan(strongestStraight.strength)
+    })
+
+    it('ensures the WEAKEST straight flush beats the STRONGEST three of a kind', () => {
+      const weakestSF = evaluateTcpHand(hand('As 2s 3s')) // A-2-3 suited (lowest SF)
+      const strongestTrips = evaluateTcpHand(hand('As Ah Ad')) // Trip aces
+      expect(weakestSF.strength).toBeGreaterThan(strongestTrips.strength)
     })
   })
 

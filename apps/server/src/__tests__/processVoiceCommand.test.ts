@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { pokerRuleset, createInitialState } from '../ruleset/index.js'
-import type { PokerGameState } from '@weekend-casino/shared'
 import { CasinoPhase } from '@weekend-casino/shared'
 
 // ── Mock ThunkCtx ─────────────────────────────────────────────
 
-function createMockCtx(state: PokerGameState, clientId = 'player-1') {
+function createMockCtx(state: any, clientId = 'player-1') {
   const dispatches: Array<[string, ...unknown[]]> = []
   return {
     ctx: {
@@ -34,13 +33,13 @@ const mockPlayer = {
 }
 
 describe('processVoiceCommand thunk', () => {
-  const processVoiceCommand = pokerRuleset.thunks['processVoiceCommand']!
+  const processVoiceCommand = (pokerRuleset.thunks as any)['processVoiceCommand']!
 
-  let baseState: PokerGameState
+  let baseState: any
 
   beforeEach(() => {
     // Set phase to a betting phase so voice actions are accepted
-    baseState = createInitialState({ players: [mockPlayer], phase: CasinoPhase.PreFlopBetting as any })
+    baseState = createInitialState({ players: [mockPlayer as any], phase: CasinoPhase.PreFlopBetting as any })
   })
 
   it('should dispatch setPlayerLastAction with fold for "I fold"', async () => {
@@ -98,26 +97,26 @@ describe('setPlayerLastAction reducer', () => {
   const setPlayerLastAction = pokerRuleset.reducers['setPlayerLastAction']!
 
   it('should update the matching player lastAction', () => {
-    const state = createInitialState({ players: [mockPlayer] })
+    const state = createInitialState({ players: [mockPlayer as any] })
     const result = setPlayerLastAction(state, 'player-1', 'fold')
 
-    expect(result.players[0]!.lastAction).toBe('fold')
+    expect((result.players[0] as any).lastAction).toBe('fold')
   })
 
   it('should not mutate the original state', () => {
-    const state = createInitialState({ players: [mockPlayer] })
+    const state = createInitialState({ players: [mockPlayer as any] })
     const result = setPlayerLastAction(state, 'player-1', 'check')
 
-    expect(state.players[0]!.lastAction).toBeNull()
+    expect((state.players[0] as any).lastAction).toBeNull()
     expect(result).not.toBe(state)
   })
 
   it('should not modify other players', () => {
     const otherPlayer = { ...mockPlayer, id: 'player-2', name: 'Other', seatIndex: 1 }
-    const state = createInitialState({ players: [mockPlayer, otherPlayer] })
+    const state = createInitialState({ players: [mockPlayer as any, otherPlayer as any] })
     const result = setPlayerLastAction(state, 'player-1', 'raise')
 
-    expect(result.players[0]!.lastAction).toBe('raise')
-    expect(result.players[1]!.lastAction).toBeNull()
+    expect((result.players[0] as any).lastAction).toBe('raise')
+    expect((result.players[1] as any).lastAction).toBeNull()
   })
 })

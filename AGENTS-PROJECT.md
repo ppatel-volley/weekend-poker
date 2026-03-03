@@ -18,6 +18,7 @@ pnpm --filter @weekend-casino/display test
 pnpm --filter @weekend-casino/controller test
 
 # Run Playwright E2E tests (requires dev servers running)
+# First-time setup: install browser binaries with `pnpm exec playwright install`
 pnpm test:e2e
 
 # Type checking
@@ -65,6 +66,8 @@ pnpm dev:controller
 | Voice Pipeline | voice, intent, Deepgram, transcript, STT | — |
 | Bot System | bot, Claude, personality, rules engine | — |
 | Wallet | wallet, chips, balance, rebuy, D-005 | — |
+| Type Integration | shared type, required field, CasinoGameState, hook generics, typecheck, build failure | 007 |
+| Multi-Agent Merge | worktree, parallel agent, merge, integration | 007 |
 
 ---
 

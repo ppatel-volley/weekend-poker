@@ -10,6 +10,7 @@
 
 import type { CasinoGameState } from '@weekend-casino/shared'
 import { CasinoPhase } from '@weekend-casino/shared'
+import { wrapWithGameNightCheck } from './game-night-utils.js'
 
 type PhaseCtx = {
   getState: () => CasinoGameState
@@ -145,9 +146,9 @@ export const tcpRoundCompletePhase = {
     const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
     return state.threeCardPoker?.roundCompleteReady === true
   },
-  next: (ctx: any) => {
+  next: wrapWithGameNightCheck((ctx: any) => {
     const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
     if (state.gameChangeRequested) return CasinoPhase.GameSelect
     return CasinoPhase.TcpPlaceBets
-  },
+  }),
 }

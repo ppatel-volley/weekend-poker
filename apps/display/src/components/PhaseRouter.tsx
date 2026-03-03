@@ -1,4 +1,4 @@
-import { PokerPhase } from '@weekend-casino/shared'
+import { CasinoPhase } from '@weekend-casino/shared'
 import { usePhase } from '../hooks/useVGFHooks.js'
 import { LobbyView } from './LobbyView.js'
 import { GameView2D } from './GameView2D.js'
@@ -27,7 +27,7 @@ export function PhaseRouter() {
     )
   }
 
-  if (phase === PokerPhase.Lobby) {
+  if (phase === CasinoPhase.Lobby) {
     return <LobbyView />
   }
 
