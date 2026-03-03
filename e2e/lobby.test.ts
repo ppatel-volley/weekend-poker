@@ -20,8 +20,11 @@ test.describe('Lobby', () => {
     // After clicking READY, the button text should change
     const readyButton = controllerPage.getByRole('button', { name: /READY/i })
     await expect(readyButton).toBeVisible()
-    // The status text should change to "Waiting for host to start..."
-    await expect(controllerPage.locator('text=Waiting for host to start')).toBeVisible()
+    // After ready, status text shows game selection prompt or start instruction
+    await expect(
+      controllerPage.locator('text=Select a game to start')
+        .or(controllerPage.locator('text=Tap START to begin!'))
+    ).toBeVisible()
   })
 
   test('display shows connected players', async ({ displayPage, controllerPage, sessionId, joinSession }) => {

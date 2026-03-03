@@ -79,11 +79,24 @@ export const lobbyPhase = {
   },
 
   onEnd: async (ctx: any) => {
-    // Initialize server-side game state before transitioning
     const state: CasinoGameState = ctx.getState()
-    if (state?.selectedGame) {
-      switchGameServerState(ctx.session.sessionId, state.selectedGame)
-      console.log(`[LOBBY] Server state initialized for ${state.selectedGame}`)
+
+    // Auto-fill empty seats with bots (up to 4 players)
+    if (state.autoFillBots) {
+      const humanCount = state.players.length
+      const botsNeeded = Math.max(0, 2 - humanCount) // At least 2 players total
+      for (let i = 0; i < botsNeeded; i++) {
+        const seatIndex = humanCount + i
+        ctx.reducerDispatcher('addBotPlayer', seatIndex, 'medium')
+        console.log(`[LOBBY] Auto-filled bot at seat ${seatIndex}`)
+      }
+    }
+
+    // Initialize server-side game state before transitioning
+    const updatedState: CasinoGameState = ctx.getState()
+    if (updatedState?.selectedGame) {
+      switchGameServerState(ctx.session.sessionId, updatedState.selectedGame)
+      console.log(`[LOBBY] Server state initialized for ${updatedState.selectedGame}`)
     }
     return ctx.getState()
   },
