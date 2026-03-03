@@ -1,8 +1,8 @@
 import { useStateSync } from '../hooks/useVGFHooks.js'
-import type { PokerGameState, PokerPlayer } from '@weekend-casino/shared'
+import type { CasinoGameState, CasinoPlayer, Card, SidePot } from '@weekend-casino/shared'
 import { CardImage } from './CardImage.js'
 
-function PlayerCard({ player, isActive }: { player: PokerPlayer; isActive: boolean }) {
+function PlayerCard({ player, isActive }: { player: CasinoPlayer; isActive: boolean }) {
   return (
     <div
       style={{
@@ -37,10 +37,16 @@ function PlayerCard({ player, isActive }: { player: PokerPlayer; isActive: boole
 }
 
 export function GameView2D() {
-  const state = useStateSync() as PokerGameState | null
+  const state = useStateSync() as CasinoGameState | null
   if (!state) return <div style={{ color: 'white', padding: 40 }}>Loading state...</div>
 
-  const { phase, players, communityCards, pot, currentBet, handNumber, dealerIndex, activePlayerIndex, dealerMessage, sidePots } = state
+  const { phase, players, handNumber, dealerIndex, dealerMessage } = state
+  // Poker-specific fields accessed via index signature (Hold'em 2D fallback view)
+  const communityCards = (state['communityCards'] ?? []) as Card[]
+  const pot = (state['pot'] ?? 0) as number
+  const currentBet = (state['currentBet'] ?? 0) as number
+  const activePlayerIndex = (state['activePlayerIndex'] ?? -1) as number
+  const sidePots = (state['sidePots'] ?? []) as SidePot[]
 
   return (
     <div

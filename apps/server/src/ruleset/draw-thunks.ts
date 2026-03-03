@@ -14,6 +14,7 @@ import {
 import { evaluateDrawHand, compareHands } from '../draw-engine/index.js'
 import { validateDiscardIndices, drawFromDeck } from '../draw-engine/index.js'
 import { getServerGameState, setServerGameState } from '../server-game-state.js'
+import { validatePlayerIdOrBot } from './security.js'
 import type { HandRank } from '../draw-engine/index.js'
 
 type ThunkCtx = IThunkContext<CasinoGameState>
@@ -37,11 +38,14 @@ function asBettingState(state: CasinoGameState) {
  */
 export const drawProcessAction = async (
   ctx: ThunkCtx,
-  playerId: string,
+  claimedPlayerId: string,
   action: string,
   amount?: number,
 ): Promise<void> => {
   const state = ctx.getState()
+  const playerId = validatePlayerIdOrBot(ctx, claimedPlayerId, state)
+  if (!playerId) return
+
   const drawState = state.fiveCardDraw
   if (!drawState) return
 
@@ -53,7 +57,7 @@ export const drawProcessAction = async (
 
   const bettingState = asBettingState(state)
   const legalActions = getLegalActions(bettingState as any, playerId)
-  if (!legalActions.includes(action)) return
+  if (!legalActions.includes(action as any)) return
 
   switch (action) {
     case 'fold':
@@ -86,10 +90,13 @@ export const drawProcessAction = async (
  */
 export const drawProcessDiscard = async (
   ctx: ThunkCtx,
-  playerId: string,
+  claimedPlayerId: string,
   cardIndices: number[],
 ): Promise<void> => {
   const state = ctx.getState()
+  const playerId = validatePlayerIdOrBot(ctx, claimedPlayerId, state)
+  if (!playerId) return
+
   const drawState = state.fiveCardDraw
   if (!drawState) return
 

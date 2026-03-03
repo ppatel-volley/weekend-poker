@@ -13,9 +13,9 @@
  *   - Wallet: 10,000 chips starting balance, sync points at SP1/SP2/SP3
  */
 
-import type { GameRuleset, IConnectionLifeCycleContext } from '@volley/vgf/types'
+import type { GameRuleset, IConnectionLifeCycleContext, IThunkContext } from '@volley/vgf/types'
 import { ClientType } from '@volley/vgf/types'
-import type { CasinoGameState, CasinoPlayer, Card } from '@weekend-casino/shared'
+import type { CasinoGameState, CasinoPlayer, Card, BotDifficulty, PlayerAction, SidePot } from '@weekend-casino/shared'
 import { CasinoPhase, MAX_PLAYERS, STARTING_WALLET_BALANCE, STARTING_STACK, BLIND_LEVELS, BETTING_PHASES } from '@weekend-casino/shared'
 import { createInitialCasinoState, casinoReducers, casinoThunks } from './casino-state.js'
 import { lobbyPhase, gameSelectPhase } from './casino-phases.js'
@@ -50,6 +50,16 @@ import {
   bjcSettlementPhase,
   bjcHandCompletePhase,
 } from './bjc-phases.js'
+import { rouletteReducers } from './roulette-reducers.js'
+import { rouletteThunks } from './roulette-thunks.js'
+import {
+  roulettePlaceBetsPhase,
+  rouletteNoMoreBetsPhase,
+  rouletteSpinPhase,
+  rouletteResultPhase,
+  roulettePayoutPhase,
+  rouletteRoundCompletePhase,
+} from './roulette-phases.js'
 import {
   drawResetHand,
   drawSetHands,
@@ -103,14 +113,23 @@ import {
 import type { HandRank } from '../poker-engine/index.js'
 import { parseVoiceIntent } from '../voice/parseVoiceIntent.js'
 import { BotManager } from '../bot-engine/index.js'
+import { wrapWithGameNightCheck } from './game-night-utils.js'
+import { validatePlayerIdOrBot, getAuthorizedPlayerId, isCallerHost, validateBetAmount } from './security.js'
+import { registerConnection, unregisterConnection, emitToClient } from './connection-registry.js'
 
 // ── Bot Manager (module-level singleton per server process) ─────
 const botManager = new BotManager()
 
 // ── Type aliases for brevity ──────────────────────────────────────
 
-type ThunkCtx = Parameters<typeof casinoThunks.requestTTS>[0]
+type ThunkCtx = IThunkContext<CasinoGameState>
 type ConnCtx = IConnectionLifeCycleContext<CasinoGameState>
+
+// VGF framework boundary: CasinoGameState is a structural superset of PokerGameState
+// but TypeScript can't verify this due to different `players` and `phase` types.
+// These helpers document the boundary and keep the cast in one place.
+type PokerCompatState = Parameters<typeof getLegalActions>[0]
+const asPokerState = (state: CasinoGameState): PokerCompatState => state as unknown as PokerCompatState
 
 // ── Hold'em-specific reducers ──────────────────────────────────────
 //
@@ -137,7 +156,7 @@ const holdemReducers = {
         ? Math.max(state.minRaiseIncrement, amount - state.currentBet)
         : state.minRaiseIncrement,
     }
-  }) as any,
+  }),
 
   foldPlayer: ((state: CasinoGameState, playerId: string): CasinoGameState => {
     return {
@@ -146,26 +165,26 @@ const holdemReducers = {
         p.id === playerId ? { ...p, status: 'folded' as const, lastAction: 'fold' as const } : p,
       ),
     }
-  }) as any,
+  }),
 
   dealCommunityCards: ((state: CasinoGameState, cards: Card[]): CasinoGameState => {
     return {
       ...state,
-      communityCards: [...(state['communityCards'] as Card[] ?? []), ...cards],
+      communityCards: [...state.communityCards, ...cards],
     }
-  }) as any,
+  }),
 
   rotateDealerButton: ((state: CasinoGameState): CasinoGameState => {
     const newDealerIndex = rotateDealerButtonFn(state.players, state.dealerIndex)
     return { ...state, dealerIndex: newDealerIndex }
-  }) as any,
+  }),
 
   updatePot: ((state: CasinoGameState): CasinoGameState => {
     const totalBets = state.players.reduce((sum, p) => sum + p.bet, 0)
     if (totalBets === 0) return state
 
     const newSidePots = calculateSidePots(state.players)
-    const mergedPots = (state['sidePots'] as any[] ?? []).map(p => ({ ...p, eligiblePlayerIds: [...p.eligiblePlayerIds] }))
+    const mergedPots: SidePot[] = state.sidePots.map(p => ({ ...p, eligiblePlayerIds: [...p.eligiblePlayerIds] }))
     for (const newPot of newSidePots) {
       const keyNew = [...newPot.eligiblePlayerIds].sort().join(',')
       const existing = mergedPots.find(p => [...p.eligiblePlayerIds].sort().join(',') === keyNew)
@@ -178,12 +197,12 @@ const holdemReducers = {
 
     return {
       ...state,
-      pot: (state['pot'] as number ?? 0) + totalBets,
+      pot: state.pot + totalBets,
       sidePots: mergedPots,
       currentBet: 0,
       players: state.players.map(p => ({ ...p, bet: 0 })),
     }
-  }) as any,
+  }),
 
   awardPot: ((state: CasinoGameState, winnerIds: string[], amounts: number[]): CasinoGameState => {
     const winnings = new Map<string, number>()
@@ -201,11 +220,11 @@ const holdemReducers = {
         return award ? { ...p, stack: p.stack + award } : p
       }),
     }
-  }) as any,
+  }),
 
   setActivePlayer: ((state: CasinoGameState, playerIndex: number): CasinoGameState => {
     return { ...state, activePlayerIndex: playerIndex }
-  }) as any,
+  }),
 
   updateBlindLevel: ((state: CasinoGameState, level: number): CasinoGameState => {
     const newLevel = BLIND_LEVELS[level - 1]
@@ -215,24 +234,20 @@ const holdemReducers = {
       blindLevel: newLevel,
       minRaiseIncrement: newLevel.bigBlind,
     }
-  }) as any,
+  }),
 
-  setPlayerLastAction: ((state: CasinoGameState, playerId: string, action: string | null): CasinoGameState => {
+  setPlayerLastAction: ((state: CasinoGameState, playerId: string, action: PlayerAction | null): CasinoGameState => {
     return {
       ...state,
       players: state.players.map(p =>
-        p.id === playerId ? { ...p, lastAction: action as any } : p,
+        p.id === playerId ? { ...p, lastAction: action } : p,
       ),
     }
-  }) as any,
+  }),
 
   markDealingComplete: ((state: CasinoGameState, complete?: boolean): CasinoGameState => {
     return { ...state, dealingComplete: complete ?? true }
-  }) as any,
-
-  setHoleCards: ((state: CasinoGameState, holeCards: Record<string, [Card, Card]>): CasinoGameState => {
-    return { ...state, holeCards }
-  }) as any,
+  }),
 
   resetHandState: ((state: CasinoGameState): CasinoGameState => {
     return {
@@ -256,19 +271,19 @@ const holdemReducers = {
           : 'active' as const,
       })),
     }
-  }) as any,
+  }),
 
   setHandNumber: ((state: CasinoGameState, handNumber: number): CasinoGameState => {
     return { ...state, handNumber }
-  }) as any,
+  }),
 
   setCurrentBet: ((state: CasinoGameState, amount: number): CasinoGameState => {
     return { ...state, currentBet: amount }
-  }) as any,
+  }),
 
   setMinRaiseIncrement: ((state: CasinoGameState, amount: number): CasinoGameState => {
     return { ...state, minRaiseIncrement: amount }
-  }) as any,
+  }),
 
   markPlayerBusted: ((state: CasinoGameState, playerId: string): CasinoGameState => {
     return {
@@ -277,7 +292,7 @@ const holdemReducers = {
         p.id === playerId ? { ...p, status: 'busted' as const } : p,
       ),
     }
-  }) as any,
+  }),
 
   updatePlayerName: ((state: CasinoGameState, playerId: string, name: string): CasinoGameState => {
     return {
@@ -286,13 +301,13 @@ const holdemReducers = {
         p.id === playerId ? { ...p, name } : p,
       ),
     }
-  }) as any,
+  }),
 
   updateDealerCharacter: ((state: CasinoGameState, characterId: string): CasinoGameState => {
     return { ...state, dealerCharacterId: characterId }
-  }) as any,
+  }),
 
-  addBotPlayer: ((state: CasinoGameState, seatIndex: number, difficulty: string): CasinoGameState => {
+  addBotPlayer: ((state: CasinoGameState, seatIndex: number, difficulty: BotDifficulty): CasinoGameState => {
     const botId = `bot-${seatIndex}`
     return {
       ...state,
@@ -301,44 +316,50 @@ const holdemReducers = {
         {
           id: botId,
           name: `Bot ${seatIndex}`,
+          avatarId: 'default',
           seatIndex,
           stack: STARTING_STACK,
           bet: 0,
           status: 'active' as const,
           lastAction: null,
           isBot: true,
+          isHost: false,
+          isReady: true,
+          currentGameStatus: 'active',
           botConfig: { difficulty, personalityId: 'default' },
           isConnected: true,
           sittingOutHandCount: 0,
-        },
+        } satisfies CasinoPlayer,
       ],
     }
-  }) as any,
+  }),
 
   removeBotPlayer: ((state: CasinoGameState, botId: string): CasinoGameState => {
     return {
       ...state,
       players: state.players.filter(p => !(p.id === botId && p.isBot)),
     }
-  }) as any,
+  }),
 
-  updateEmotionalState: ((state: CasinoGameState, playerId: string, emotionalState: any): CasinoGameState => {
-    // For future use when implementing bot emotional states
+  updateEmotionalState: ((state: CasinoGameState, _playerId: string, _emotionalState: unknown): CasinoGameState => {
+    // Deferred: bot emotional states not implemented in v1
     return state
-  }) as any,
+  }),
 
-  updateOpponentProfile: ((state: CasinoGameState, playerId: string, profile: any): CasinoGameState => {
-    // For future use when implementing opponent profiling
+  updateOpponentProfile: ((state: CasinoGameState, _playerId: string, _profile: unknown): CasinoGameState => {
+    // Deferred: opponent profiling not implemented in v1
     return state
-  }) as any,
+  }),
 
-  enqueueTTSMessage: ((state: CasinoGameState, message: any): CasinoGameState => {
+  enqueueTTSMessage: ((state: CasinoGameState, message: unknown): CasinoGameState => {
     // Delegate to casinoEnqueueTTS in casinoReducers
-    return { ...state, ttsQueue: [...state.ttsQueue, message] }
-  }) as any,
+    return { ...state, ttsQueue: [...state.ttsQueue, message as CasinoGameState['ttsQueue'][number]] }
+  }),
 
-  updateSessionHighlights: ((state: CasinoGameState, highlight: any): CasinoGameState => {
-    const currentLargestPot = state.sessionStats?.largestPot
+  updateSessionHighlights: ((state: CasinoGameState, highlight: { potSize: number }): CasinoGameState => {
+    // sessionStats uses poker-compatible shape at runtime (see createInitialCasinoState)
+    const stats = state.sessionStats as unknown as Record<string, unknown>
+    const currentLargestPot = stats?.largestPot as { potSize: number } | null | undefined
     const shouldUpdate = !currentLargestPot || highlight.potSize > currentLargestPot.potSize
 
     return {
@@ -346,23 +367,44 @@ const holdemReducers = {
       sessionStats: {
         ...state.sessionStats,
         largestPot: shouldUpdate ? highlight : currentLargestPot,
-      },
+      } as CasinoGameState['sessionStats'],
     }
-  }) as any,
+  }),
 }
 
 // ── Hold'em-specific thunks ────────────────────────────────────────
 
 const holdemThunks = {
-  processPlayerAction: (async (ctx: ThunkCtx, playerId: string, action: string, amount?: number) => {
+  processPlayerAction: (async (ctx: ThunkCtx, claimedPlayerId: string, action: string, amount?: number) => {
     const state = ctx.getState()
+
+    // SECURITY: Validate player identity — client-supplied playerId is untrusted
+    const playerId = validatePlayerIdOrBot(ctx, claimedPlayerId, state)
+    if (!playerId) return
+
     const player = state.players.find(p => p.id === playerId)
     if (!player) return
 
-    if (state.players[state['activePlayerIndex'] as number ?? -1]?.id !== playerId) return
+    if (state.players[state.activePlayerIndex]?.id !== playerId) return
 
-    const legalActions = getLegalActions(state as any, playerId)
-    if (!legalActions.includes(action)) return
+    const legalActions = getLegalActions(asPokerState(state), playerId)
+    if (!legalActions.includes(action as PlayerAction)) return
+
+    // SECURITY: Validate bet/raise amounts (High #4)
+    if ((action === 'bet' || action === 'raise') && amount !== undefined) {
+      const error = validateBetAmount(
+        amount,
+        player.stack,
+        player.bet,
+        state.currentBet,
+        state.minRaiseIncrement,
+        action,
+      )
+      if (error) {
+        ctx.dispatch('setBetError', playerId, error, Date.now() + 3000)
+        return
+      }
+    }
 
     switch (action) {
       case 'fold':
@@ -388,32 +430,146 @@ const holdemThunks = {
 
     ctx.dispatch('setPlayerLastAction', playerId, action)
     advanceToNextPlayer(ctx)
-  }) as any,
+  }),
 
   processVoiceCommand: (async (ctx: ThunkCtx, transcript: string) => {
     const result = parseVoiceIntent(transcript)
     console.log('[voice]', JSON.stringify(result))
 
-    const actionIntents = ['fold', 'check', 'call', 'bet', 'raise', 'all_in']
-    if (actionIntents.includes(result.intent)) {
-      // Only dispatch if current phase accepts betting/wagering actions
-      const state = ctx.getState()
-      if ((BETTING_PHASES as readonly string[]).includes(state.phase)) {
-        ctx.dispatch('setPlayerLastAction', ctx.getClientId(), result.intent)
+    const state = ctx.getState()
+    const playerId = ctx.getClientId()
+    const game = state.selectedGame
+    const phase = state.phase
+    const amount = result.entities?.amount !== undefined ? result.entities.amount : undefined
+    const intent = result.intent
+
+    // ── Hold'em betting ─────────────────────────────────────────
+    if (game === 'holdem' && (BETTING_PHASES as readonly string[]).includes(phase)) {
+      const holdemActions = ['fold', 'check', 'call', 'bet', 'raise', 'all_in']
+      if (holdemActions.includes(intent)) {
+        await ctx.dispatchThunk('processPlayerAction', playerId, intent, amount)
+        return
       }
     }
-  }) as any,
+
+    // ── 5-Card Draw betting ─────────────────────────────────────
+    if (game === 'five_card_draw') {
+      const drawBettingPhases = [CasinoPhase.DrawBetting1, CasinoPhase.DrawBetting2] as string[]
+      if (drawBettingPhases.includes(phase)) {
+        const drawActions = ['fold', 'check', 'call', 'bet', 'raise', 'all_in']
+        if (drawActions.includes(intent)) {
+          await ctx.dispatchThunk('drawProcessAction', playerId, intent, amount)
+          return
+        }
+      }
+      if (phase === CasinoPhase.DrawDrawPhase) {
+        if (intent === 'stand_pat') {
+          await ctx.dispatchThunk('drawProcessDiscard', playerId, [])
+          return
+        }
+        // 'discard' and 'draw' — amount represents card count but indices
+        // must come from the controller UI, not voice. Confirm discard with empty.
+        if (intent === 'discard' || intent === 'draw') {
+          await ctx.dispatchThunk('drawProcessDiscard', playerId, [])
+          return
+        }
+      }
+    }
+
+    // ── Blackjack Classic ───────────────────────────────────────
+    if (game === 'blackjack_classic') {
+      if (phase === CasinoPhase.BjPlaceBets && intent === 'bet' && amount !== undefined) {
+        await ctx.dispatchThunk('bjPlaceBet', playerId, amount)
+        return
+      }
+      if (phase === CasinoPhase.BjInsurance && intent === 'bj_insurance') {
+        await ctx.dispatchThunk('bjProcessInsurance', playerId, true)
+        return
+      }
+      if (phase === CasinoPhase.BjPlayerTurns) {
+        if (intent === 'bj_hit') { await ctx.dispatchThunk('bjHit', playerId); return }
+        if (intent === 'bj_stand') { await ctx.dispatchThunk('bjStand', playerId); return }
+        if (intent === 'bj_double') { await ctx.dispatchThunk('bjDoubleDown', playerId); return }
+        if (intent === 'bj_split') { await ctx.dispatchThunk('bjSplit', playerId); return }
+        if (intent === 'bj_surrender') { await ctx.dispatchThunk('bjSurrender', playerId); return }
+      }
+    }
+
+    // ── Blackjack Competitive ───────────────────────────────────
+    if (game === 'blackjack_competitive') {
+      if (phase === CasinoPhase.BjcPlayerTurns) {
+        if (intent === 'bj_hit') { await ctx.dispatchThunk('bjcHit', playerId); return }
+        if (intent === 'bj_stand') { await ctx.dispatchThunk('bjcStand', playerId); return }
+        if (intent === 'bj_double') { await ctx.dispatchThunk('bjcDoubleDown', playerId); return }
+      }
+    }
+
+    // ── Three Card Poker ────────────────────────────────────────
+    if (game === 'three_card_poker') {
+      if (phase === CasinoPhase.TcpPlaceBets && intent === 'tcp_ante') {
+        const tcp = state.threeCardPoker
+        const anteAmount = amount ?? tcp?.config.minAnte ?? 25
+        await ctx.dispatchThunk('tcpPlaceAnteBet', playerId, anteAmount)
+        return
+      }
+      if (phase === CasinoPhase.TcpPlayerDecisions) {
+        if (intent === 'tcp_play') { await ctx.dispatchThunk('tcpMakeDecision', playerId, 'play'); return }
+        if (intent === 'tcp_fold') { await ctx.dispatchThunk('tcpMakeDecision', playerId, 'fold'); return }
+      }
+    }
+
+    // ── Roulette ────────────────────────────────────────────────
+    if (game === 'roulette' && phase === CasinoPhase.RoulettePlaceBets) {
+      const roulette = state.roulette
+      const defaultBet = roulette?.config.minBet ?? 10
+
+      // Outside bets (colour, parity, range)
+      const outsideBetMap: Record<string, string> = {
+        roulette_red: 'red', roulette_black: 'black',
+        roulette_odd: 'odd', roulette_even: 'even',
+        roulette_high: 'high', roulette_low: 'low',
+      }
+      if (outsideBetMap[intent]) {
+        await ctx.dispatchThunk('roulettePlaceBet', playerId, outsideBetMap[intent], amount ?? defaultBet)
+        return
+      }
+
+      // Dozen bets
+      if (intent === 'roulette_dozen' && result.entities?.amount) {
+        const dozenType = `dozen_${result.entities.amount}` as const
+        await ctx.dispatchThunk('roulettePlaceBet', playerId, dozenType, amount ?? defaultBet)
+        return
+      }
+
+      // Straight-up number bet
+      if (intent === 'roulette_straight' && result.entities?.amount !== undefined) {
+        await ctx.dispatchThunk('roulettePlaceBet', playerId, 'straight_up', defaultBet, [result.entities.amount])
+        return
+      }
+
+      // Split bet (two numbers)
+      if (intent === 'roulette_split' && result.entities?.amount !== undefined && result.entities?.splitTarget !== undefined) {
+        await ctx.dispatchThunk('roulettePlaceBet', playerId, 'split', defaultBet, [result.entities.amount, result.entities.splitTarget])
+        return
+      }
+
+      // Meta actions ('confirm' also matches tcp_confirm due to intent priority)
+      if (intent === 'roulette_clear') { await ctx.dispatchThunk('rouletteClearBets', playerId); return }
+      if (intent === 'roulette_confirm' || intent === 'tcp_confirm') { await ctx.dispatchThunk('rouletteConfirmBets', playerId); return }
+      if (intent === 'roulette_no_bet') { await ctx.dispatchThunk('rouletteNoBet', playerId); return }
+    }
+  }),
 
   startHand: (async (ctx: ThunkCtx) => {
     ctx.dispatch('resetHandState')
-  }) as any,
+  }),
 
   evaluateHands: (async (ctx: ThunkCtx) => {
     const result = resolveWinners(ctx.getState(), ctx.getSessionId())
     if (result) {
       ctx.dispatch('awardPot', result.winnerIds, result.amounts)
     }
-  }) as any,
+  }),
 
   distributePot: (async (ctx: ThunkCtx) => {
     const state = ctx.getState()
@@ -422,16 +578,16 @@ const holdemThunks = {
     )
 
     if (remaining.length === 1) {
-      ctx.dispatch('awardPot', [remaining[0]!.id], [state['pot'] as number ?? 0])
+      ctx.dispatch('awardPot', [remaining[0]!.id], [state.pot])
       return
     }
 
     await ctx.dispatchThunk('evaluateHands')
-  }) as any,
+  }),
 
   autoFoldPlayer: (async (ctx: ThunkCtx, playerId: string) => {
     const state = ctx.getState()
-    const legalActions = getLegalActions(state as any, playerId)
+    const legalActions = getLegalActions(asPokerState(state), playerId)
 
     if (legalActions.includes('check')) {
       ctx.dispatch('setPlayerLastAction', playerId, 'check')
@@ -440,26 +596,26 @@ const holdemThunks = {
     }
 
     advanceToNextPlayer(ctx)
-  }) as any,
+  }),
 
   botDecision: (async (ctx: ThunkCtx, botId: string) => {
     const state = ctx.getState()
     const bot = state.players.find(p => p.id === botId)
     if (!bot || !bot.isBot) return
 
-    const legalActions = getLegalActions(state as any, botId)
+    const legalActions = getLegalActions(asPokerState(state), botId)
     if (legalActions.length === 0) return
 
     // Ensure bot is registered in the manager
     if (!botManager.isBot(botId)) {
-      const difficulty = bot.botConfig?.difficulty ?? 'medium'
+      const difficulty: BotDifficulty = bot.botConfig?.difficulty ?? 'medium'
       const personalityId = bot.botConfig?.personalityId ?? 'vincent'
-      botManager.addBot(bot.seatIndex, difficulty as any, personalityId)
+      botManager.addBot(bot.seatIndex, difficulty, personalityId)
     }
 
-    const holeCards = state.holeCards?.[botId]
-      ? (Array.isArray(state.holeCards[botId]) ? state.holeCards[botId] as any[] : [])
-      : []
+    // Read hole cards from server-side state (not broadcast state)
+    const serverHoleCards = getServerHandState(ctx.getSessionId())?.holeCards.get(botId)
+    const holeCards: Card[] = serverHoleCards ? [...serverHoleCards] : []
 
     const BOT_TIMEOUT_MS = 10_000
     const timeoutPromise = new Promise<never>((_, reject) =>
@@ -470,14 +626,14 @@ const holdemThunks = {
     try {
       decision = await Promise.race([
         botManager.requestBotAction({
-          gameType: (state.selectedGame ?? 'holdem') as any,
+          gameType: state.selectedGame ?? 'holdem',
           botPlayerId: botId,
           stack: bot.stack,
           bet: bot.bet,
           currentBet: state.currentBet,
           minRaiseIncrement: state.minRaiseIncrement,
-          pot: state['pot'] as number ?? 0,
-          communityCards: (state['communityCards'] as any[]) ?? [],
+          pot: state.pot,
+          communityCards: state.communityCards,
           holeCards,
           legalActions,
           activePlayers: state.players.filter(p => p.status === 'active' || p.status === 'all_in').length,
@@ -489,7 +645,7 @@ const holdemThunks = {
       ])
     } catch {
       // Timeout or error — default to fold
-      decision = { action: 'fold', amount: undefined, dialogue: undefined } as any
+      decision = { action: 'fold', amount: undefined, dialogue: undefined, thinkTimeMs: 0 }
     }
 
     // Set dialogue as dealer message if present
@@ -497,30 +653,102 @@ const holdemThunks = {
       ctx.dispatch('setDealerMessage', `${bot.name}: ${decision.dialogue}`)
     }
 
-    await ctx.dispatchThunk('processPlayerAction', botId, decision.action, decision.amount)
-  }) as any,
+    // SECURITY: Bot actions dispatch reducers directly — never go through
+    // client-facing processPlayerAction which would (correctly) reject bot IDs.
+    const action = decision.action
+    switch (action) {
+      case 'fold':
+        ctx.dispatch('foldPlayer', botId)
+        break
+      case 'call':
+        ctx.dispatch('updatePlayerBet', botId, state.currentBet)
+        break
+      case 'bet':
+      case 'raise':
+        if (decision.amount !== undefined) {
+          ctx.dispatch('updatePlayerBet', botId, decision.amount)
+        }
+        break
+      case 'all_in':
+        ctx.dispatch('updatePlayerBet', botId, bot.stack + bot.bet)
+        break
+      // 'check' — no state change needed
+    }
 
+    ctx.dispatch('setPlayerLastAction', botId, action)
+    advanceToNextPlayer(ctx)
+  }),
+
+  /**
+   * Securely delivers the calling player's own hole cards via targeted emit.
+   * SECURITY: Cards are sent ONLY to the requesting client's connection,
+   * never written to broadcast state. state.holeCards stays {} at all times.
+   */
+  requestMyHoleCards: (async (ctx: ThunkCtx) => {
+    const authorizedId = getAuthorizedPlayerId(ctx)
+    const sessionId = ctx.getSessionId()
+    const serverState = getServerHandState(sessionId)
+    if (!serverState) return
+
+    const myCards = serverState.holeCards.get(authorizedId)
+    if (!myCards) return
+
+    // Deliver cards via targeted connection emit — NOT broadcast state.
+    emitToClient(sessionId, authorizedId, 'privateHoleCards', {
+      playerId: authorizedId,
+      cards: myCards,
+    })
+  }),
+
+  /**
+   * Host-only game selection (High #5).
+   * Moves selectGame from a plain reducer to a thunk with host authorization.
+   */
+  selectGameAsHost: (async (ctx: ThunkCtx, game: string) => {
+    const state = ctx.getState()
+    if (!isCallerHost(ctx, state)) {
+      console.warn('[SECURITY] Non-host attempted to select game. Rejecting.')
+      return
+    }
+    ctx.dispatch('setSelectedGame', game)
+  }),
+
+  /**
+   * Host-only game selection confirmation (High #5).
+   */
+  confirmGameSelectAsHost: (async (ctx: ThunkCtx) => {
+    const state = ctx.getState()
+    if (!isCallerHost(ctx, state)) {
+      console.warn('[SECURITY] Non-host attempted to confirm game selection. Rejecting.')
+      return
+    }
+    // SECURITY: Use internal reducer — 'confirmGameSelection' is blocked for clients.
+    ctx.dispatch('_confirmGameSelectionInternal')
+  }),
+
+  // Full sit-out logic (skip in turn order, hold seat) deferred to v2.1
   sitOutPlayer: (async (ctx: ThunkCtx, playerId: string) => {
-    // Mark player as sitting out for the next hand
     const state = ctx.getState()
     const player = state.players.find(p => p.id === playerId)
     if (!player) return
 
-    // If not already busted, keep them in the player list but mark as sitting out
     if (player.status !== 'busted') {
-      ctx.dispatch('updatePlayerName', playerId, player.name) // Placeholder reducer call
-      // TODO: Add sitOutPlayer reducer when needed
+      ctx.dispatch('setPlayerLastAction', playerId, null)
     }
-  }) as any,
+  }),
 
+  // Full deal-in logic (validate seat, restore to active roster) deferred to v2.1
   dealInPlayer: (async (ctx: ThunkCtx, playerId: string) => {
-    // Re-seat a player who was sitting out
-    // TODO: Implement deal in logic
-  }) as any,
+    const state = ctx.getState()
+    const player = state.players.find(p => p.id === playerId)
+    if (!player) return
+    // No-op: player remains in roster, will be dealt in on next hand
+  }),
 
+  // Full session end (persist stats, leaderboard) deferred to v2.1
   endSession: (async (ctx: ThunkCtx) => {
-    // TODO: Implement session end logic (record stats, trigger transitions, etc)
-  }) as any,
+    ctx.dispatch('setDealerMessage', 'Session ending. Thanks for playing!')
+  }),
 }
 
 // ── Shared helpers ────────────────────────────────────────────────
@@ -535,21 +763,21 @@ function resolveWinners(
   )
 
   if (remaining.length === 1) {
-    return { winnerIds: [remaining[0]!.id], amounts: [state['pot'] as number ?? 0] }
+    return { winnerIds: [remaining[0]!.id], amounts: [state.pot] }
   }
 
   const playerHands: Array<{ playerId: string; hand: HandRank }> = []
   for (const player of remaining) {
     const holeCards = serverState?.holeCards.get(player.id)
     if (!holeCards) continue
-    const allCards = [...holeCards, ...(state['communityCards'] as Card[] ?? [])]
+    const allCards = [...holeCards, ...state.communityCards]
     const hand = evaluateHand(allCards)
     playerHands.push({ playerId: player.id, hand })
   }
 
-  const pots = (state['sidePots'] as any[] ?? []).length > 0
-    ? (state['sidePots'] as any[])
-    : [{ amount: state['pot'] ?? 0, eligiblePlayerIds: remaining.map(p => p.id) }]
+  const pots: SidePot[] = state.sidePots.length > 0
+    ? state.sidePots
+    : [{ amount: state.pot, eligiblePlayerIds: remaining.map(p => p.id) }]
 
   const winnerIds: string[] = []
   const amounts: number[] = []
@@ -577,8 +805,9 @@ function resolveWinners(
 
 function advanceToNextPlayer(ctx: ThunkCtx): void {
   const state = ctx.getState()
-  if (!isBettingRoundComplete(state as any) && !isOnlyOnePlayerRemaining(state as any)) {
-    const nextIdx = nextActivePlayer(state.players, state['activePlayerIndex'] as number ?? -1)
+  const pokerState = asPokerState(state)
+  if (!isBettingRoundComplete(pokerState) && !isOnlyOnePlayerRemaining(pokerState)) {
+    const nextIdx = nextActivePlayer(state.players, state.activePlayerIndex)
     if (nextIdx !== -1) {
       ctx.dispatch('setActivePlayer', nextIdx)
     }
@@ -630,20 +859,22 @@ function makePhase(overrides: {
 
 function bettingEndIf(ctx: any): boolean {
   const state: CasinoGameState = ctx.session.state
-  return isBettingRoundComplete(state as any) || isOnlyOnePlayerRemaining(state as any)
+  const pokerState = asPokerState(state)
+  return isBettingRoundComplete(pokerState) || isOnlyOnePlayerRemaining(pokerState)
 }
 
 function bettingNextPhase(ctx: any, normalNext: string): string {
   const state: CasinoGameState = ctx.session.state
-  if (isOnlyOnePlayerRemaining(state as any)) return CasinoPhase.HandComplete
-  if (areAllRemainingPlayersAllIn(state as any)) return CasinoPhase.AllInRunout
+  const pokerState = asPokerState(state)
+  if (isOnlyOnePlayerRemaining(pokerState)) return CasinoPhase.HandComplete
+  if (areAllRemainingPlayersAllIn(pokerState)) return CasinoPhase.AllInRunout
   return normalNext
 }
 
 /** Auto-fold any disconnected active player whose turn it is. */
 function autoFoldIfDisconnected(ctx: any): void {
   const state: CasinoGameState = ctx.getState()
-  const activeIdx = state['activePlayerIndex'] as number ?? -1
+  const activeIdx = state.activePlayerIndex
   const activePlayer = state.players[activeIdx]
   if (activePlayer && !activePlayer.isConnected && activePlayer.status === 'active') {
     ctx.dispatchThunk('autoFoldPlayer', activePlayer.id)
@@ -744,11 +975,10 @@ const dealingHoleCardsPhase = makePhase({
       holeCards,
     })
 
-    const holeCardsRecord: Record<string, [Card, Card]> = {}
-    for (const [playerId, cards] of holeCards) {
-      holeCardsRecord[playerId] = cards
-    }
-    ctx.dispatch('setHoleCards', holeCardsRecord)
+    // SECURITY: Hole cards are stored ONLY in ServerHandState.
+    // Each player retrieves their own cards via requestMyHoleCards thunk,
+    // which delivers them via targeted connection emit (never broadcast state).
+    // state.holeCards stays {} at all times.
     ctx.dispatch('markDealingComplete', true)
     return ctx.getState()
   },
@@ -859,7 +1089,7 @@ const riverBettingPhase = makePhase({
   endIf: bettingEndIf,
   next: (ctx: any) => {
     const state: CasinoGameState = ctx.session.state
-    if (isOnlyOnePlayerRemaining(state as any)) return CasinoPhase.HandComplete
+    if (isOnlyOnePlayerRemaining(asPokerState(state))) return CasinoPhase.HandComplete
     return CasinoPhase.Showdown
   },
 })
@@ -872,7 +1102,7 @@ const allInRunoutPhase = makePhase({
     if (!serverState) return ctx.getState()
 
     const deck = [...serverState.deck]
-    const currentCount = (state['communityCards'] as Card[] ?? []).length
+    const currentCount = state.communityCards.length
 
     // Standard poker burn logic per street:
     // Flop (0→3): burn 1, deal 3
@@ -932,7 +1162,7 @@ const handCompletePhase = makePhase({
     return ctx.getState()
   },
   endIf: () => true,
-  next: (ctx: any) => {
+  next: wrapWithGameNightCheck((ctx: any) => {
     const state: CasinoGameState = ctx.session.state
     if (state.gameChangeRequested) return CasinoPhase.GameSelect
     const playablePlayers = state.players.filter(
@@ -942,7 +1172,7 @@ const handCompletePhase = makePhase({
       return CasinoPhase.Lobby
     }
     return CasinoPhase.PostingBlinds
-  },
+  }),
 })
 
 // ── Phase map ──────────────────────────────────────────────────────
@@ -1001,18 +1231,30 @@ const phases = {
   [CasinoPhase.TcpDealerReveal]: tcpDealerRevealPhase,
   [CasinoPhase.TcpSettlement]: tcpSettlementPhase,
   [CasinoPhase.TcpRoundComplete]: tcpRoundCompletePhase,
+
+  // Roulette phases (ROULETTE_ prefix per D-003)
+  [CasinoPhase.RoulettePlaceBets]: roulettePlaceBetsPhase,
+  [CasinoPhase.RouletteNoMoreBets]: rouletteNoMoreBetsPhase,
+  [CasinoPhase.RouletteSpin]: rouletteSpinPhase,
+  [CasinoPhase.RouletteResult]: rouletteResultPhase,
+  [CasinoPhase.RoulettePayout]: roulettePayoutPhase,
+  [CasinoPhase.RouletteRoundComplete]: rouletteRoundCompletePhase,
 }
 
 // ── Connection handlers ────────────────────────────────────────────
 
 const onConnect = async (ctx: ConnCtx) => {
   const { clientType } = ctx.connection.metadata
+  const clientId = ctx.getClientId()
+  const sessionId = ctx.getSessionId()
+
+  // Register connection for targeted private messaging (hole card delivery).
+  registerConnection(sessionId, clientId, ctx.connection)
+
   if (clientType !== ClientType.Controller) return
 
   const state = ctx.getState()
   if (state.players.length >= MAX_PLAYERS) return
-
-  const clientId = ctx.getClientId()
 
   if (state.players.some(p => p.id === clientId)) {
     ctx.dispatch('markPlayerReconnected', clientId)
@@ -1035,7 +1277,11 @@ const onConnect = async (ctx: ConnCtx) => {
   const newPlayer: CasinoPlayer = {
     id: clientId,
     name: displayName,
+    avatarId: 'default',
     seatIndex,
+    isHost: state.players.length === 0,
+    isReady: false,
+    currentGameStatus: 'active',
     stack: STARTING_WALLET_BALANCE,
     bet: 0,
     status: 'active',
@@ -1050,6 +1296,11 @@ const onConnect = async (ctx: ConnCtx) => {
 
 const onDisconnect = async (ctx: ConnCtx) => {
   const clientId = ctx.getClientId()
+  const sessionId = ctx.getSessionId()
+
+  // Unregister connection from private messaging registry.
+  unregisterConnection(sessionId, clientId)
+
   const state = ctx.getState()
   const player = state.players.find(p => p.id === clientId)
   if (!player) return
@@ -1076,6 +1327,7 @@ export const casinoRuleset = {
     ...tcpReducers,
     ...bjReducers,
     ...bjcReducers,
+    ...rouletteReducers,
     // 5-Card Draw reducers
     drawResetHand,
     drawSetHands,
@@ -1090,12 +1342,32 @@ export const casinoRuleset = {
     drawAwardPot,
     drawSetCurrentBet,
     drawSetMinRaiseIncrement,
-    // Controller dispatch aliases (controller uses short names)
-    selectGame: casinoReducers.setSelectedGame,
+    // SECURITY: setHoleCards is a hard no-op. Hole cards are NEVER in broadcast state.
+    // Cards are delivered via targeted connection emits (see requestMyHoleCards thunk).
+    setHoleCards: ((state: CasinoGameState, _holeCards: Record<string, [Card, Card]>): CasinoGameState => {
+      console.warn('[SECURITY] setHoleCards dispatch blocked. Cards never go in broadcast state.')
+      return { ...state, holeCards: {} }
+    }),
+    // SECURITY: selectGame and confirmGameSelection are blocked for direct client dispatch.
+    // Use selectGameAsHost and confirmGameSelectAsHost thunks instead.
+    // These no-ops prevent clients from bypassing host authorization.
+    selectGame: ((state: CasinoGameState, _game: unknown): CasinoGameState => {
+      console.warn('[SECURITY] Client attempted direct selectGame dispatch. Use selectGameAsHost thunk.')
+      return state
+    }),
+    confirmGameSelection: ((state: CasinoGameState): CasinoGameState => {
+      console.warn('[SECURITY] Client attempted direct confirmGameSelection dispatch. Use confirmGameSelectAsHost thunk.')
+      return state
+    }),
+    // Internal-only confirmation reducer used by confirmGameSelectAsHost thunk.
+    _confirmGameSelectionInternal: ((state: CasinoGameState): CasinoGameState => ({
+      ...state,
+      gameSelectConfirmed: true,
+    })),
     checkLobbyReady: ((state: CasinoGameState): CasinoGameState => ({
       ...state,
       lobbyReady: true,
-    })) as any,
+    })),
   },
   thunks: {
     ...casinoThunks,
@@ -1103,13 +1375,19 @@ export const casinoRuleset = {
     ...tcpThunks,
     ...bjThunks,
     ...bjcThunks,
+    ...rouletteThunks,
     // 5-Card Draw thunks
     drawProcessAction,
     drawProcessDiscard,
     drawExecuteReplace,
     drawEvaluateAndDistribute,
   },
-  phases,
+  // VGF framework boundary: phase onBegin/onEnd/endIf callbacks use adapted contexts
+  // (makePhase/adaptPhaseCtx wrappers) and lobby/gameSelect phases return Promise<void>
+  // from onBegin (VGF accepts this at runtime but Phase type expects GameState | Promise<GameState>).
+  // Removing this cast would require updating 50+ test mock types in phases.test.ts and
+  // qa-audit-fixes.test.ts — deferred to dedicated test-hardening pass.
+  phases: phases as any,
   actions: {},
   onConnect,
   onDisconnect,

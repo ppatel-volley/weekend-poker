@@ -9,7 +9,6 @@
  */
 
 import type { CasinoGameState, Card } from '@weekend-casino/shared'
-import { BJ_MIN_BET, BJ_MAX_BET } from '@weekend-casino/shared'
 import {
   evaluateBlackjackHand,
   isNaturalBlackjack,
@@ -20,6 +19,7 @@ import {
   needsReshuffle,
 } from '../blackjack-engine/index.js'
 import { getServerGameState, setServerGameState } from '../server-game-state.js'
+import { validatePlayerIdOrBot } from './security.js'
 
 type ThunkCtx = {
   getState: () => CasinoGameState
@@ -203,8 +203,11 @@ export const bjcThunks = {
   /**
    * Player hits — deal one card to their hand.
    */
-  bjcHit: async (ctx: ThunkCtx, playerId: string) => {
+  bjcHit: async (ctx: ThunkCtx, claimedPlayerId: string) => {
     const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     const bjc = state.blackjackCompetitive
     if (!bjc) return
 
@@ -240,7 +243,11 @@ export const bjcThunks = {
   /**
    * Player stands.
    */
-  bjcStand: async (ctx: ThunkCtx, playerId: string) => {
+  bjcStand: async (ctx: ThunkCtx, claimedPlayerId: string) => {
+    const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     ctx.dispatch('bjcStandHand', playerId)
     await ctx.dispatchThunk('bjcCheckAdvance', playerId)
   },
@@ -248,8 +255,11 @@ export const bjcThunks = {
   /**
    * Player doubles down — one more card, bet doubled, then stand.
    */
-  bjcDoubleDown: async (ctx: ThunkCtx, playerId: string) => {
+  bjcDoubleDown: async (ctx: ThunkCtx, claimedPlayerId: string) => {
     const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     const bjc = state.blackjackCompetitive
     if (!bjc) return
 

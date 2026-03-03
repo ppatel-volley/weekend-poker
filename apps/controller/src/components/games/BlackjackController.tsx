@@ -10,8 +10,8 @@
  */
 
 import { useState } from 'react'
-import { usePhase, useStateSync, useDispatchThunk } from '../../hooks/useVGFHooks.js'
-import type { CasinoGameState, BlackjackGameState, BlackjackPlayerState, Card } from '@weekend-casino/shared'
+import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
+import type { BlackjackGameState, Card } from '@weekend-casino/shared'
 
 const BET_AMOUNTS = [10, 25, 50, 100, 250, 500]
 
@@ -40,24 +40,6 @@ function CardDisplay({ card }: { card: Card }) {
     }}>
       <div>{card.rank}</div>
       <div style={{ fontSize: '14px' }}>{suitSymbols[card.suit]}</div>
-    </div>
-  )
-}
-
-/** Face-down card placeholder. */
-function FaceDownCard() {
-  return (
-    <div style={{
-      width: '55px',
-      height: '80px',
-      background: '#2a2a4e',
-      borderRadius: '6px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      border: '2px solid #444',
-    }}>
-      <div style={{ color: '#666', fontSize: '20px' }}>?</div>
     </div>
   )
 }
@@ -422,12 +404,12 @@ function actionBtnStyle(bg: string): React.CSSProperties {
 
 export function BlackjackController() {
   const phase = usePhase() as string | null
-  const state = useStateSync() as CasinoGameState | null
+  const state = useStateSync()
   const dispatchThunk = useDispatchThunk()
 
+  const member = useSessionMember()
   const bj = state?.blackjack
-  const players = state?.players ?? []
-  const playerId = players[0]?.id ?? ''
+  const playerId = member?.sessionMemberId ?? ''
   const walletBalance = state?.wallet?.[playerId] ?? 0
 
   const phaseStr = phase ?? ''

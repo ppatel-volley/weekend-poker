@@ -132,8 +132,8 @@ export interface PokerGameState {
   currentBet: number
   minRaiseIncrement: number
 
-  // Hole cards per player (playerId -> [Card, Card])
-  // Stored in shared state for simplicity; controllers read only their own.
+  // Hole cards field (always empty in broadcast state).
+  // SECURITY: Cards are delivered via targeted private events, never broadcast.
   holeCards: Record<string, [Card, Card]>
 
   // Hand history (current hand only)

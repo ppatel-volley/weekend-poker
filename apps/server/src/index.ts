@@ -2,7 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { createServer } from 'node:http'
 import { VGFServer, MemoryStorage, SocketIOTransport } from '@volley/vgf/server'
-import type { PokerGameState } from '@weekend-casino/shared'
+import type { CasinoGameState } from '@weekend-casino/shared'
 import { pokerRuleset } from './ruleset/index.js'
 import { logger } from './logger.js'
 import { parseAllowedOrigins } from './cors-config.js'
@@ -64,7 +64,7 @@ const noopSchedulerProvider = () => ({
 
 // ── VGF server ─────────────────────────────────────────────────
 // TODO: Add RedisRuntimeSchedulerStore for scheduled actions in production
-const server = new VGFServer<PokerGameState>({
+const server = new VGFServer<CasinoGameState>({
   game: pokerRuleset,
   httpServer,
   port: PORT,

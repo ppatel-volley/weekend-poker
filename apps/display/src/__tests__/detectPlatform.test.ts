@@ -3,7 +3,6 @@ import { detectPlatform } from '../platform/detectPlatform.js'
 
 describe('detectPlatform', () => {
   const originalLocation = window.location
-  const originalNavigator = window.navigator
 
   beforeEach(() => {
     // Reset URL to a clean state before each test

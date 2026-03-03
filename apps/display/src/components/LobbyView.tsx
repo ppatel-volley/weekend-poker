@@ -23,7 +23,7 @@ export function LobbyView() {
   const sessionId = useSessionId()
   const members = useSessionMembers()
   const { isTV } = usePlatform()
-  const { ref: lobbyRef, focused: lobbyFocused } = useFocusable({
+  const { ref: lobbyRef } = useFocusable({
     focusKey: 'LOBBY',
     trackChildren: true,
     isFocusBoundary: true,

@@ -28,6 +28,8 @@ export type CasinoFixtures = {
   waitForPhase: (phase: string) => Promise<void>
   /** Select a game from the controller lobby */
   selectGame: (page: Page, gameLabel: string) => Promise<void>
+  /** Verify both display and controller share the same session (cross-client assertion) */
+  assertSameSession: () => Promise<void>
 }
 
 /**
@@ -46,8 +48,8 @@ export const test = base.extend<CasinoFixtures>({
     await page.goto(DISPLAY_URL)
 
     // Wait for the display to create a session and show the lobby.
-    // The display shows "Weekend Casino" and then a controller URL with sessionId.
-    await expect(page.locator('text=Weekend Casino')).toBeVisible({ timeout: 15_000 })
+    // The display renders an <img alt="Weekend Casino"> logo, not visible text.
+    await expect(page.getByAltText('Weekend Casino')).toBeVisible({ timeout: 15_000 })
 
     // Extract sessionId from the controller link shown on the display lobby.
     const controllerLink = page.locator('a[href*="sessionId"]')
@@ -75,11 +77,10 @@ export const test = base.extend<CasinoFixtures>({
       viewport: { width: 1920, height: 1080 },
     })
     const page = await context.newPage()
-    // The display app creates its own session on load; for E2E we need to
-    // connect to the same session. Since the display auto-creates, we reload
-    // and it reconnects to the same server-side session.
-    await page.goto(DISPLAY_URL)
-    await expect(page.locator('text=Weekend Casino')).toBeVisible({ timeout: 15_000 })
+    // Pass the sessionId so the display joins the same session created by
+    // the sessionId fixture, instead of auto-creating a new one.
+    await page.goto(`${DISPLAY_URL}?sessionId=${sessionId}`)
+    await expect(page.getByAltText('Weekend Casino')).toBeVisible({ timeout: 15_000 })
 
     await use(page)
     await context.close()
@@ -91,7 +92,7 @@ export const test = base.extend<CasinoFixtures>({
     })
     const page = await context.newPage()
     await page.goto(`${CONTROLLER_URL}?sessionId=${sessionId}`)
-    await expect(page.locator('text=Weekend Casino')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByAltText('Weekend Casino')).toBeVisible({ timeout: 15_000 })
 
     await use(page)
     await context.close()
@@ -103,7 +104,7 @@ export const test = base.extend<CasinoFixtures>({
     })
     const page = await context.newPage()
     await page.goto(`${CONTROLLER_URL}?sessionId=${sessionId}`)
-    await expect(page.locator('text=Weekend Casino')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByAltText('Weekend Casino')).toBeVisible({ timeout: 15_000 })
 
     await use(page)
     await context.close()
@@ -144,6 +145,20 @@ export const test = base.extend<CasinoFixtures>({
     }
 
     await use(selectGame)
+  },
+
+  assertSameSession: async ({ displayPage, controllerPage, joinSession }, use) => {
+    const assertSameSession = async () => {
+      // Join from the controller so a player appears in the session
+      await joinSession(controllerPage, 'SessionCheck')
+
+      // The display should show a Players heading reflecting at least 1 player
+      await expect(
+        displayPage.getByRole('heading', { name: /Players \(1/ }),
+      ).toBeVisible({ timeout: 10_000 })
+    }
+
+    await use(assertSameSession)
   },
 })
 

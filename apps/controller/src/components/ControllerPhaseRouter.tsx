@@ -1,4 +1,4 @@
-import { PokerPhase } from '@weekend-casino/shared'
+import { CasinoPhase } from '@weekend-casino/shared'
 import { usePhase } from '../hooks/useVGFHooks.js'
 import { ControllerLobby } from './ControllerLobby.js'
 import { ControllerGameplay } from './ControllerGameplay.js'
@@ -21,7 +21,7 @@ export function ControllerPhaseRouter() {
   }
 
   switch (phase) {
-    case PokerPhase.Lobby:
+    case CasinoPhase.Lobby:
       return <ControllerLobby />
     default:
       return <ControllerGameplay phase={phase} />

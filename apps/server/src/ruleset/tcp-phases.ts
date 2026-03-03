@@ -10,6 +10,7 @@
 
 import type { CasinoGameState } from '@weekend-casino/shared'
 import { CasinoPhase } from '@weekend-casino/shared'
+import { wrapWithGameNightCheck } from './game-night-utils.js'
 
 type PhaseCtx = {
   getState: () => CasinoGameState
@@ -47,7 +48,7 @@ export const tcpPlaceBetsPhase = {
     return adapted.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.threeCardPoker?.allAntesPlaced === true
   },
   next: CasinoPhase.TcpDealCards,
@@ -66,7 +67,7 @@ export const tcpDealCardsPhase = {
     return adapted.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.threeCardPoker?.dealComplete === true
   },
   next: CasinoPhase.TcpPlayerDecisions,
@@ -85,7 +86,7 @@ export const tcpPlayerDecisionsPhase = {
     return adapted.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.threeCardPoker?.allDecisionsMade === true
   },
   next: CasinoPhase.TcpDealerReveal,
@@ -104,7 +105,7 @@ export const tcpDealerRevealPhase = {
     return adapted.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.threeCardPoker?.dealerRevealed === true
   },
   next: CasinoPhase.TcpSettlement,
@@ -123,7 +124,7 @@ export const tcpSettlementPhase = {
     return adapted.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.threeCardPoker?.payoutComplete === true
   },
   next: CasinoPhase.TcpRoundComplete,
@@ -142,12 +143,12 @@ export const tcpRoundCompletePhase = {
     return adapted.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.threeCardPoker?.roundCompleteReady === true
   },
-  next: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+  next: wrapWithGameNightCheck((ctx: any) => {
+    const state: CasinoGameState = ctx.session.state
     if (state.gameChangeRequested) return CasinoPhase.GameSelect
     return CasinoPhase.TcpPlaceBets
-  },
+  }),
 }

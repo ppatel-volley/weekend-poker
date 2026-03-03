@@ -12,12 +12,19 @@ export type VoiceIntent =
   | 'tcp_ante' | 'tcp_pair_plus' | 'tcp_play' | 'tcp_fold' | 'tcp_confirm'
   // Blackjack intents
   | 'bj_hit' | 'bj_stand' | 'bj_double' | 'bj_split' | 'bj_insurance' | 'bj_surrender'
+  // Roulette intents
+  | 'roulette_red' | 'roulette_black' | 'roulette_odd' | 'roulette_even'
+  | 'roulette_high' | 'roulette_low' | 'roulette_straight' | 'roulette_split'
+  | 'roulette_dozen' | 'roulette_repeat' | 'roulette_clear' | 'roulette_confirm'
+  | 'roulette_no_bet'
   | 'unknown'
 
 export interface ParsedVoiceCommand {
   intent: VoiceIntent
   entities: {
     amount?: number
+    /** Second number for roulette split bets. */
+    splitTarget?: number
   }
   confidence: number
   rawTranscript: string
@@ -34,7 +41,6 @@ export type DealerCharacterId = 'vincent' | 'maya' | 'remy' | 'jade'
 export interface ControllerMemberState {
   displayName: string
   avatarId: string
-  holeCards?: [string, string]
 }
 
 /**

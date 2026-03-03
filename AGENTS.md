@@ -3,13 +3,35 @@
 > **Template**: Reusable framework for configuring AI coding agents.
 > Customize [`AGENTS-PROJECT.md`](./AGENTS-PROJECT.md) for your project and swap [`AGENTS-REACT-TS.md`](./AGENTS-REACT-TS.md) for your tech stack.
 >
-> Informed by ["Large Language Model Reasoning Failures"](https://arxiv.org/abs/2602.06176) (Song, Han, Goodman — ICML 2025).
+> Informed by ["Large Language Model Reasoning Failures"](https://arxiv.org/abs/2602.06176) (Song, Han, Goodman — ICML 2025)
+> and ["Beyond Synthetic Benchmarks"](https://arxiv.org/abs/2510.26130v2) on real-world code generation performance gaps.
 
 **How to Use This Document:**
-1. Sections 1–3 are **MANDATORY** — read before writing any code
-2. Section 8 has behavioral guidelines to reduce common LLM coding mistakes
-3. Check [`learnings/INDEX.md`](./learnings/INDEX.md) before starting work (if it exists)
-4. See [`AGENTS-RLM.md`](./AGENTS-RLM.md) only when context exceeds ~100K tokens
+1. Determine the **execution mode** (see table below) — this controls how much process to apply
+2. Sections 1–3 are **MANDATORY** — read before writing any code
+3. Section 8 has behavioral guidelines to reduce common LLM coding mistakes
+4. Check [`learnings/INDEX.md`](./learnings/INDEX.md) before starting work (if it exists)
+5. See [`AGENTS-RLM.md`](./AGENTS-RLM.md) only when context exceeds ~100K tokens
+
+### Execution Modes
+
+Scale process to risk. Not every task needs the full workflow.
+
+| Mode | When | Decompose? | Multi-agent? | Task docs? | Verification Block? |
+|------|------|------------|-------------|------------|-------------------|
+| **Quick** | 1-2 files, no shared API/schema changes, no security implications | No | No | No | Yes (abbreviated) |
+| **Standard** | 3-5 files, cross-module changes, or new integration points | Yes | Optional | Recommended | Yes (full) |
+| **Critical** | Architecture, migrations, security, 6+ files, or cross-package API changes | Yes | Yes | Required | Yes (full) |
+
+**Mode decision checklist** (answer Yes to any → upgrade):
+- Does the change touch a shared API, schema, or type contract? → **Standard** minimum
+- Does it involve a database migration, security boundary, or breaking change? → **Critical**
+- Are there multiple valid approaches with different trade-offs? → **Standard** minimum
+- Could a mistake cause data loss or a production outage? → **Critical**
+
+When in doubt, default to **Standard**. Upgrade to **Critical** if you discover hidden complexity mid-task.
+
+**Declare your mode at task start:** `Mode: Quick/Standard/Critical (reason: …)`
 
 ---
 
@@ -30,15 +52,22 @@ Import project and language-specific guidelines as needed:
 
 ### Verification Block Template (REQUIRED)
 
+**Full** (Standard/Critical mode):
 ```
 ---
 **Verification**
 - Learnings checked: [LIST or "None applicable - reason"]
-- Tests: [PASSED/FAILED] ([X] tests)
-- Types: [PASSED/NOT RUN]
-- Build: [PASSED/NOT RUN]
+- Tests: [PASSED/FAILED] ([X] tests) — `pnpm test -- --run`
+- Types: [PASSED/FAILED] — `pnpm typecheck` (**MANDATORY** — vitest does NOT check types)
+- Build: [PASSED/FAILED] — `pnpm build` (**MANDATORY** — must produce shippable artifact)
 - New tests added: [YES - describe / NO - justify]
 - Confidence: [0.0-1.0] [brief reason if below 0.9]
+```
+
+**Abbreviated** (Quick mode):
+```
+---
+**Verification** — Mode: Quick | Tests: [PASSED/FAILED] | Confidence: [0.0-1.0]
 ```
 
 ### When to Include
@@ -54,10 +83,12 @@ Import project and language-specific guidelines as needed:
 
 ## 2. Complexity Triggers (MUST Check)
 
-**Before starting ANY task:**
+**Before starting ANY Standard or Critical task:**
 1. Check [`learnings/INDEX.md`](./learnings/INDEX.md) for relevant past mistakes (skip if not yet created)
 2. Check project-specific keyword triggers in [`AGENTS-PROJECT.md`](./AGENTS-PROJECT.md) (if applicable)
 3. Scan complexity triggers below
+
+> **Quick mode:** skip steps 1-2 unless the task matches a project keyword trigger or touches shared interfaces. Still scan triggers — if any fire, upgrade to Standard.
 
 **If ANY trigger is TRUE, you MUST:**
 - State which keyword/complexity trigger(s) apply
@@ -69,7 +100,7 @@ Import project and language-specific guidelines as needed:
 
 | Trigger | Action | Example |
 |---------|--------|---------|
-| Changes touch 3+ files | Decompose | Refactoring, new feature across packages |
+| Changes touch 3+ files across different modules/packages, or modify shared interfaces | Decompose | Cross-package refactoring, new feature touching shared types |
 | Architectural decision required | Decompose | Add caching, implement auth |
 | Request is ambiguous | Clarify | Missing details that change implementation |
 | Multiple valid approaches exist | Decompose | Trade-offs between solutions |
@@ -116,20 +147,33 @@ Don't ask when:
 - **CRITICAL:** If a test expectation is genuinely incorrect, fix the test AND document why
 - When in doubt, verify the math — especially for physics, geometry, calculations
 
+### Test Realism
+
+Synthetic-style tests (pure logic, assertion-based) miss the dominant failure modes in real-world code. Ensure tests also cover:
+
+| Failure Mode | Test Strategy |
+|---|---|
+| AttributeError (wrong attribute/method names) | Test actual attribute access on real or mocked objects |
+| TypeError (wrong argument types, return types) | Test with realistic typed inputs, not just happy-path primitives |
+| Dependency failures (missing imports, version mismatches) | Integration tests that exercise real dependency chains |
+| Cross-class interactions | Tests that instantiate and compose multiple project classes together |
+
+Don't just test that your function returns the right value — test that it correctly interacts with the classes and modules it depends on.
+
 ---
 
 ## 4. Pre-Completion Checklist
 
 **Before saying "done", verify ALL items:**
 
-- [ ] Tests pass
+- [ ] Tests pass (`pnpm test -- --run`)
 - [ ] New tests added for new code (or justified why not)
-- [ ] Type check passes (if applicable)
-- [ ] Build succeeds
+- [ ] **Type check passes** (`pnpm typecheck`) — **HARD GATE: tests passing alone is NOT sufficient. Vitest strips types and will not catch type errors.**
+- [ ] **Build succeeds** (`pnpm build`) — **HARD GATE: if the build fails, the code is not shippable regardless of test results.**
 - [ ] Verification Block included in response
 - [ ] Prove it works — never mark complete without demonstration
 - [ ] Diff behavior between main and your changes (when relevant)
-- [ ] No function exceeds ~50 lines, no file exceeds ~300 lines
+- [ ] Investigate functions exceeding ~80 lines or files exceeding ~500 lines — refactor only if it improves clarity and safety, not to hit an arbitrary target
 - [ ] No debug artifacts left behind (console.log, debugger, commented-out code)
 - [ ] Naming is self-documenting — no abbreviations that require explanation
 
@@ -148,6 +192,16 @@ Anchor confidence to **observable artifacts**, not gut feeling:
 | 0.5–0.7 | Tests don't cover the change, or requirement is ambiguous | State assumptions, flag risk |
 | Below 0.5 | Can't verify correctness, or requirement is unclear | **STOP** — ask for clarification |
 
+### Cross-Dependency Calibration Warning
+
+LLM performance on real-world code with cross-class dependencies is dramatically lower than on isolated functions (research shows 25-34% vs 84-89%). Adjust confidence **DOWN** when:
+- Code depends on multiple project-internal classes or modules
+- The task involves integrating with unfamiliar external libraries
+- You haven't read the actual source of dependencies you're using
+- The code has complex type hierarchies or inheritance chains
+
+In these cases, reduce your initial confidence estimate by 0.2 and verify explicitly.
+
 ### Recovery Path (confidence below 0.8)
 
 1. Identify the weakest link — what specific artifact is missing or failing?
@@ -165,6 +219,14 @@ When complexity triggers apply:
 3. **VERIFY** — Cross-check with alternate method, boundary/edge-case analysis, consistency with constraints, run tests
 4. **SYNTHESIZE** — Combine results. Final confidence ≈ min(sub-confidences) if any is critical.
 5. **REFLECT** — If confidence below 0.8, identify weakness and retry (max 2 times)
+
+### Generation Strategy
+
+For class-level or module-level code generation with large context available:
+- Prefer **holistic generation** (single-pass implementation) over incremental method-by-method generation
+- Holistic generation maintains internal consistency across methods, shared state, and type contracts
+- Incremental generation risks introducing inconsistencies between methods generated in separate passes
+- Exception: when the class is very large (>200 lines), decompose by logical concern, not by method
 
 ### Output Template (complex tasks)
 
@@ -208,6 +270,7 @@ When complexity triggers apply:
 - If multiple interpretations exist, present them — don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
 - If something is unclear, stop. Name what's confusing. Ask.
+- **Read before you write.** Before generating any code that uses another module, class, or library, read its actual source or type definitions. The most common real-world failures come from assuming an API shape that doesn't exist. If you can't read it, cap your confidence at 0.6.
 
 ### 8.2 Simplicity First
 
@@ -264,6 +327,15 @@ Plan format:
 - Keep task scope tight — one logical change per request. (This applies to individual agent sessions. For larger tasks requiring multi-agent execution, see §9.)
 - Trim context ruthlessly. Irrelevant files and background noise degrade reasoning quality.
 - A focused 200-line excerpt beats a 5000-line file paste.
+
+### Context Provision Strategy
+
+When providing context to solve a task:
+- **If requirements are fully specified** (complete types, interfaces, docstrings): additional code examples add little value. Focus on the spec.
+- **If requirements are partially specified** (some types/interfaces available but implementation details missing): retrieve 2-3 similar implementations from the codebase as reference. This is where supplementary context provides the most benefit.
+- **If requirements are vague/absent**: context retrieval alone won't save you. Clarify requirements first (§2 Clarification Gate), then retrieve examples.
+
+This follows the Information Gap principle: supplementary context compensates for missing implementation details, but is redundant when specs are complete and insufficient when specs are absent.
 
 ### 8.6 Problem Framing Awareness
 
@@ -363,6 +435,16 @@ Plan format:
 - Include correlation/request IDs in log entries for traceability across services
 - Log at boundaries: incoming requests, outgoing calls, errors, and state transitions — not every function call
 
+### 8.15 Dependency & Type Awareness
+
+**Real-world code fails on dependencies and types, not logic. Verify every external touchpoint.**
+
+- Before using any class, module, or library API — **read its actual interface**. Don't assume methods/attributes exist from memory.
+- Verify attribute names, method signatures, and return types against the actual source or type definitions. `AttributeError` and `TypeError` account for the majority of real-world coding failures.
+- When generating code that depends on other classes/modules in the project, read those files first. Cross-class dependencies are the #1 source of failure in production code generation.
+- Don't assume library APIs from training data are current — check imports resolve and signatures match the installed version.
+- For any non-trivial class interaction, trace the dependency chain: what does this class inherit? What does it import? What types does it expect?
+
 ---
 
 ## 9. Workflow Orchestration
@@ -373,21 +455,21 @@ Plan format:
 - If something goes sideways, STOP and re-plan immediately
 - Use plan mode for verification steps, not just building
 - Write detailed specs upfront to reduce ambiguity
-- Always include a link to the local `.md` file where the plan is being developed, so the user can easily jump in and edit it if needed
+- When writing plans to a local `.md` file, include a link so the user can easily jump in and edit
 - Structure plans from **high-level (product, UX) → low-level (architecture, code structure)**. Don't mix levels of abstraction. PMs should get what they need by skimming the top; engineers should find implementation detail by reading deeper
 - Include the "what" and "why" for each step, not just the "how"
 
 ### Team-Based Execution
 
-**For any non-trivial work, spawn a team of specialist agents rather than working solo.**
+**For Critical-mode tasks (see Execution Modes), consider spawning a team of specialist agents. For Standard-mode tasks, a single agent with subagent research is usually sufficient.**
 
-- Decompose the task and create a team with specialist agents for each area of work
+- Only spawn a team when the task genuinely benefits from parallel execution across different domains (e.g., frontend + backend + tests simultaneously)
 - Each agent should have deep expertise in their assigned domain (e.g., frontend, backend, testing, data, architecture, DevOps)
 - Use the shared task list for coordination — agents claim and complete tasks independently
 - One logical concern per agent — don't overload specialists with unrelated work
 - Offload research, exploration, and parallel analysis to keep the lead agent's context clean
-- For complex problems, throw more compute at it — more specialists working in parallel
 - The lead agent orchestrates, reviews, and merges — specialists execute
+- **Don't over-parallelise:** coordination overhead can exceed the time saved. A single focused agent often outperforms a poorly-coordinated team.
 
 ### Git Worktree Strategy (Multi-Agent Default)
 
@@ -423,10 +505,11 @@ git worktree add ../project-tests feature/tests
 | Quick, low-risk parallel tasks | Shared directory is fine |
 
 ### Autonomous Execution
-- When given a bug report: just fix it. Don't ask for hand-holding.
+- Default to autonomous action — investigate, diagnose, and fix without hand-holding
 - Point at logs, errors, failing tests — then resolve them
 - Zero context switching required from the user
 - Go fix failing CI tests without being told how
+- **Priority when autonomy and clarification conflict:** be autonomous by default; pause only when Clarification Gate conditions (§2) are met. If the fix is safe and reversible, act first and explain after.
 
 ### Demand Elegance
 - For non-trivial changes: pause and ask "is there a more elegant way?"
@@ -439,14 +522,37 @@ git worktree add ../project-tests feature/tests
 - Expect coordination failures. Agents in parallel have no shared state. Conflicts and redundant work are the default without human orchestration.
 - Add explicit verification checkpoints between stages.
 
+### Multi-Agent Integration Verification (MANDATORY)
+
+**After merging output from parallel agents, the lead agent MUST run the full verification gate — not just tests.**
+
+Vitest (and similar test runners) strip TypeScript types at transform time and do NOT enforce type correctness. **1,000 passing tests with a broken build is not a passing codebase.**
+
+**Post-merge verification sequence (all must pass):**
+```bash
+pnpm typecheck    # TypeScript strict checking — catches type mismatches
+pnpm build        # Production build — catches import/export issues
+pnpm test -- --run  # Runtime behaviour — catches logic errors
+```
+
+**Common multi-agent type failures:**
+- Agent A adds a required field to a shared type; Agent B's test fixtures don't include it
+- Agent A changes hook generics; Agent B's components still cast to the old types
+- Agent A renames a type field; Agent B uses the old name in new code
+- Worktree isolation means each agent's code typechecks in isolation but fails when merged
+
+**Each agent's prompt MUST include all three verification commands**, not just `vitest run`. The lead agent must also re-run all three after merging.
+
 ### File Edit Conflicts (Exponential Backoff — Fallback)
 
 When worktrees aren't viable and agents share a directory, or when agents must co-edit shared files (config, lock files, shared types), use this pattern. When you get a "File has been modified since read" error, retry with exponential backoff:
 
 1. **Immediately** — re-read the file and retry the edit
-2. **After 10 seconds** — `sleep 10`, re-read, retry
-3. **After 30 seconds** — `sleep 30`, re-read, retry
-4. **After 60 seconds** — `sleep 60`, re-read, retry
+2. **After ~10 seconds** — wait, re-read, retry
+3. **After ~30 seconds** — wait, re-read, retry
+4. **After ~60 seconds** — wait, re-read, retry
+
+> Use platform-appropriate wait mechanisms (`sleep` on Unix, `Start-Sleep` on PowerShell, or tool-native delays).
 
 Only give up after all 4 attempts fail. Each retry MUST re-read the file first to get the latest content, then adapt the edit to the current state of the file.
 
@@ -454,21 +560,26 @@ Only give up after all 4 attempts fail. Each retry MUST re-read the file first t
 
 ## 10. Task Management
 
-> Create a `tasks/` directory if it doesn't exist before writing to these files.
+> Task documentation scales with execution mode. Quick-mode tasks don't need task files. Standard/Critical tasks benefit from structured tracking.
+
+For **Standard** mode (recommended) and **Critical** mode (required):
 
 1. **Plan** — Write plan to `tasks/todo.md` with checkable items
 2. **Verify Plan** — Check in before starting implementation
 3. **Track Progress** — Mark items complete as you go
 4. **Explain Changes** — High-level summary at each step
 5. **Document Results** — Add review section to `tasks/todo.md`
-6. **Capture Lessons** — Update `tasks/lessons.md` after corrections
 
-### Self-Improvement Loop (after ANY correction from the user)
+> Standard-mode tasks may skip task docs if the change is straightforward and well-understood. Critical-mode tasks must always have task docs.
 
-1. Update `tasks/lessons.md` with the pattern
+### Self-Improvement Loop (after corrections on Standard/Critical tasks)
+
+1. Update `tasks/lessons.md` with the pattern (create `tasks/` directory if needed)
 2. Write rules for yourself that prevent the same mistake
 3. Ruthlessly iterate until mistake rate drops
 4. Review lessons at session start
+
+> For Quick-mode tasks, a lessons entry is only warranted if the mistake is likely to recur.
 
 ---
 
@@ -491,6 +602,9 @@ See [`AGENTS-RLM.md`](./AGENTS-RLM.md) for large context handling patterns. **Lo
 | Framing sensitivity | Medium | Restructure prompt if output is off (§8.6) |
 | Reversal curse | Medium in complex context | State relationships bidirectionally (§8.6) |
 | Multi-agent coordination | High if parallelising | Human review gates, no auto-merge (§9) |
+| Dependency hallucination | High for real-world code | Read actual interfaces before using; never assume API shapes (§8.15) |
+| Synthetic benchmark overconfidence | High for self-assessment | Reduce confidence by 0.2 for cross-dependency code (§5) |
+| Type system blindness | High for complex codebases | Verify types at every boundary, especially inheritance chains (§8.15) |
 
 ---
 

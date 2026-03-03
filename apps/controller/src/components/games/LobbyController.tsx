@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { CasinoGame, CasinoGameState } from '@weekend-casino/shared'
-import { CASINO_GAME_LABELS, CASINO_GAME_DESCRIPTIONS, V1_GAMES } from '@weekend-casino/shared'
+import type { CasinoGame } from '@weekend-casino/shared'
+import { CASINO_GAME_LABELS, CASINO_GAME_DESCRIPTIONS, V1_GAMES, V2_0_GAMES } from '@weekend-casino/shared'
 import {
   useClientActions,
   useSessionMemberSafe,
@@ -10,11 +10,12 @@ import {
 
 /** Suit icons to decorate game cards. */
 const gameCardSuits: Record<string, string> = {
-  HOLDEM: '♠',
-  FIVE_CARD_DRAW: '♦',
-  BLACKJACK_CLASSIC: '♣',
-  BLACKJACK_COMPETITIVE: '♥',
-  THREE_CARD_POKER: '♠',
+  holdem: '♠',
+  five_card_draw: '♦',
+  blackjack_classic: '♣',
+  blackjack_competitive: '♥',
+  roulette: '♦',
+  three_card_poker: '♠',
 }
 
 /**
@@ -28,7 +29,7 @@ export function LobbyController() {
   const { toggleReady, updateState } = useClientActions()
   const dispatch = useDispatch()
   const member = useSessionMemberSafe()
-  const state = useStateSync() as CasinoGameState | null
+  const state = useStateSync()
   const isReady = member?.isReady ?? false
   const selectedGame = state?.selectedGame ?? null
 
@@ -39,20 +40,33 @@ export function LobbyController() {
   }
 
   const handleReady = () => {
+    if (!member?.sessionMemberId) return // Guard: wait for handshake
     toggleReady()
     if (name.trim()) {
       ;(dispatch as (name: string, ...args: unknown[]) => void)(
-        'updatePlayerName', member?.sessionMemberId, name.trim(),
+        'updatePlayerName', member.sessionMemberId, name.trim(),
       )
     }
+    // Sync CasinoPlayer.isReady with VGF member ready state
+    ;(dispatch as (name: string, ...args: unknown[]) => void)(
+      'setPlayerReady', member.sessionMemberId, true,
+    )
     ;(dispatch as (name: string, ...args: unknown[]) => void)(
       'checkLobbyReady',
     )
   }
 
   const handleSelectGame = (game: CasinoGame) => {
+    if (!member?.sessionMemberId) return // Guard: wait for handshake
     ;(dispatch as (name: string, ...args: unknown[]) => void)(
-      'selectGame', game,
+      'setSelectedGame', game,
+    )
+  }
+
+  const handleStartGame = () => {
+    if (!member?.sessionMemberId) return
+    ;(dispatch as (name: string, ...args: unknown[]) => void)(
+      '_confirmGameSelectionInternal',
     )
   }
 
@@ -249,7 +263,7 @@ export function LobbyController() {
           marginBottom: '24px',
         }}
       >
-        {V1_GAMES.map((game) => {
+        {[...V1_GAMES, ...V2_0_GAMES].map((game) => {
           const isSelected = selectedGame === game
           const suitChar = gameCardSuits[game] ?? '♠'
           const isRedSuit = suitChar === '♥' || suitChar === '♦'
@@ -365,6 +379,31 @@ export function LobbyController() {
         ) : 'READY'}
       </button>
 
+      {/* Start Game button — shown only when ready and a game is selected */}
+      {isReady && selectedGame && (
+        <button
+          style={{
+            width: '100%',
+            marginTop: '12px',
+            padding: '16px',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            borderRadius: '14px',
+            border: '2px solid rgba(212, 175, 55, 0.4)',
+            cursor: 'pointer',
+            background: 'linear-gradient(135deg, #8B6914 0%, #6B4F10 100%)',
+            color: 'white',
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            fontFamily: 'system-ui, sans-serif',
+            boxShadow: '0 4px 20px rgba(212, 175, 55, 0.3)',
+          }}
+          onClick={handleStartGame}
+        >
+          START {CASINO_GAME_LABELS[selectedGame].toUpperCase()}
+        </button>
+      )}
+
       <p
         style={{
           marginTop: '20px',
@@ -374,7 +413,11 @@ export function LobbyController() {
           letterSpacing: '0.03em',
         }}
       >
-        {isReady ? 'Waiting for host to start...' : 'Enter your name and tap READY'}
+        {isReady && selectedGame
+          ? 'Tap START to begin!'
+          : isReady
+            ? 'Select a game to start'
+            : 'Enter your name and tap READY'}
       </p>
     </div>
   )

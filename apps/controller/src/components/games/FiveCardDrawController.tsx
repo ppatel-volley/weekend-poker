@@ -1,20 +1,144 @@
-import { useState, useCallback } from 'react'
-import { useSessionMember } from '../../hooks/useVGFHooks.js'
-
 /**
  * 5-Card Draw controller — card selection for discard + betting controls.
  *
- * Phase-driven button visibility:
- *   betting: FOLD, CHECK/CALL, RAISE, ALL IN (matches Hold'em pattern)
- *   discard: KEEP ALL CARDS, DRAW (with selected card count)
+ * Phase-driven layout:
+ *   DRAW_POSTING_BLINDS / DRAW_DEALING: Waiting for deal
+ *   DRAW_BETTING_1 / DRAW_BETTING_2: Betting actions (fold/check/call/raise/all-in)
+ *   DRAW_DRAW_PHASE: Card discard selection + confirm
+ *   DRAW_SHOWDOWN / DRAW_POT_DISTRIBUTION / DRAW_HAND_COMPLETE: Results display
  */
-export function FiveCardDrawController() {
-  const member = useSessionMember()
-  const playerName = member?.displayName ?? 'Player'
 
-  // Local state for discard selection (indices 0-4)
+import { useState, useCallback } from 'react'
+import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
+import type { FiveCardDrawGameState, Card } from '@weekend-casino/shared'
+
+/** Card display component. */
+function CardDisplay({ card }: { card: Card }) {
+  const suitSymbols: Record<string, string> = {
+    spades: 'S', hearts: 'H', diamonds: 'D', clubs: 'C',
+  }
+  const suitColours: Record<string, string> = {
+    spades: '#333', hearts: '#c0392b', diamonds: '#c0392b', clubs: '#333',
+  }
+  return (
+    <div style={{
+      width: '55px',
+      height: '80px',
+      background: 'white',
+      borderRadius: '6px',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: suitColours[card.suit] ?? '#333',
+      fontSize: '18px',
+      fontWeight: 'bold',
+      border: '2px solid #ddd',
+    }}>
+      <div>{card.rank}</div>
+      <div style={{ fontSize: '14px' }}>{suitSymbols[card.suit]}</div>
+    </div>
+  )
+}
+
+/** Betting view for DRAW_BETTING_1 and DRAW_BETTING_2 phases. */
+function BettingView({
+  draw,
+  playerId,
+  players,
+  dispatchThunk,
+}: {
+  draw: FiveCardDrawGameState
+  playerId: string
+  players: Array<{ id: string; status: string; stack: number; bet: number }>
+  dispatchThunk: (name: string, ...args: unknown[]) => void
+}) {
+  const player = players.find(p => p.id === playerId)
+  if (!player) return null
+
+  const isMyTurn = players[draw.activePlayerIndex]?.id === playerId
+  const hand = draw.hands[playerId] ?? []
+
+  return (
+    <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {/* Hand display */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginBottom: '8px' }}>
+        {hand.map((card, i) => (
+          <CardDisplay key={i} card={card} />
+        ))}
+        {hand.length === 0 && (
+          <div style={{ color: '#aaa', padding: '16px' }}>Waiting for cards...</div>
+        )}
+      </div>
+
+      {/* Pot and bet info */}
+      <div style={{ textAlign: 'center', fontSize: '13px', color: '#aaa' }}>
+        Pot: ${draw.pot} | Current bet: ${draw.currentBet} | Your bet: ${player.bet} | Stack: ${player.stack}
+      </div>
+
+      {/* Turn indicator */}
+      {!isMyTurn && (
+        <div style={{ textAlign: 'center', padding: '16px', color: '#aaa' }}>
+          Waiting for other players...
+        </div>
+      )}
+
+      {/* Action buttons */}
+      {isMyTurn && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: 'auto' }}>
+          <button
+            onClick={() => dispatchThunk('drawProcessAction', playerId, 'fold')}
+            style={actionBtnStyle('#e74c3c')}
+          >
+            FOLD
+          </button>
+          {player.bet >= draw.currentBet ? (
+            <button
+              onClick={() => dispatchThunk('drawProcessAction', playerId, 'check')}
+              style={actionBtnStyle('#2ecc71')}
+            >
+              CHECK
+            </button>
+          ) : (
+            <button
+              onClick={() => dispatchThunk('drawProcessAction', playerId, 'call')}
+              style={actionBtnStyle('#f39c12')}
+            >
+              CALL ${draw.currentBet}
+            </button>
+          )}
+          <button
+            onClick={() => dispatchThunk('drawProcessAction', playerId, 'raise', draw.currentBet + draw.minRaiseIncrement)}
+            disabled={player.stack <= draw.currentBet - player.bet}
+            style={actionBtnStyle('#9b59b6', player.stack <= draw.currentBet - player.bet)}
+          >
+            RAISE
+          </button>
+          <button
+            onClick={() => dispatchThunk('drawProcessAction', playerId, 'all_in')}
+            style={actionBtnStyle('#e91e63')}
+          >
+            ALL IN
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Discard selection view for DRAW_DRAW_PHASE. */
+function DiscardView({
+  draw,
+  playerId,
+  dispatchThunk,
+}: {
+  draw: FiveCardDrawGameState
+  playerId: string
+  dispatchThunk: (name: string, ...args: unknown[]) => void
+}) {
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
-  const [phase, setPhase] = useState<'betting' | 'discard'>('betting')
+  const hand = draw.hands[playerId] ?? []
+  const hasConfirmed = draw.confirmedDiscards[playerId] === true
 
   const toggleCard = useCallback((index: number) => {
     setSelectedIndices(prev => {
@@ -28,113 +152,104 @@ export function FiveCardDrawController() {
     })
   }, [])
 
-  const handleDiscard = useCallback(() => {
-    // Will dispatch drawProcessDiscard thunk via VGF
-    // For now, clear selection after confirming
-    setSelectedIndices(new Set())
-  }, [])
-
-  const handleKeepAll = useCallback(() => {
-    // Discard 0 cards — keep all
-    setSelectedIndices(new Set())
-  }, [])
-
-  const isBetting = phase === 'betting'
-  const isDiscard = phase === 'discard'
+  if (hasConfirmed) {
+    return (
+      <div style={{ textAlign: 'center', padding: '32px', color: '#aaa' }}>
+        Discard confirmed. Waiting for other players...
+      </div>
+    )
+  }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-        background: '#1a1a2e',
-        color: 'white',
-        fontFamily: 'system-ui, sans-serif',
-        padding: '16px',
-      }}
-    >
-      <h2 style={{ textAlign: 'center', marginBottom: '8px' }}>5-Card Draw</h2>
-      <p style={{ textAlign: 'center', color: '#aaa', marginBottom: '16px', fontSize: '14px' }}>
-        {isDiscard
-          ? `${playerName}, tap cards to select for discard`
-          : `${playerName}, place your bet`}
+    <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <p style={{ textAlign: 'center', color: '#aaa', fontSize: '14px' }}>
+        Tap cards to select for discard
       </p>
 
-      {/* Card hand — tappable cards (only interactive during discard) */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '8px',
-          marginBottom: '24px',
-          flex: 1,
-          alignItems: 'center',
-        }}
-      >
-        {[0, 1, 2, 3, 4].map((i) => {
+      {/* Card hand */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flex: 1, alignItems: 'center' }}>
+        {hand.map((card, i) => {
           const isSelected = selectedIndices.has(i)
           return (
             <button
               key={i}
-              onClick={() => isDiscard && toggleCard(i)}
+              onClick={() => toggleCard(i)}
               aria-label={`Card ${i + 1}${isSelected ? ' (selected for discard)' : ''}`}
               style={{
                 width: '56px',
                 height: '84px',
                 borderRadius: '6px',
-                background: isSelected ? '#3a1a1e' : '#2a2a3e',
-                border: isSelected ? '2px solid #e74c3c' : '1px solid #444',
+                background: isSelected ? '#3a1a1e' : 'white',
+                border: isSelected ? '2px solid #e74c3c' : '2px solid #ddd',
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: '18px',
-                color: isSelected ? '#e74c3c' : '#fff',
-                cursor: isDiscard ? 'pointer' : 'default',
+                fontWeight: 'bold',
+                color: isSelected ? '#e74c3c' : '#333',
+                cursor: 'pointer',
                 transform: isSelected ? 'translateY(-8px)' : 'none',
                 transition: 'all 0.2s ease',
-                opacity: isDiscard ? 1 : 0.6,
               }}
             >
-              {isSelected ? 'X' : '?'}
+              {isSelected ? 'X' : (
+                <>
+                  <div>{card.rank}</div>
+                  <div style={{ fontSize: '14px' }}>
+                    {{ spades: 'S', hearts: 'H', diamonds: 'D', clubs: 'C' }[card.suit]}
+                  </div>
+                </>
+              )}
             </button>
           )
         })}
       </div>
 
-      {/* Discard info — only during discard phase */}
-      {isDiscard && (
-        <p style={{ textAlign: 'center', color: '#888', marginBottom: '16px', fontSize: '13px' }}>
-          {selectedIndices.size === 0
-            ? 'No cards selected'
-            : `${selectedIndices.size} card${selectedIndices.size > 1 ? 's' : ''} selected for discard`}
-        </p>
-      )}
+      {/* Selection info */}
+      <p style={{ textAlign: 'center', color: '#888', fontSize: '13px' }}>
+        {selectedIndices.size === 0
+          ? 'No cards selected'
+          : `${selectedIndices.size} card${selectedIndices.size > 1 ? 's' : ''} selected for discard`}
+      </p>
 
-      {/* Action buttons — context-sensitive per phase */}
+      {/* Action buttons */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-        {isDiscard && (
-          <>
-            <button
-              onClick={handleDiscard}
-              disabled={selectedIndices.size === 0}
-              style={actionBtnStyle('#3498db', selectedIndices.size === 0)}
-            >
-              DRAW ({selectedIndices.size})
-            </button>
-            <button onClick={handleKeepAll} style={actionBtnStyle('#2ecc71')}>
-              KEEP ALL CARDS
-            </button>
-          </>
-        )}
-        {isBetting && (
-          <>
-            <button style={actionBtnStyle('#e74c3c')}>FOLD</button>
-            <button style={actionBtnStyle('#f39c12')}>CHECK</button>
-            <button style={actionBtnStyle('#9b59b6')}>CALL</button>
-            <button style={actionBtnStyle('#e91e63')}>ALL IN</button>
-          </>
-        )}
+        <button
+          onClick={() => dispatchThunk('drawProcessDiscard', playerId, [...selectedIndices])}
+          disabled={selectedIndices.size === 0}
+          style={actionBtnStyle('#3498db', selectedIndices.size === 0)}
+        >
+          DRAW ({selectedIndices.size})
+        </button>
+        <button
+          onClick={() => dispatchThunk('drawProcessDiscard', playerId, [])}
+          style={actionBtnStyle('#2ecc71')}
+        >
+          KEEP ALL CARDS
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Results view for showdown/pot distribution/hand complete. */
+function ResultsView({ draw, playerId }: { draw: FiveCardDrawGameState; playerId: string }) {
+  const hand = draw.hands[playerId] ?? []
+
+  return (
+    <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>YOUR HAND</div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+          {hand.map((card, i) => (
+            <CardDisplay key={i} card={card} />
+          ))}
+        </div>
+      </div>
+
+      <div style={{ textAlign: 'center', padding: '16px', color: '#aaa', fontSize: '14px' }}>
+        {draw.pot > 0 ? `Pot: $${draw.pot}` : 'Hand complete'}
       </div>
     </div>
   )
@@ -152,4 +267,60 @@ function actionBtnStyle(bg: string, disabled?: boolean): React.CSSProperties {
     color: 'white',
     opacity: disabled ? 0.5 : 1,
   }
+}
+
+export function FiveCardDrawController() {
+  const phase = usePhase() as string | null
+  const state = useStateSync()
+  const dispatchThunk = useDispatchThunk()
+  const member = useSessionMember()
+
+  const draw = state?.fiveCardDraw as FiveCardDrawGameState | undefined
+  const playerId = member?.sessionMemberId ?? ''
+  const players = (state?.players ?? []) as Array<{ id: string; status: string; stack: number; bet: number }>
+
+  const phaseStr = phase ?? ''
+  const isBetting = phaseStr === 'DRAW_BETTING_1' || phaseStr === 'DRAW_BETTING_2'
+  const isDiscard = phaseStr === 'DRAW_DRAW_PHASE'
+  const isResults = phaseStr === 'DRAW_SHOWDOWN' || phaseStr === 'DRAW_POT_DISTRIBUTION' || phaseStr === 'DRAW_HAND_COMPLETE'
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: '100vh',
+        background: '#1a1a2e',
+        color: 'white',
+        fontFamily: 'system-ui, sans-serif',
+      }}
+    >
+      <h2 style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>5-Card Draw</h2>
+
+      {phaseStr === 'DRAW_POSTING_BLINDS' || phaseStr === 'DRAW_DEALING' ? (
+        <div style={{ textAlign: 'center', padding: '32px', color: '#aaa', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {phaseStr === 'DRAW_POSTING_BLINDS' ? 'Posting blinds...' : 'Dealing cards...'}
+        </div>
+      ) : !draw ? (
+        <div style={{ textAlign: 'center', padding: '32px', color: '#aaa', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          Waiting for hand to start...
+        </div>
+      ) : isBetting ? (
+        <BettingView
+          draw={draw}
+          playerId={playerId}
+          players={players}
+          dispatchThunk={dispatchThunk as any}
+        />
+      ) : isDiscard ? (
+        <DiscardView draw={draw} playerId={playerId} dispatchThunk={dispatchThunk as any} />
+      ) : isResults ? (
+        <ResultsView draw={draw} playerId={playerId} />
+      ) : (
+        <div style={{ textAlign: 'center', padding: '32px', color: '#aaa', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          Waiting...
+        </div>
+      )}
+    </div>
+  )
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { PokerGameState, PokerPlayer, Card, TTSMessage, HandHighlight } from '@weekend-casino/shared'
+import type { PokerPlayer, Card, TTSMessage, HandHighlight } from '@weekend-casino/shared'
 import { STARTING_STACK, BLIND_LEVELS } from '@weekend-casino/shared'
 import { createInitialState, pokerRuleset } from '../ruleset/index.js'
 
@@ -23,13 +23,13 @@ function makePlayer(overrides: Partial<PokerPlayer> = {}): PokerPlayer {
 }
 
 /** Creates a state with players pre-populated. */
-function stateWithPlayers(...players: PokerPlayer[]): PokerGameState {
-  return createInitialState({ players })
+function stateWithPlayers(...players: PokerPlayer[]): any {
+  return createInitialState({ players } as any)
 }
 
 /** Grabs a reducer from the ruleset by name. */
 function getReducer(name: string) {
-  const r = pokerRuleset.reducers[name]
+  const r = (pokerRuleset.reducers as Record<string, any>)[name]
   if (!r) throw new Error(`Reducer "${name}" not found`)
   return r
 }
@@ -741,7 +741,7 @@ describe('updateSessionHighlights reducer', () => {
         largestPot: existingHighlight,
         biggestBluff: null,
         worstBeat: null,
-      },
+      } as any,
     })
 
     const newHighlight: HandHighlight = {
@@ -752,7 +752,7 @@ describe('updateSessionHighlights reducer', () => {
     }
 
     const next = updateSessionHighlights(state, newHighlight)
-    expect(next.sessionStats.largestPot).toEqual(newHighlight)
+    expect((next.sessionStats as any).largestPot).toEqual(newHighlight)
   })
 
   it('should not update largestPot when the new pot is smaller', () => {
@@ -771,7 +771,7 @@ describe('updateSessionHighlights reducer', () => {
         largestPot: existingHighlight,
         biggestBluff: null,
         worstBeat: null,
-      },
+      } as any,
     })
 
     const smallerHighlight: HandHighlight = {
@@ -782,7 +782,7 @@ describe('updateSessionHighlights reducer', () => {
     }
 
     const next = updateSessionHighlights(state, smallerHighlight)
-    expect(next.sessionStats.largestPot).toEqual(existingHighlight)
+    expect((next.sessionStats as any).largestPot).toEqual(existingHighlight)
   })
 
   it('should not mutate the original state', () => {
@@ -796,6 +796,6 @@ describe('updateSessionHighlights reducer', () => {
 
     const next = updateSessionHighlights(state, highlight)
     expect(next).not.toBe(state)
-    expect(state.sessionStats.largestPot).toBeNull()
+    expect((state.sessionStats as any).largestPot).toBeNull()
   })
 })

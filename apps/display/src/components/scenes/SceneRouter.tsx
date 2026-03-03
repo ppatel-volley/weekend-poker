@@ -1,13 +1,28 @@
-import { Suspense } from 'react'
+import React, { Suspense } from 'react'
 import { useCurrentGame, usePhase } from '../../hooks/useVGFHooks.js'
 import { LobbyScene } from './LobbyScene.js'
-import { HoldemScene } from './HoldemScene.js'
-import { FiveCardDrawScene } from './FiveCardDrawScene.js'
-import { BlackjackScene } from './BlackjackScene.js'
-import { CompetitiveBlackjackScene } from './CompetitiveBlackjackScene.js'
-import { ThreeCardPokerScene } from './ThreeCardPokerScene.js'
 import { SceneLoadingFallback } from './SceneLoadingFallback.js'
 import type { CasinoGame } from '@weekend-casino/shared'
+
+/** Lazy-loaded game scenes — split into separate chunks for smaller initial bundle. */
+const HoldemScene = React.lazy(() =>
+  import('./HoldemScene.js').then(m => ({ default: m.HoldemScene })),
+)
+const FiveCardDrawScene = React.lazy(() =>
+  import('./FiveCardDrawScene.js').then(m => ({ default: m.FiveCardDrawScene })),
+)
+const BlackjackScene = React.lazy(() =>
+  import('./BlackjackScene.js').then(m => ({ default: m.BlackjackScene })),
+)
+const CompetitiveBlackjackScene = React.lazy(() =>
+  import('./CompetitiveBlackjackScene.js').then(m => ({ default: m.CompetitiveBlackjackScene })),
+)
+const ThreeCardPokerScene = React.lazy(() =>
+  import('./ThreeCardPokerScene.js').then(m => ({ default: m.ThreeCardPokerScene })),
+)
+const RouletteScene = React.lazy(() =>
+  import('./RouletteScene.js').then(m => ({ default: m.RouletteScene })),
+)
 
 /** Maps CasinoGame to its scene component. */
 const SCENE_MAP: Record<CasinoGame, React.ComponentType> = {
@@ -15,7 +30,7 @@ const SCENE_MAP: Record<CasinoGame, React.ComponentType> = {
   five_card_draw: FiveCardDrawScene,
   blackjack_classic: BlackjackScene,
   blackjack_competitive: CompetitiveBlackjackScene,
-  roulette: FiveCardDrawScene,       // reuse placeholder until Roulette scene built
+  roulette: RouletteScene,
   three_card_poker: ThreeCardPokerScene,
   craps: FiveCardDrawScene,          // reuse placeholder until Craps scene built
 }

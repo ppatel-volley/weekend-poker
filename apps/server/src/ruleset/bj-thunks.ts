@@ -6,7 +6,6 @@
  */
 
 import type { CasinoGameState, Card } from '@weekend-casino/shared'
-import { BJ_MIN_BET, BJ_MAX_BET } from '@weekend-casino/shared'
 import {
   evaluateBlackjackHand,
   isNaturalBlackjack,
@@ -21,6 +20,7 @@ import {
   calculateInsurancePayout,
 } from '../blackjack-engine/index.js'
 import { getServerGameState, setServerGameState } from '../server-game-state.js'
+import { validatePlayerIdOrBot } from './security.js'
 
 type ThunkCtx = {
   getState: () => CasinoGameState
@@ -52,8 +52,11 @@ export const bjThunks = {
   /**
    * Place a bet with validation.
    */
-  bjPlaceBet: async (ctx: ThunkCtx, playerId: string, amount: number) => {
+  bjPlaceBet: async (ctx: ThunkCtx, claimedPlayerId: string, amount: number) => {
     const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     const bj = state.blackjack
     if (!bj) return
 
@@ -157,8 +160,11 @@ export const bjThunks = {
   /**
    * Process insurance decision for a player.
    */
-  bjProcessInsurance: async (ctx: ThunkCtx, playerId: string, takeInsurance: boolean) => {
+  bjProcessInsurance: async (ctx: ThunkCtx, claimedPlayerId: string, takeInsurance: boolean) => {
     const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     const bj = state.blackjack
     if (!bj) return
 
@@ -205,8 +211,11 @@ export const bjThunks = {
   /**
    * Player hits — deal one card to their active hand.
    */
-  bjHit: async (ctx: ThunkCtx, playerId: string) => {
+  bjHit: async (ctx: ThunkCtx, claimedPlayerId: string) => {
     const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     const bj = state.blackjack
     if (!bj) return
 
@@ -245,7 +254,11 @@ export const bjThunks = {
   /**
    * Player stands on current hand.
    */
-  bjStand: async (ctx: ThunkCtx, playerId: string) => {
+  bjStand: async (ctx: ThunkCtx, claimedPlayerId: string) => {
+    const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     ctx.dispatch('bjStandHand', playerId)
     await ctx.dispatchThunk('bjCheckAdvance', playerId)
   },
@@ -253,8 +266,11 @@ export const bjThunks = {
   /**
    * Player doubles down — one more card, bet doubled, then stand.
    */
-  bjDoubleDown: async (ctx: ThunkCtx, playerId: string) => {
+  bjDoubleDown: async (ctx: ThunkCtx, claimedPlayerId: string) => {
     const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     const bj = state.blackjack
     if (!bj) return
 
@@ -300,8 +316,11 @@ export const bjThunks = {
   /**
    * Player splits their hand.
    */
-  bjSplit: async (ctx: ThunkCtx, playerId: string) => {
+  bjSplit: async (ctx: ThunkCtx, claimedPlayerId: string) => {
     const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     const bj = state.blackjack
     if (!bj || !bj.config.splitEnabled) return
 
@@ -363,8 +382,11 @@ export const bjThunks = {
   /**
    * Player surrenders (first two cards only, gets half bet back).
    */
-  bjSurrender: async (ctx: ThunkCtx, playerId: string) => {
+  bjSurrender: async (ctx: ThunkCtx, claimedPlayerId: string) => {
     const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     const bj = state.blackjack
     if (!bj || !bj.config.surrenderEnabled) return
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { PokerGameState, PokerPlayer } from '@weekend-casino/shared'
+import type { PokerPlayer } from '@weekend-casino/shared'
 import { STARTING_STACK } from '@weekend-casino/shared'
 import { createInitialState, pokerRuleset } from '../ruleset/index.js'
 
@@ -21,8 +21,8 @@ function makePlayer(overrides: Partial<PokerPlayer> = {}): PokerPlayer {
 }
 
 /** Helper to create a state with players pre-populated. */
-function stateWithPlayers(...players: PokerPlayer[]): PokerGameState {
-  return createInitialState({ players })
+function stateWithPlayers(...players: PokerPlayer[]): any {
+  return createInitialState({ players } as any)
 }
 
 describe('updatePlayerName reducer', () => {
@@ -117,7 +117,7 @@ describe('addPlayer reducer', () => {
     const state = createInitialState()
     const player = makePlayer()
 
-    const next = addPlayer(state, player)
+    const next = addPlayer(state, player as any)
 
     expect(next.players).toHaveLength(1)
     expect(next.players[0]).toEqual(player)
@@ -125,7 +125,7 @@ describe('addPlayer reducer', () => {
 
   it('should not mutate the original state', () => {
     const state = createInitialState()
-    const next = addPlayer(state, makePlayer())
+    const next = addPlayer(state, makePlayer() as any)
 
     expect(state.players).toHaveLength(0)
     expect(next.players).toHaveLength(1)

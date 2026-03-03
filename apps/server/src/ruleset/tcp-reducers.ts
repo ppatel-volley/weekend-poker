@@ -5,7 +5,7 @@
  * No side effects, no Date.now(), no Math.random().
  */
 
-import type { CasinoGameState, TcpPlayerHand, TcpDealerHand, Card, TcpHandRank } from '@weekend-casino/shared'
+import type { CasinoGameState, Card, TcpHandRank } from '@weekend-casino/shared'
 import { TCP_MIN_ANTE, TCP_MAX_ANTE, TCP_MAX_PAIR_PLUS } from '@weekend-casino/shared'
 
 /** Creates a fresh TCP sub-state for a new round. */

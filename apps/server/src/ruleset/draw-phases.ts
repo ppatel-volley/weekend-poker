@@ -11,16 +11,14 @@ import { CasinoPhase } from '@weekend-casino/shared'
 import {
   isBettingRoundComplete,
   isOnlyOnePlayerRemaining,
-  areAllRemainingPlayersAllIn,
   getSmallBlindIndex,
   getBigBlindIndex,
   findFirstActivePlayerLeftOfButton,
   findFirstActivePlayerLeftOfBB,
-  nextActivePlayer,
-  rotateDealerButton,
 } from '../poker-engine/index.js'
 import { createDeck, shuffleDeck } from '../poker-engine/deck.js'
 import { getServerGameState, setServerGameState } from '../server-game-state.js'
+import { wrapWithGameNightCheck } from './game-night-utils.js'
 
 // ── Phase helpers ────────────────────────────────────────────────
 
@@ -48,7 +46,7 @@ function makePhase(overrides: {
 }) {
   const wrappedOnBegin = overrides.onBegin
     ? (ctx: any) => overrides.onBegin!(adaptPhaseCtx(ctx))
-    : (ctx: any) => ctx.session.state
+    : (ctx: any) => ctx.getState()
 
   const wrappedOnEnd = overrides.onEnd
     ? (ctx: any) => overrides.onEnd!(adaptPhaseCtx(ctx))
@@ -94,8 +92,6 @@ export const drawPostingBlindsPhase = makePhase({
     ctx.dispatch('drawResetHand')
     ctx.dispatch('setHandNumber', state.handNumber + 1)
 
-    const updated: CasinoGameState = ctx.getState()
-    const newDealerIndex = rotateDealerButton(updated.players, updated.dealerIndex)
     // Use holdem's rotateDealerButton reducer since it's shared
     ctx.dispatch('rotateDealerButton')
 
@@ -208,14 +204,13 @@ export const drawBetting1Phase = makePhase({
 export const drawDrawPhasePhase = makePhase({
   onBegin: (ctx: any) => {
     // Reset discard state for new draw
-    const state: CasinoGameState = ctx.getState()
     // Players with 'active' or 'all_in' status participate
     // Stand pat (discard 0) is the default — players must confirm
     return ctx.getState()
   },
-  onEnd: (ctx: any) => {
+  onEnd: async (ctx: any) => {
     // Apply card replacements before moving to betting round 2
-    ctx.dispatchThunk('drawExecuteReplace')
+    await ctx.dispatchThunk('drawExecuteReplace')
     return ctx.getState()
   },
   endIf: (ctx: any) => {
@@ -282,9 +277,9 @@ export const drawShowdownPhase = makePhase({
  * DRAW_POT_DISTRIBUTION: Award pot to winner(s).
  */
 export const drawPotDistributionPhase = makePhase({
-  onBegin: (ctx: any) => {
+  onBegin: async (ctx: any) => {
     // Thunk call to evaluate and distribute
-    ctx.dispatchThunk('drawEvaluateAndDistribute')
+    await ctx.dispatchThunk('drawEvaluateAndDistribute')
     return ctx.getState()
   },
   endIf: () => true,
@@ -305,7 +300,7 @@ export const drawHandCompletePhase = makePhase({
     return ctx.getState()
   },
   endIf: () => true,
-  next: (ctx: any) => {
+  next: wrapWithGameNightCheck((ctx: any) => {
     const state: CasinoGameState = ctx.session.state
     if (state.gameChangeRequested) return CasinoPhase.GameSelect
     const playablePlayers = state.players.filter(
@@ -315,5 +310,5 @@ export const drawHandCompletePhase = makePhase({
       return CasinoPhase.Lobby
     }
     return CasinoPhase.DrawPostingBlinds
-  },
+  }),
 })

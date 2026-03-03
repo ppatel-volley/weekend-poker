@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react'
-import type { PokerPhase, PlayerAction, PokerGameState, Card } from '@weekend-casino/shared'
-import { BETTING_PHASES, getPhaseLabel, CasinoPhase } from '@weekend-casino/shared'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import type { PlayerAction, PokerGameState } from '@weekend-casino/shared'
+import { CasinoPhase, BETTING_PHASES, getPhaseLabel } from '@weekend-casino/shared'
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition.js'
 import { useDispatchThunk, useSessionMember, useStateSync } from '../hooks/useVGFHooks.js'
+import { usePrivateHoleCards } from '../hooks/usePrivateHoleCards.js'
 
 /**
  * Main gameplay controller screen.
@@ -10,13 +11,14 @@ import { useDispatchThunk, useSessionMember, useStateSync } from '../hooks/useVG
  * Shows hole cards, action buttons during betting phases,
  * and a push-to-talk button for voice commands.
  */
-export function ControllerGameplay({ phase }: { phase: PokerPhase }) {
+export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
   const isBettingPhase = (BETTING_PHASES as readonly string[]).includes(phase)
   const { status, pendingTranscript, finalTranscript, startRecording, stopRecording } = useVoiceRecognition()
 
   const dispatchThunk = useDispatchThunk() as (name: string, ...args: unknown[]) => void
   const member = useSessionMember()
-  const state = useStateSync() as PokerGameState | null
+  // Hold'em-specific view: cast to PokerGameState for Hold'em field access
+  const state = useStateSync() as unknown as PokerGameState | null
 
   const playerId = member?.sessionMemberId ?? ''
   const player = state?.players.find(p => p.id === playerId)
@@ -28,9 +30,19 @@ export function ControllerGameplay({ phase }: { phase: PokerPhase }) {
   const bigBlind = state?.blindLevel?.bigBlind ?? 20
   const minRaise = state?.minRaiseIncrement ?? bigBlind
 
-  const myCards: [Card, Card] | undefined = playerId && state?.holeCards
-    ? state.holeCards[playerId] as [Card, Card] | undefined
-    : undefined
+  // SECURITY: Hole cards are delivered via targeted private events,
+  // never through broadcast state. state.holeCards is always {}.
+  const myCards = usePrivateHoleCards(playerId)
+  const requestedHandRef = useRef(0)
+  useEffect(() => {
+    const handNumber = (state as any)?.handNumber ?? 0
+    if (phase === CasinoPhase.DealingHoleCards || phase === CasinoPhase.PreFlopBetting) {
+      if (handNumber > 0 && requestedHandRef.current !== handNumber) {
+        requestedHandRef.current = handNumber
+        dispatchThunk('requestMyHoleCards')
+      }
+    }
+  }, [phase, state, dispatchThunk])
 
   const [raiseAmount, setRaiseAmount] = useState(0)
 
@@ -75,7 +87,7 @@ export function ControllerGameplay({ phase }: { phase: PokerPhase }) {
           opacity: 0.8,
         }}
       >
-        <span>{getPhaseLabel(phase as CasinoPhase)}</span>
+        <span>{getPhaseLabel(phase)}</span>
         <span>Stack: ${myStack}</span>
       </div>
 

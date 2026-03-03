@@ -42,3 +42,12 @@ export const BJ_MAX_SPLITS = 3
 export const BJ_BET_TIMEOUT_MS = 20_000
 export const BJ_ACTION_TIMEOUT_MS = 30_000
 export const BJ_INSURANCE_TIMEOUT_MS = 10_000
+
+// ── Roulette Constants ──────────────────────────────────────────────
+export const ROULETTE_MIN_BET = 5
+export const ROULETTE_MAX_INSIDE_BET = 100
+export const ROULETTE_MAX_OUTSIDE_BET = 500
+export const ROULETTE_MAX_TOTAL_BET = 1000
+export const ROULETTE_BET_TIMEOUT_MS = 45_000
+export const ROULETTE_SPIN_ANIMATION_TARGET_MS = 6_000
+export const ROULETTE_SPIN_HARD_TIMEOUT_MS = 8_000

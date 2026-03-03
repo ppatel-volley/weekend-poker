@@ -6,7 +6,6 @@
  * player during their turn. Discard animation dims selected cards.
  */
 import { useStateSyncSelector, usePhase } from '../../hooks/useVGFHooks.js'
-import type { CasinoPhase } from '@weekend-casino/shared'
 
 /** Player hand display — 5 cards in a fan layout. */
 function PlayerHand({

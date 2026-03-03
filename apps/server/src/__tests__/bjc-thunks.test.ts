@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import type { CasinoGameState, Card, BlackjackCompetitiveGameState } from '@weekend-casino/shared'
+import { describe, it, expect, beforeEach } from 'vitest'
+import type { CasinoGameState, Card } from '@weekend-casino/shared'
 import { CasinoPhase } from '@weekend-casino/shared'
 import { bjcReducers } from '../ruleset/bjc-reducers.js'
 import { bjcThunks } from '../ruleset/bjc-thunks.js'
-import { _resetAllServerState, setServerGameState, getServerGameState } from '../server-game-state.js'
+import { _resetAllServerState, setServerGameState } from '../server-game-state.js'
 import { createShoe, shuffleShoe } from '../blackjack-engine/index.js'
 
 function card(rank: string, suit: string = 'spades'): Card {
@@ -19,19 +19,32 @@ function createTestState(): CasinoGameState {
     gameChangeVotes: {},
     wallet: { p1: 10000, p2: 10000, p3: 10000 },
     players: [
-      { id: 'p1', name: 'Player 1', seatIndex: 0, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0 },
-      { id: 'p2', name: 'Player 2', seatIndex: 1, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0 },
-    ],
+      { id: 'p1', name: 'Player 1', seatIndex: 0, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0, avatarId: 'default', isHost: false, isReady: true, currentGameStatus: 'active' },
+      { id: 'p2', name: 'Player 2', seatIndex: 1, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0, avatarId: 'default', isHost: false, isReady: true, currentGameStatus: 'active' },
+    ] as any,
     dealerCharacterId: 'ace_malone',
-    blindLevel: { level: 1, smallBlind: 5, bigBlind: 10 },
+    blindLevel: { level: 1, smallBlind: 5, bigBlind: 10, minBuyIn: 200, maxBuyIn: 2000 },
     handNumber: 1,
     dealerIndex: 0,
     lobbyReady: true,
     dealerMessage: null,
     ttsQueue: [],
-    sessionStats: { handsPlayed: 0, gamesPlayed: {}, largestPot: null, playerStats: {} },
+    reactions: [],
+    sessionStats: { handsPlayed: 0, gamesPlayed: {}, largestPot: null, playerStats: {} } as any,
+    interHandDelaySec: 3,
+    autoFillBots: true,
+    activePlayerIndex: -1,
+    communityCards: [],
+    pot: 0,
+    sidePots: [],
+    currentBet: 0,
+    minRaiseIncrement: 10,
+    holeCards: {},
+    handHistory: [],
+    lastAggressor: null,
+    dealingComplete: false,
     blackjackCompetitive: undefined,
-  } as CasinoGameState
+  } as unknown as CasinoGameState
 }
 
 function createMockCtx(initialState: CasinoGameState) {
@@ -182,7 +195,7 @@ describe('bjcThunks', () => {
       state = bjcReducers.bjcInitRound(state, ['p1'], 1, 10)
       state = bjcReducers.bjcSetPlayerCards(state, 'p1', [card('K'), card('8')], 18, false, false)
       state = bjcReducers.bjcStandHand(state, 'p1')
-      const { ctx, getState, getDispatches } = createMockCtx(state)
+      const { ctx, getDispatches } = createMockCtx(state)
 
       const shoe = [card('2')]
       setServerGameState('test-session', {
@@ -259,7 +272,7 @@ describe('bjcThunks', () => {
       state = bjcReducers.bjcInitRound(state, ['p1'], 1, 10)
       state = bjcReducers.bjcPlaceAnte(state, 'p1', 10)
       state = bjcReducers.bjcSetPlayerCards(state, 'p1', [card('5'), card('6')], 11, false, false)
-      const { ctx, getState, getDispatches } = createMockCtx(state)
+      const { ctx, getDispatches } = createMockCtx(state)
 
       await bjcThunks.bjcDoubleDown(ctx, 'p1')
 
@@ -336,7 +349,6 @@ describe('bjcThunks', () => {
       state = bjcReducers.bjcStandHand(state, 'p1')
       // p2 busted
       state = bjcReducers.bjcAddCardToHand(state, 'p2', card('J'), 26, false, true)
-      const { ctx, getState } = createMockCtx(state)
 
       // Fix: p2's hand already set with 3 cards, so simulate the bust properly
       // Let's redo this more cleanly

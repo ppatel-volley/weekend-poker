@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { PokerGameState, PokerPlayer, Card } from '@weekend-casino/shared'
+import type { PokerPlayer, Card } from '@weekend-casino/shared'
 import { PokerPhase, STARTING_STACK } from '@weekend-casino/shared'
 import { createInitialState, pokerRuleset } from '../ruleset/index.js'
 import { _resetAllServerState, setServerHandState } from '../poker-engine/index.js'
 
 // ── Test helpers ─────────────────────────────────────────────────
+
+type TestState = any
 
 function makePlayer(overrides: Partial<PokerPlayer> = {}): PokerPlayer {
   return {
@@ -22,8 +24,8 @@ function makePlayer(overrides: Partial<PokerPlayer> = {}): PokerPlayer {
   }
 }
 
-function stateWithPlayers(...players: PokerPlayer[]): PokerGameState {
-  return createInitialState({ players })
+function stateWithPlayers(...players: PokerPlayer[]): TestState {
+  return createInitialState({ players } as any)
 }
 
 /**
@@ -33,20 +35,22 @@ function stateWithPlayers(...players: PokerPlayer[]): PokerGameState {
  * and applies reducers to the state so that subsequent getState()
  * calls return the updated state.
  */
-function createMockCtx(initialState: PokerGameState, sessionId = 'test-session') {
+function createMockCtx(initialState: TestState, sessionId = 'test-session', clientId = 'test-client') {
   let state = { ...initialState }
   const dispatched: Array<{ name: string; args: unknown[] }> = []
   const thunkDispatched: Array<{ name: string; args: unknown[] }> = []
 
+  const reducers = pokerRuleset.reducers as Record<string, (...args: any[]) => any>
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mock context for testing
   const ctx = {
     getState: () => state,
-    getClientId: () => 'test-client',
+    getClientId: () => clientId,
     getSessionId: () => sessionId,
     dispatch: (name: string, ...args: unknown[]) => {
       dispatched.push({ name, args })
       // Apply the reducer to keep state consistent
-      const reducer = pokerRuleset.reducers[name]
+      const reducer = reducers[name]
       if (reducer) {
         state = reducer(state, ...args)
       }
@@ -74,7 +78,7 @@ function createMockCtx(initialState: PokerGameState, sessionId = 'test-session')
 }
 
 function getThunk(name: string) {
-  const t = pokerRuleset.thunks[name]
+  const t = (pokerRuleset.thunks as Record<string, any>)[name]
   if (!t) throw new Error(`Thunk "${name}" not found`)
   return t
 }
@@ -100,7 +104,7 @@ describe('processPlayerAction thunk', () => {
       phase: PokerPhase.PreFlopBetting,
     }
 
-    const { ctx, dispatched } = createMockCtx(state)
+    const { ctx, dispatched } = createMockCtx(state, 'test-session', 'p1')
     await processPlayerAction(ctx, 'p1', 'fold')
 
     // Should NOT have dispatched foldPlayer — it's not p1's turn
@@ -118,7 +122,7 @@ describe('processPlayerAction thunk', () => {
       currentBet: 10,
     }
 
-    const { ctx, dispatched } = createMockCtx(state)
+    const { ctx, dispatched } = createMockCtx(state, 'test-session', 'p1')
     await processPlayerAction(ctx, 'p1', 'fold')
 
     expect(dispatched.some(d => d.name === 'foldPlayer' && d.args[0] === 'p1')).toBe(true)
@@ -135,7 +139,7 @@ describe('processPlayerAction thunk', () => {
       currentBet: 0,
     }
 
-    const { ctx, dispatched } = createMockCtx(state)
+    const { ctx, dispatched } = createMockCtx(state, 'test-session', 'p1')
     await processPlayerAction(ctx, 'p1', 'check')
 
     // Check doesn't need a reducer dispatch for the bet, but should record the action
@@ -153,7 +157,7 @@ describe('processPlayerAction thunk', () => {
       currentBet: 100,
     }
 
-    const { ctx, dispatched, getState } = createMockCtx(state)
+    const { ctx, dispatched, getState } = createMockCtx(state, 'test-session', 'p1')
     await processPlayerAction(ctx, 'p1', 'call')
 
     expect(dispatched.some(d => d.name === 'updatePlayerBet' && d.args[0] === 'p1' && d.args[1] === 100)).toBe(true)
@@ -172,7 +176,7 @@ describe('processPlayerAction thunk', () => {
       currentBet: 0,
     }
 
-    const { ctx, dispatched, getState } = createMockCtx(state)
+    const { ctx, dispatched, getState } = createMockCtx(state, 'test-session', 'p1')
     await processPlayerAction(ctx, 'p1', 'bet', 200)
 
     expect(dispatched.some(d => d.name === 'updatePlayerBet' && d.args[1] === 200)).toBe(true)
@@ -191,7 +195,7 @@ describe('processPlayerAction thunk', () => {
       minRaiseIncrement: 100,
     }
 
-    const { ctx, dispatched, getState } = createMockCtx(state)
+    const { ctx, dispatched, getState } = createMockCtx(state, 'test-session', 'p1')
     await processPlayerAction(ctx, 'p1', 'raise', 300)
 
     expect(dispatched.some(d => d.name === 'updatePlayerBet' && d.args[1] === 300)).toBe(true)
@@ -209,7 +213,7 @@ describe('processPlayerAction thunk', () => {
       currentBet: 100,
     }
 
-    const { ctx, dispatched, getState } = createMockCtx(state)
+    const { ctx, dispatched, getState } = createMockCtx(state, 'test-session', 'p1')
     await processPlayerAction(ctx, 'p1', 'all_in')
 
     // All-in bets the player's entire stack
@@ -229,7 +233,7 @@ describe('processPlayerAction thunk', () => {
       currentBet: 100,
     }
 
-    const { ctx, dispatched } = createMockCtx(state)
+    const { ctx, dispatched } = createMockCtx(state, 'test-session', 'p1')
     await processPlayerAction(ctx, 'p1', 'check')
 
     // Check is not legal when facing a bet — no updatePlayerBet should fire
@@ -248,7 +252,7 @@ describe('processPlayerAction thunk', () => {
       currentBet: 0,
     }
 
-    const { ctx, getState } = createMockCtx(state)
+    const { ctx, getState } = createMockCtx(state, 'test-session', 'p1')
     await processPlayerAction(ctx, 'p1', 'check')
 
     expect(getState().players[0]!.lastAction).toBe('check')
@@ -266,7 +270,7 @@ describe('processPlayerAction thunk', () => {
       currentBet: 0,
     }
 
-    const { ctx, dispatched } = createMockCtx(state)
+    const { ctx, dispatched } = createMockCtx(state, 'test-session', 'p1')
     await processPlayerAction(ctx, 'p1', 'check')
 
     // Should set active player to p2 (index 1)

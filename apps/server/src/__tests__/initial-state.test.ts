@@ -98,21 +98,25 @@ describe('createInitialState', () => {
   })
 
   // ── Session stats ──────────────────────────────────────────
+  // The initial casino state uses poker-shaped session stats for backward compat.
+  // Access via index signature since the TS type is CasinoGameState.sessionStats.
 
   it('should initialise session stats correctly', () => {
-    expect(state.sessionStats.handsPlayed).toBe(0)
-    expect(state.sessionStats.totalPotDealt).toBe(0)
-    expect(state.sessionStats.startedAt).toBeGreaterThan(0)
-    expect(state.sessionStats.playerStats).toEqual({})
-    expect(state.sessionStats.largestPot).toBeNull()
-    expect(state.sessionStats.biggestBluff).toBeNull()
-    expect(state.sessionStats.worstBeat).toBeNull()
+    const stats = state.sessionStats as any
+    expect(stats.handsPlayed).toBe(0)
+    expect(stats.totalPotDealt).toBe(0)
+    expect(stats.startedAt).toBeGreaterThan(0)
+    expect(stats.playerStats).toEqual({})
+    expect(stats.largestPot).toBeNull()
+    expect(stats.biggestBluff).toBeNull()
+    expect(stats.worstBeat).toBeNull()
   })
 
   it('should set startedAt to approximately the current time', () => {
+    const stats = state.sessionStats as any
     const now = Date.now()
     // Allow a generous 5-second window for test execution
-    expect(state.sessionStats.startedAt).toBeGreaterThan(now - 5000)
-    expect(state.sessionStats.startedAt).toBeLessThanOrEqual(now)
+    expect(stats.startedAt).toBeGreaterThan(now - 5000)
+    expect(stats.startedAt).toBeLessThanOrEqual(now)
   })
 })

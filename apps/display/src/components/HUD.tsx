@@ -1,4 +1,3 @@
-import type { PokerPhase } from '@weekend-casino/shared'
 import { getPhaseLabel, CasinoPhase } from '@weekend-casino/shared'
 import { useStateSyncSelector } from '../hooks/useVGFHooks.js'
 
@@ -13,7 +12,7 @@ import { useStateSyncSelector } from '../hooks/useVGFHooks.js'
  * TODO: Add blind level indicator
  * TODO: Add hand number display
  */
-export function HUD({ phase }: { phase: PokerPhase }) {
+export function HUD({ phase }: { phase: CasinoPhase }) {
   const pot = useStateSyncSelector((s) => s.pot)
   const dealerMessage = useStateSyncSelector((s) => s.dealerMessage)
   const handNumber = useStateSyncSelector((s) => s.handNumber)
@@ -34,7 +33,7 @@ export function HUD({ phase }: { phase: PokerPhase }) {
       {/* Top bar — phase and pot */}
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <span style={{ opacity: 0.7, fontSize: '0.875rem' }}>
-          Hand #{handNumber ?? 0} &middot; {getPhaseLabel(phase as CasinoPhase)}
+          Hand #{handNumber ?? 0} &middot; {getPhaseLabel(phase)}
         </span>
         <span style={{ fontWeight: 'bold' }}>Pot: ${pot ?? 0}</span>
       </div>

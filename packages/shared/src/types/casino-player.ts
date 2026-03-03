@@ -1,4 +1,4 @@
-import type { BotConfig } from './game-state.js'
+import type { BotConfig, PlayerStatus, PlayerAction } from './game-state.js'
 
 /**
  * Player status in the casino session.
@@ -9,10 +9,14 @@ export type CasinoPlayerStatus = 'active' | 'sitting-out' | 'spectating' | 'bust
 /**
  * Casino Player — Unified player type across all games (v1 and v2).
  *
- * Extends the per-game player types (PokerPlayer, BlackjackPlayer, etc.)
- * with cross-game casino metadata.
+ * Includes poker-compatible fields (stack, bet, status, lastAction) for
+ * backward compatibility with Hold'em and Draw game phases/reducers that
+ * operate directly on state.players elements.
  */
 export interface CasinoPlayer {
+  // ─── VGF index signature for extensibility ───
+  [key: string]: unknown
+
   // ─── Identity ───
   id: string
   name: string
@@ -27,6 +31,12 @@ export interface CasinoPlayer {
   isReady: boolean
   currentGameStatus: CasinoPlayerStatus
   sittingOutHandCount: number
+
+  // ─── Poker-Compatible Game Fields (backward compat) ───
+  stack: number
+  bet: number
+  status: PlayerStatus
+  lastAction: PlayerAction | null
 
   // ─── Bot Configuration ───
   isBot: boolean

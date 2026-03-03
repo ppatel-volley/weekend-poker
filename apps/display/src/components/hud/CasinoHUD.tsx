@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
-import { CASINO_GAME_LABELS } from '@weekend-casino/shared'
+import { CASINO_GAME_LABELS, MAX_PLAYERS } from '@weekend-casino/shared'
 import type { CasinoGame } from '@weekend-casino/shared'
+import { QRCodeSVG } from 'qrcode.react'
 import { useFocusable } from '@noriginmedia/norigin-spatial-navigation'
 import { useCurrentGame, useStateSyncSelector } from '../../hooks/useVGFHooks.js'
+import { useSessionId } from '../../hooks/useSessionId.js'
 import { useInputMode } from '../../platform/InputModeProvider.js'
 
 /** Formats seconds as HH:MM:SS. */
@@ -65,8 +67,16 @@ export function CasinoHUD() {
   const wallet = useStateSyncSelector((s) => s.wallet)
   const players = useStateSyncSelector((s) => s.players)
   const dealerMessage = useStateSyncSelector((s) => s.dealerMessage)
+  const sessionId = useSessionId()
   const { inputMode } = useInputMode()
   const isRemote = inputMode === 'remote'
+
+  const baseControllerUrl = import.meta.env['VITE_CONTROLLER_URL'] as string | undefined
+  const controllerUrl = baseControllerUrl
+    ? `${baseControllerUrl}?sessionId=${sessionId}`
+    : `http://${window.location.hostname}:5174?sessionId=${sessionId}`
+  const humanPlayers = players?.filter((p: any) => !p.isBot).length ?? 0
+  const showJoinQR = humanPlayers < MAX_PLAYERS
 
   const { ref: hudRef } = useFocusable({
     focusKey: 'CASINO_HUD',
@@ -101,6 +111,55 @@ export function CasinoHUD() {
           {formatSessionTime(sessionSeconds)}
         </span>
       </div>
+
+      {/* Join QR — shown until table is full */}
+      {showJoinQR && (
+        <a
+          href={controllerUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            position: 'absolute',
+            top: 60,
+            right: 20,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 6,
+            pointerEvents: 'auto',
+            cursor: 'pointer',
+            textDecoration: 'none',
+            opacity: 0.85,
+            transition: 'opacity 0.2s ease',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.85' }}
+        >
+          <div
+            style={{
+              padding: 8,
+              background: 'white',
+              borderRadius: 8,
+              boxShadow: '0 2px 12px rgba(212, 175, 55, 0.3)',
+              border: '1px solid rgba(212, 175, 55, 0.4)',
+            }}
+          >
+            <QRCodeSVG value={controllerUrl} size={80} />
+          </div>
+          <span
+            style={{
+              fontSize: '0.65rem',
+              color: 'rgba(212, 175, 55, 0.8)',
+              letterSpacing: '0.15em',
+              textTransform: 'uppercase',
+              fontFamily: 'system-ui, sans-serif',
+              textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+            }}
+          >
+            Join ({humanPlayers}/{MAX_PLAYERS})
+          </span>
+        </a>
+      )}
 
       {/* Dealer message */}
       {dealerMessage && (

@@ -13,14 +13,14 @@ import { test, expect } from './fixtures/casino-fixture'
 test.describe('Hold\'em', () => {
   test('display shows lobby with game title', async ({ displayPage }) => {
     // Display should show lobby view with title
-    await expect(displayPage.locator('text=Weekend Casino')).toBeVisible()
+    await expect(displayPage.getByAltText('Weekend Casino').or(displayPage.getByRole('heading', { name: 'Weekend Casino' }))).toBeVisible({ timeout: 15_000 })
     // Should show "Waiting for players..." since nobody is ready
     await expect(displayPage.locator('text=Waiting for players')).toBeVisible()
   })
 
   test('display shows player count', async ({ displayPage }) => {
     // Display lobby should show the player count header
-    await expect(displayPage.locator('text=Players')).toBeVisible({ timeout: 10_000 })
+    await expect(displayPage.getByRole('heading', { name: /Players/ })).toBeVisible({ timeout: 10_000 })
   })
 
   test('controller shows action buttons text during game', async ({ controllerPage }) => {

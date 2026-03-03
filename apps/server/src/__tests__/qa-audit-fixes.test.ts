@@ -5,15 +5,17 @@
  * and is now fixed. Grouped by finding ID.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { CasinoGameState, CasinoPlayer, Card } from '@weekend-casino/shared'
-import { CasinoPhase, STARTING_WALLET_BALANCE, STARTING_STACK } from '@weekend-casino/shared'
+import { describe, it, expect, vi } from 'vitest'
+import type { CasinoGameState, Card } from '@weekend-casino/shared'
+import { CasinoPhase, STARTING_STACK } from '@weekend-casino/shared'
 import { createInitialCasinoState, casinoReducers } from '../ruleset/casino-state.js'
 import { casinoRuleset } from '../ruleset/casino-ruleset.js'
 
 // ── Helpers ────────────────────────────────────────────────────
 
-function makeCasinoPlayer(overrides: Partial<CasinoPlayer> = {}): CasinoPlayer {
+// The actual runtime players have poker-compat fields (stack, bet, etc.)
+// that are not on the CasinoPlayer type. Use `any` for the return.
+function makeCasinoPlayer(overrides: Record<string, any> = {}): any {
   return {
     id: 'player-1',
     name: 'Alice',
@@ -25,6 +27,10 @@ function makeCasinoPlayer(overrides: Partial<CasinoPlayer> = {}): CasinoPlayer {
     isBot: false,
     isConnected: true,
     sittingOutHandCount: 0,
+    avatarId: 'default',
+    isHost: false,
+    isReady: false,
+    currentGameStatus: 'active',
     ...overrides,
   }
 }
@@ -406,8 +412,8 @@ describe('BJ2 — surrender returns floor(bet/2)', () => {
 describe('V2 — voice command rejected during non-betting phase', () => {
   const processVoiceCommand = casinoRuleset.thunks['processVoiceCommand']!
 
-  it('should NOT dispatch setPlayerLastAction during Lobby phase', async () => {
-    const dispatches: Array<[string, ...unknown[]]> = []
+  it('should NOT dispatch during Lobby phase', async () => {
+    const thunkDispatches: Array<[string, ...unknown[]]> = []
     const state = stateWith({
       phase: CasinoPhase.Lobby,
       players: [makeCasinoPlayer()],
@@ -416,43 +422,48 @@ describe('V2 — voice command rejected during non-betting phase', () => {
     const ctx = {
       getState: () => state,
       getClientId: () => 'player-1',
-      dispatch: (action: string, ...args: unknown[]) => {
-        dispatches.push([action, ...args])
-      },
+      dispatch: vi.fn(),
+      dispatchThunk: vi.fn(async (name: string, ...args: unknown[]) => {
+        thunkDispatches.push([name, ...args])
+      }),
       getMembers: () => ({}),
     }
 
     await processVoiceCommand(ctx as any, 'I fold')
 
-    const actionDispatch = dispatches.find(d => d[0] === 'setPlayerLastAction')
-    expect(actionDispatch).toBeUndefined()
+    // Should not route through processPlayerAction during non-betting phase
+    const actionThunk = thunkDispatches.find(d => d[0] === 'processPlayerAction')
+    expect(actionThunk).toBeUndefined()
   })
 
-  it('should dispatch setPlayerLastAction during betting phase', async () => {
-    const dispatches: Array<[string, ...unknown[]]> = []
+  it('should route through processPlayerAction during betting phase', async () => {
+    const thunkDispatches: Array<[string, ...unknown[]]> = []
     const state = stateWith({
       phase: CasinoPhase.PreFlopBetting,
+      selectedGame: 'holdem',
       players: [makeCasinoPlayer()],
     })
 
     const ctx = {
       getState: () => state,
       getClientId: () => 'player-1',
-      dispatch: (action: string, ...args: unknown[]) => {
-        dispatches.push([action, ...args])
-      },
+      dispatch: vi.fn(),
+      dispatchThunk: vi.fn(async (name: string, ...args: unknown[]) => {
+        thunkDispatches.push([name, ...args])
+      }),
       getMembers: () => ({}),
     }
 
     await processVoiceCommand(ctx as any, 'I fold')
 
-    const actionDispatch = dispatches.find(d => d[0] === 'setPlayerLastAction')
-    expect(actionDispatch).toBeDefined()
-    expect(actionDispatch![2]).toBe('fold')
+    // Voice commands now route through processPlayerAction for validation
+    const actionThunk = thunkDispatches.find(d => d[0] === 'processPlayerAction')
+    expect(actionThunk).toBeDefined()
+    expect(actionThunk![2]).toBe('fold')
   })
 
   it('should NOT dispatch during dealing phase', async () => {
-    const dispatches: Array<[string, ...unknown[]]> = []
+    const thunkDispatches: Array<[string, ...unknown[]]> = []
     const state = stateWith({
       phase: CasinoPhase.DealingHoleCards,
       players: [makeCasinoPlayer()],
@@ -461,16 +472,17 @@ describe('V2 — voice command rejected during non-betting phase', () => {
     const ctx = {
       getState: () => state,
       getClientId: () => 'player-1',
-      dispatch: (action: string, ...args: unknown[]) => {
-        dispatches.push([action, ...args])
-      },
+      dispatch: vi.fn(),
+      dispatchThunk: vi.fn(async (name: string, ...args: unknown[]) => {
+        thunkDispatches.push([name, ...args])
+      }),
       getMembers: () => ({}),
     }
 
     await processVoiceCommand(ctx as any, 'raise 200')
 
-    const actionDispatch = dispatches.find(d => d[0] === 'setPlayerLastAction')
-    expect(actionDispatch).toBeUndefined()
+    const actionThunk = thunkDispatches.find(d => d[0] === 'processPlayerAction')
+    expect(actionThunk).toBeUndefined()
   })
 })
 

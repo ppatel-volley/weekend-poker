@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { ACESFilmicToneMapping, PCFShadowMap, SRGBColorSpace } from 'three'
-import type { PokerPhase } from '@weekend-casino/shared'
+import type { CasinoPhase, PokerPhase } from '@weekend-casino/shared'
 import { PokerTable } from './PokerTable.js'
 import { Lighting } from './Lighting.js'
 import { CameraRig } from './CameraRig.js'
@@ -23,7 +23,7 @@ import { HUD } from './HUD.js'
  * CardDeckProvider wraps the 3D scene so that CommunityCards (and
  * future hole-card displays) can access card mesh clones via context.
  */
-export function GameView({ phase }: { phase: PokerPhase }) {
+export function GameView({ phase }: { phase: CasinoPhase }) {
   return (
     <>
       <Canvas
@@ -40,7 +40,7 @@ export function GameView({ phase }: { phase: PokerPhase }) {
       >
         <Suspense fallback={null}>
           <Lighting />
-          <CameraRig phase={phase} />
+          <CameraRig phase={phase as unknown as PokerPhase} />
 
           <CardDeckProvider>
             <PokerTable />

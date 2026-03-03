@@ -6,6 +6,8 @@ import type { SessionStats } from './casino-session-stats.js'
 import type { VideoPlayback, BackgroundVideo } from './casino-video.js'
 import type { BlindLevel, TTSMessage, SidePot } from './game-state.js'
 import type { InputMode } from './platform.js'
+import type { ReactionEvent } from './reactions.js'
+import type { Card } from './cards.js'
 
 /**
  * Root Casino Game State — Multi-game platform unified state (D-002, D-001).
@@ -102,6 +104,29 @@ export interface CasinoGameState {
   }
 
   // ───────────────────────────────────────────────────────────────
+  // Hold'em Backwards-Compatible Fields (D-003: unprefixed)
+  // These live at root level for Hold'em (not in a sub-state)
+  // ───────────────────────────────────────────────────────────────
+  interHandDelaySec: number
+  autoFillBots: boolean
+  activePlayerIndex: number
+  communityCards: Card[]
+  pot: number
+  sidePots: SidePot[]
+  currentBet: number
+  minRaiseIncrement: number
+  // SECURITY: Always {} in broadcast state. Cards delivered via targeted private events.
+  holeCards: Record<string, [Card, Card]>
+  handHistory: unknown[]
+  lastAggressor: string | null
+  dealingComplete: boolean
+
+  // ───────────────────────────────────────────────────────────────
+  // Reactions / Emotes (v2.0 — cosmetic only)
+  // ───────────────────────────────────────────────────────────────
+  reactions: ReactionEvent[]
+
+  // ───────────────────────────────────────────────────────────────
   // v1 Game Sub-States (Only Populated When Active)
   // ───────────────────────────────────────────────────────────────
   holdem?: HoldemGameState
@@ -121,10 +146,20 @@ export interface CasinoGameState {
   craps?: CrapsGameState
 
   // ───────────────────────────────────────────────────────────────
+  // v2.0 Speed Variants (config-driven, NOT new game types)
+  // ───────────────────────────────────────────────────────────────
+  speedConfig?: SpeedConfig
+
+  // ───────────────────────────────────────────────────────────────
+  // v2.0 Quick-Play & Casino Crawl
+  // ───────────────────────────────────────────────────────────────
+  quickPlayMode?: QuickPlayConfig
+  casinoCrawl?: CasinoCrawlConfig
+
+  // ───────────────────────────────────────────────────────────────
   // v2.1+ Meta-Game Sub-States
   // ───────────────────────────────────────────────────────────────
   gameNight?: GameNightGameState
-  quickPlay?: QuickPlayConfig
   jackpot?: ProgressiveJackpot
 }
 
@@ -323,10 +358,97 @@ export interface BlackjackCompetitiveGameState {
   resultMessage: string
 }
 
-/** v2.0 Roulette game state. Defined in TDD-backend.md Section 8. */
+/** Roulette bet type — inside bets and outside bets. */
+export type RouletteBetType =
+  | 'straight_up'
+  | 'split'
+  | 'street'
+  | 'corner'
+  | 'six_line'
+  | 'red'
+  | 'black'
+  | 'odd'
+  | 'even'
+  | 'high'
+  | 'low'
+  | 'dozen_1'
+  | 'dozen_2'
+  | 'dozen_3'
+  | 'column_1'
+  | 'column_2'
+  | 'column_3'
+
+/** Single roulette bet. */
+export interface RouletteBet {
+  id: string
+  playerId: string
+  type: RouletteBetType
+  amount: number
+  /** Which numbers are covered by this bet. */
+  numbers: number[]
+  /** Resolution status. */
+  status: 'active' | 'won' | 'lost'
+  /** Payout amount (0 until resolved). */
+  payout: number
+}
+
+/** Per-player roulette state. */
+export interface RoulettePlayerState {
+  playerId: string
+  totalBet: number
+  totalPayout: number
+  roundResult: number
+  betsConfirmed: boolean
+  favouriteNumbers: number[]
+}
+
+/** History entry for the roulette scoreboard. */
+export interface RouletteHistoryEntry {
+  roundNumber: number
+  number: number
+  colour: 'red' | 'black' | 'green'
+}
+
+/** Roulette table configuration. */
+export interface RouletteConfig {
+  minBet: number
+  maxInsideBet: number
+  maxOutsideBet: number
+  maxTotalBet: number
+  laPartage: boolean
+}
+
+/** v2.0 Roulette game state. */
 export interface RouletteGameState {
   [key: string]: unknown
-  // TBD: Will include bets, wheel result, payout, etc.
+
+  /** Winning number for the current round (null until spin). */
+  winningNumber: number | null
+  /** Colour of the winning number. */
+  winningColour: 'red' | 'black' | 'green' | null
+  /** All bets placed this round. */
+  bets: RouletteBet[]
+  /** Per-player state. */
+  players: RoulettePlayerState[]
+  /** Recent winning numbers (last 20). */
+  history: RouletteHistoryEntry[]
+  /** Spin animation state. */
+  spinState: 'idle' | 'spinning' | 'slowing' | 'stopped'
+  /** Near-miss data for display animation. */
+  nearMisses: { playerId: string; betNumber: number }[]
+
+  /** Phase transition flags (C1 pattern). */
+  allBetsPlaced: boolean
+  bettingClosed: boolean
+  spinComplete: boolean
+  resultAnnounced: boolean
+  payoutComplete: boolean
+  roundCompleteReady: boolean
+
+  /** Round number. */
+  roundNumber: number
+  /** Configuration. */
+  config: RouletteConfig
 }
 
 /**
@@ -424,13 +546,120 @@ export interface CrapsGameState {
 /** v2.1 Game Night Mode state. Defined in TDD-backend.md Section 13. */
 export interface GameNightGameState {
   [key: string]: unknown
-  // TBD: Will include round number, scorecard, game rotation, etc.
+  /** Whether Game Night Mode is currently active. */
+  active: boolean
+  /** Maximum rounds before transitioning to leaderboard. */
+  roundLimit: number
+  /** Number of rounds played so far. */
+  roundsPlayed: number
+  /** Player scores (playerId -> score). */
+  scores: Record<string, number>
 }
 
-/** v2.0 Quick Play config (auto-rotating games). */
+/**
+ * Speed variant configuration (v2.0). Config-driven, NOT new game types.
+ * Applies to Hold'em, 5-Card Draw, and Blackjack.
+ * Default: disabled (all games play at standard speed).
+ */
+export interface SpeedConfig {
+  enabled: boolean
+  /** Action timer in seconds (standard: 30, speed Hold'em: 10, speed Draw: 15, speed BJ: 10) */
+  actionTimerSeconds: number
+  /** Auto-fold on timeout — Hold'em/Draw only (standard: false, speed: true) */
+  autoFoldOnTimeout: boolean
+  /** Auto-stand on hard 17+ — Blackjack only (standard: false, speed: true) */
+  autoStandOnHard17: boolean
+  /** Hands between automatic blind increases — Hold'em only (0 = manual) */
+  autoBlindsIncreaseEvery: number
+  /** Fast animations flag for display client */
+  fastAnimations: boolean
+  /** Draw selection timer in seconds — 5-Card Draw only (standard: 30, speed: 10) */
+  drawTimerSeconds: number
+}
+
+/** Default speed config (disabled — standard play). */
+export const DEFAULT_SPEED_CONFIG: SpeedConfig = {
+  enabled: false,
+  actionTimerSeconds: 30,
+  autoFoldOnTimeout: false,
+  autoStandOnHard17: false,
+  autoBlindsIncreaseEvery: 0,
+  fastAnimations: false,
+  drawTimerSeconds: 30,
+}
+
+/** Speed Hold'em preset. */
+export const SPEED_HOLDEM_CONFIG: SpeedConfig = {
+  enabled: true,
+  actionTimerSeconds: 10,
+  autoFoldOnTimeout: true,
+  autoStandOnHard17: false,
+  autoBlindsIncreaseEvery: 5,
+  fastAnimations: true,
+  drawTimerSeconds: 30,
+}
+
+/** Speed 5-Card Draw preset. */
+export const SPEED_DRAW_CONFIG: SpeedConfig = {
+  enabled: true,
+  actionTimerSeconds: 15,
+  autoFoldOnTimeout: true,
+  autoStandOnHard17: false,
+  autoBlindsIncreaseEvery: 0,
+  fastAnimations: true,
+  drawTimerSeconds: 10,
+}
+
+/** Speed Blackjack preset. */
+export const SPEED_BLACKJACK_CONFIG: SpeedConfig = {
+  enabled: true,
+  actionTimerSeconds: 10,
+  autoFoldOnTimeout: false,
+  autoStandOnHard17: true,
+  autoBlindsIncreaseEvery: 0,
+  fastAnimations: true,
+  drawTimerSeconds: 30,
+}
+
+/** v2.0 Quick-Play mode config (random game rotation). */
 export interface QuickPlayConfig {
   enabled: boolean
-  rotationIntervalMs: number
+  /** Hands/rounds to play before auto-rotating to next game */
+  rotationIntervalHands: number
+  /** Current hand/round count in the current game */
+  currentHandCount: number
+  /** History of games played this session (for weighting) */
+  gamesPlayed: CasinoGame[]
+}
+
+/** Default quick-play config (disabled). */
+export const DEFAULT_QUICK_PLAY_CONFIG: QuickPlayConfig = {
+  enabled: false,
+  rotationIntervalHands: 10,
+  currentHandCount: 0,
+  gamesPlayed: [],
+}
+
+/** v2.0 Casino Crawl config (sequential rotation through all games). */
+export interface CasinoCrawlConfig {
+  active: boolean
+  /** Ordered list of games to cycle through */
+  gamesOrder: CasinoGame[]
+  /** Index into gamesOrder of the current game */
+  currentIndex: number
+  /** Rounds per game before rotating (default: 5) */
+  roundsPerGame: number
+  /** Rounds played in the current game */
+  roundsPlayed: number
+}
+
+/** Default casino crawl config (inactive). */
+export const DEFAULT_CASINO_CRAWL_CONFIG: CasinoCrawlConfig = {
+  active: false,
+  gamesOrder: [],
+  currentIndex: 0,
+  roundsPerGame: 5,
+  roundsPlayed: 0,
 }
 
 /** v2.2 Progressive Jackpot display state. */

@@ -8,6 +8,7 @@ import { GameRouter } from './components/GameRouter.js'
 import { WalletDisplay } from './components/shared/WalletDisplay.js'
 import { PlayerInfo } from './components/shared/PlayerInfo.js'
 import { VoiceButton } from './components/shared/VoiceButton.js'
+import { ReactionBar } from './components/shared/ReactionBar.js'
 import { usePhase } from './hooks/useVGFHooks.js'
 
 const SERVER_URL =
@@ -107,6 +108,8 @@ function ConnectedController() {
     )
   }
 
+  const isGameplay = phase !== 'LOBBY' && phase !== 'GAME_SELECT'
+
   return (
     <div
       style={{
@@ -136,6 +139,9 @@ function ConnectedController() {
       <div style={{ flex: 1 }}>
         <GameRouter />
       </div>
+
+      {/* Reaction bar — only visible during gameplay, not in lobby */}
+      {isGameplay && <ReactionBar />}
 
       {/* Voice button footer */}
       <div style={{ padding: '12px 16px 16px' }}>

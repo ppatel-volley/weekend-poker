@@ -8,8 +8,8 @@ import { test, expect } from './fixtures/casino-fixture'
 
 test.describe('Lobby', () => {
   test('controller loads and shows lobby UI', async ({ controllerPage }) => {
-    // The controller should show the lobby with name input
-    await expect(controllerPage.locator('text=Weekend Casino')).toBeVisible()
+    // The controller should show the lobby with logo image
+    await expect(controllerPage.getByAltText('Weekend Casino')).toBeVisible()
     await expect(controllerPage.locator('#player-name')).toBeVisible()
     await expect(controllerPage.getByRole('button', { name: /READY/i })).toBeVisible()
   })
@@ -20,8 +20,11 @@ test.describe('Lobby', () => {
     // After clicking READY, the button text should change
     const readyButton = controllerPage.getByRole('button', { name: /READY/i })
     await expect(readyButton).toBeVisible()
-    // The status text should change to "Waiting for host to start..."
-    await expect(controllerPage.locator('text=Waiting for host to start')).toBeVisible()
+    // After ready, status text shows game selection prompt or start instruction
+    await expect(
+      controllerPage.locator('text=Select a game to start')
+        .or(controllerPage.locator('text=Tap START to begin!'))
+    ).toBeVisible()
   })
 
   test('display shows connected players', async ({ displayPage, controllerPage, sessionId, joinSession }) => {
@@ -29,11 +32,11 @@ test.describe('Lobby', () => {
     await joinSession(controllerPage, 'Alice')
 
     // The display lobby should show "Players (1/4)" or similar
-    await expect(displayPage.locator('text=Players')).toBeVisible({ timeout: 10_000 })
+    await expect(displayPage.getByRole('heading', { name: /Players/ })).toBeVisible({ timeout: 10_000 })
   })
 
   test('display shows lobby title', async ({ displayPage }) => {
-    await expect(displayPage.locator('text=Weekend Casino')).toBeVisible()
+    await expect(displayPage.getByAltText('Weekend Casino').or(displayPage.getByRole('heading', { name: 'Weekend Casino' }))).toBeVisible({ timeout: 15_000 })
   })
 
   test('game selection buttons appear on controller', async ({ controllerPage }) => {

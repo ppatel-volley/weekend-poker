@@ -103,7 +103,6 @@ export function createClaudeEngine(options: ClaudeEngineOptions = {}): IBotEngin
   const { client = null, randomFn } = options
   const rulesEngine = createRulesEngine(randomFn)
   const rateLimiter = new RateLimiter()
-  const random = randomFn ?? Math.random
 
   return {
     async decide(context: BotDecisionContext): Promise<BotDecision> {
