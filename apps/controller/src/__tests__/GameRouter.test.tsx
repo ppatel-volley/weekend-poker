@@ -17,6 +17,11 @@ vi.mock('../hooks/useVGFHooks.js', () => ({
   useStateSyncSelector: () => null,
 }))
 
+// Mock private hole cards hook (cards delivered via targeted events, not broadcast state)
+vi.mock('../hooks/usePrivateHoleCards.js', () => ({
+  usePrivateHoleCards: () => undefined,
+}))
+
 // Mock Deepgram SDK (used by useVoice -> VoiceButton in some game layouts)
 vi.mock('@deepgram/sdk', () => ({
   createClient: vi.fn(),

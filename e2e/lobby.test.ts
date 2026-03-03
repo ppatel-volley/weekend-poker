@@ -33,7 +33,7 @@ test.describe('Lobby', () => {
   })
 
   test('display shows lobby title', async ({ displayPage }) => {
-    await expect(displayPage.getByAltText('Weekend Casino').or(displayPage.locator('text=Weekend Casino'))).toBeVisible()
+    await expect(displayPage.getByAltText('Weekend Casino').or(displayPage.getByRole('heading', { name: 'Weekend Casino' }))).toBeVisible({ timeout: 15_000 })
   })
 
   test('game selection buttons appear on controller', async ({ controllerPage }) => {

@@ -13,7 +13,7 @@ import { test, expect } from './fixtures/casino-fixture'
 test.describe('Hold\'em', () => {
   test('display shows lobby with game title', async ({ displayPage }) => {
     // Display should show lobby view with title
-    await expect(displayPage.locator('text=Weekend Casino')).toBeVisible()
+    await expect(displayPage.getByAltText('Weekend Casino').or(displayPage.getByRole('heading', { name: 'Weekend Casino' }))).toBeVisible({ timeout: 15_000 })
     // Should show "Waiting for players..." since nobody is ready
     await expect(displayPage.locator('text=Waiting for players')).toBeVisible()
   })

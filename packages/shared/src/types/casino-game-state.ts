@@ -115,6 +115,7 @@ export interface CasinoGameState {
   sidePots: SidePot[]
   currentBet: number
   minRaiseIncrement: number
+  // SECURITY: Always {} in broadcast state. Cards delivered via targeted private events.
   holeCards: Record<string, [Card, Card]>
   handHistory: unknown[]
   lastAggressor: string | null

@@ -9,6 +9,7 @@ import type { CasinoGameState, Card } from '@weekend-casino/shared'
 import { evaluateTcpHand, dealerQualifies, calculateTcpPayout } from '../tcp-engine/index.js'
 import { createDeck, shuffleDeck } from '../poker-engine/deck.js'
 import { getServerGameState, setServerGameState } from '../server-game-state.js'
+import { validatePlayerIdOrBot } from './security.js'
 
 type ThunkCtx = {
   getState: () => CasinoGameState
@@ -26,8 +27,11 @@ export const tcpThunks = {
    * Place an ante bet with validation.
    * Called by controller when player confirms their ante.
    */
-  tcpPlaceAnteBet: async (ctx: ThunkCtx, playerId: string, amount: number, pairPlusAmount?: number) => {
+  tcpPlaceAnteBet: async (ctx: ThunkCtx, claimedPlayerId: string, amount: number, pairPlusAmount?: number) => {
     const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     const tcp = state.threeCardPoker
     if (!tcp) return
 
@@ -121,8 +125,11 @@ export const tcpThunks = {
   /**
    * Process a player's play/fold decision.
    */
-  tcpMakeDecision: async (ctx: ThunkCtx, playerId: string, decision: 'play' | 'fold') => {
+  tcpMakeDecision: async (ctx: ThunkCtx, claimedPlayerId: string, decision: 'play' | 'fold') => {
     const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     const tcp = state.threeCardPoker
     if (!tcp) return
 

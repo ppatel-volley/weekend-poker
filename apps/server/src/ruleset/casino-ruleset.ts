@@ -115,6 +115,7 @@ import { parseVoiceIntent } from '../voice/parseVoiceIntent.js'
 import { BotManager } from '../bot-engine/index.js'
 import { wrapWithGameNightCheck } from './game-night-utils.js'
 import { validatePlayerIdOrBot, getAuthorizedPlayerId, isCallerHost, validateBetAmount } from './security.js'
+import { registerConnection, unregisterConnection, emitToClient } from './connection-registry.js'
 
 // ── Bot Manager (module-level singleton per server process) ─────
 const botManager = new BotManager()
@@ -246,15 +247,6 @@ const holdemReducers = {
 
   markDealingComplete: ((state: CasinoGameState, complete?: boolean): CasinoGameState => {
     return { ...state, dealingComplete: complete ?? true }
-  }),
-
-  /**
-   * SECURITY: Internal-only reducer for setting hole cards.
-   * Only server-side thunks and phase lifecycle hooks should use this.
-   * Client dispatch of 'setHoleCards' is blocked (see top-level reducer override).
-   */
-  _setHoleCardsInternal: ((state: CasinoGameState, holeCards: Record<string, [Card, Card]>): CasinoGameState => {
-    return { ...state, holeCards }
   }),
 
   resetHandState: ((state: CasinoGameState): CasinoGameState => {
@@ -557,9 +549,9 @@ const holdemThunks = {
   }),
 
   /**
-   * Securely delivers the calling player's own hole cards.
-   * SECURITY: Only returns the caller's own cards from server-side state.
-   * This thunk is called by the controller after the dealing phase begins.
+   * Securely delivers the calling player's own hole cards via targeted emit.
+   * SECURITY: Cards are sent ONLY to the requesting client's connection,
+   * never written to broadcast state. state.holeCards stays {} at all times.
    */
   requestMyHoleCards: (async (ctx: ThunkCtx) => {
     const authorizedId = getAuthorizedPlayerId(ctx)
@@ -570,13 +562,10 @@ const holdemThunks = {
     const myCards = serverState.holeCards.get(authorizedId)
     if (!myCards) return
 
-    // Set only this player's cards in the broadcast state.
-    // Other players' entries are NOT included.
-    // SECURITY: Uses internal reducer — 'setHoleCards' is blocked for clients.
-    const state = ctx.getState()
-    ctx.dispatch('_setHoleCardsInternal', {
-      ...state.holeCards,
-      [authorizedId]: myCards,
+    // Deliver cards via targeted connection emit — NOT broadcast state.
+    emitToClient(sessionId, authorizedId, 'privateHoleCards', {
+      playerId: authorizedId,
+      cards: myCards,
     })
   }),
 
@@ -855,10 +844,10 @@ const dealingHoleCardsPhase = makePhase({
       holeCards,
     })
 
-    // SECURITY: Do NOT broadcast hole cards to all clients.
-    // Cards are stored server-side only (ServerHandState).
-    // Each player retrieves their own cards via requestMyHoleCards thunk.
-    ctx.dispatch('_setHoleCardsInternal', {})
+    // SECURITY: Hole cards are stored ONLY in ServerHandState.
+    // Each player retrieves their own cards via requestMyHoleCards thunk,
+    // which delivers them via targeted connection emit (never broadcast state).
+    // state.holeCards stays {} at all times.
     ctx.dispatch('markDealingComplete', true)
     return ctx.getState()
   },
@@ -1125,12 +1114,16 @@ const phases = {
 
 const onConnect = async (ctx: ConnCtx) => {
   const { clientType } = ctx.connection.metadata
+  const clientId = ctx.getClientId()
+  const sessionId = ctx.getSessionId()
+
+  // Register connection for targeted private messaging (hole card delivery).
+  registerConnection(sessionId, clientId, ctx.connection)
+
   if (clientType !== ClientType.Controller) return
 
   const state = ctx.getState()
   if (state.players.length >= MAX_PLAYERS) return
-
-  const clientId = ctx.getClientId()
 
   if (state.players.some(p => p.id === clientId)) {
     ctx.dispatch('markPlayerReconnected', clientId)
@@ -1172,6 +1165,11 @@ const onConnect = async (ctx: ConnCtx) => {
 
 const onDisconnect = async (ctx: ConnCtx) => {
   const clientId = ctx.getClientId()
+  const sessionId = ctx.getSessionId()
+
+  // Unregister connection from private messaging registry.
+  unregisterConnection(sessionId, clientId)
+
   const state = ctx.getState()
   const player = state.players.find(p => p.id === clientId)
   if (!player) return
@@ -1213,10 +1211,10 @@ export const casinoRuleset = {
     drawAwardPot,
     drawSetCurrentBet,
     drawSetMinRaiseIncrement,
-    // SECURITY: setHoleCards is blocked for client dispatch — always returns empty.
-    // Server-side code uses _setHoleCardsInternal instead.
+    // SECURITY: setHoleCards is a hard no-op. Hole cards are NEVER in broadcast state.
+    // Cards are delivered via targeted connection emits (see requestMyHoleCards thunk).
     setHoleCards: ((state: CasinoGameState, _holeCards: Record<string, [Card, Card]>): CasinoGameState => {
-      console.warn('[SECURITY] Client attempted direct setHoleCards dispatch. Blocked.')
+      console.warn('[SECURITY] setHoleCards dispatch blocked. Cards never go in broadcast state.')
       return { ...state, holeCards: {} }
     }),
     // SECURITY: selectGame and confirmGameSelection are blocked for direct client dispatch.

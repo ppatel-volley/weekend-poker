@@ -10,6 +10,7 @@ import { createInitialCasinoState } from '../ruleset/casino-state.js'
 import { casinoRuleset } from '../ruleset/casino-ruleset.js'
 import { _resetAllServerState as resetPokerServerState, setServerHandState } from '../poker-engine/index.js'
 import { _resetAllServerState as resetCasinoServerState } from '../server-game-state.js'
+import { registerConnection, _resetAllConnections } from '../ruleset/connection-registry.js'
 import {
   getAuthorizedPlayerId,
   validatePlayerIdOrBot,
@@ -98,6 +99,7 @@ function getThunk(name: string) {
 beforeEach(() => {
   resetPokerServerState()
   resetCasinoServerState()
+  _resetAllConnections()
 })
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -105,13 +107,12 @@ beforeEach(() => {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 describe('CRITICAL #1: Hole Card Leakage Prevention', () => {
-  it('should NOT broadcast other players hole cards in state', () => {
-    // Verify that initial state has empty holeCards
+  it('initial state has empty holeCards', () => {
     const state = makeState()
     expect(state.holeCards).toEqual({})
   })
 
-  it('setHoleCards reducer BLOCKS client attempts to inject cards', () => {
+  it('setHoleCards reducer is a hard no-op — always returns holeCards: {}', () => {
     const state = makeState()
     const reducer = casinoRuleset.reducers.setHoleCards as any
     const card1: Card = { rank: 'A', suit: 'spades' }
@@ -120,21 +121,15 @@ describe('CRITICAL #1: Hole Card Leakage Prevention', () => {
     // Client attempts to inject hole cards via direct setHoleCards dispatch
     const newState = reducer(state, { 'attacker': [card1, card2] })
 
-    // SECURITY: setHoleCards always returns empty holeCards, blocking the injection
+    // SECURITY: setHoleCards always returns empty holeCards
     expect(newState.holeCards).toEqual({})
   })
 
-  it('_setHoleCardsInternal reducer sets hole cards (server-only)', () => {
-    const state = makeState()
-    const reducer = (casinoRuleset.reducers as any)._setHoleCardsInternal
-    const card1: Card = { rank: 'A', suit: 'spades' }
-    const card2: Card = { rank: 'K', suit: 'hearts' }
-
-    const newState = reducer(state, { 'p1': [card1, card2] })
-    expect(newState.holeCards).toEqual({ 'p1': [card1, card2] })
+  it('_setHoleCardsInternal reducer does NOT exist (removed)', () => {
+    expect((casinoRuleset.reducers as any)._setHoleCardsInternal).toBeUndefined()
   })
 
-  it('requestMyHoleCards only returns the callers own cards', async () => {
+  it('requestMyHoleCards delivers cards via targeted emit, NOT broadcast state', async () => {
     const p1 = makePlayer({ id: 'p1', seatIndex: 0 })
     const p2 = makePlayer({ id: 'p2', seatIndex: 1 })
     const state = makeState({
@@ -143,7 +138,6 @@ describe('CRITICAL #1: Hole Card Leakage Prevention', () => {
       handNumber: 1,
     })
 
-    // Set up server-side state with both players' cards
     const card1: Card = { rank: 'A', suit: 'spades' }
     const card2: Card = { rank: 'K', suit: 'hearts' }
     const card3: Card = { rank: 'Q', suit: 'diamonds' }
@@ -157,25 +151,49 @@ describe('CRITICAL #1: Hole Card Leakage Prevention', () => {
       ]),
     })
 
+    // Register mock connections for both players
+    const p1Messages: unknown[] = []
+    const p2Messages: unknown[] = []
+    registerConnection('test-session', 'p1', {
+      emit: (_event: string, data: unknown) => { p1Messages.push(data) },
+      isDisposed: false,
+      metadata: {} as any,
+      onDisconnect: () => {},
+      onMessage: () => {},
+      dispose: () => {},
+    } as any)
+    registerConnection('test-session', 'p2', {
+      emit: (_event: string, data: unknown) => { p2Messages.push(data) },
+      isDisposed: false,
+      metadata: {} as any,
+      onDisconnect: () => {},
+      onMessage: () => {},
+      dispose: () => {},
+    } as any)
+
     // Player 1 requests their cards
     const { ctx: ctx1, getState: getState1 } = createMockCtx(state, 'p1', 'test-session')
-    const requestMyHoleCards = getThunk('requestMyHoleCards')
-    await requestMyHoleCards(ctx1)
+    await getThunk('requestMyHoleCards')(ctx1)
 
-    // Player 1 should see their own cards
-    const stateAfterP1 = getState1()
-    expect(stateAfterP1.holeCards['p1']).toEqual([card1, card2])
+    // SECURITY: broadcast state holeCards remains empty
+    expect(getState1().holeCards).toEqual({})
 
-    // Player 2's cards should NOT be in the broadcast state
-    expect(stateAfterP1.holeCards['p2']).toBeUndefined()
+    // Cards were delivered via targeted emit to p1 only
+    expect(p1Messages).toHaveLength(1)
+    expect(p1Messages[0]).toEqual({
+      type: 'privateHoleCards',
+      payload: [{ playerId: 'p1', cards: [card1, card2] }],
+    })
+
+    // p2 did NOT receive p1's cards
+    expect(p2Messages).toHaveLength(0)
   })
 
   it('requestMyHoleCards does nothing if no server state exists', async () => {
     const state = makeState({ handNumber: 1 })
     const { ctx, getState } = createMockCtx(state, 'p1', 'nonexistent-session')
 
-    const requestMyHoleCards = getThunk('requestMyHoleCards')
-    await requestMyHoleCards(ctx)
+    await getThunk('requestMyHoleCards')(ctx)
 
     expect(getState().holeCards).toEqual({})
   })
@@ -189,15 +207,25 @@ describe('CRITICAL #1: Hole Card Leakage Prevention', () => {
       ]),
     })
 
-    const { ctx, getState } = createMockCtx(state, 'p1', 'test-session')
-    const requestMyHoleCards = getThunk('requestMyHoleCards')
-    await requestMyHoleCards(ctx)
+    const emitted: unknown[] = []
+    registerConnection('test-session', 'p1', {
+      emit: (_event: string, data: unknown) => { emitted.push(data) },
+      isDisposed: false,
+      metadata: {} as any,
+      onDisconnect: () => {},
+      onMessage: () => {},
+      dispose: () => {},
+    } as any)
 
-    // Should not have added any cards
+    const { ctx, getState } = createMockCtx(state, 'p1', 'test-session')
+    await getThunk('requestMyHoleCards')(ctx)
+
+    // No cards emitted, broadcast state unchanged
     expect(getState().holeCards).toEqual({})
+    expect(emitted).toHaveLength(0)
   })
 
-  it('broadcast state never contains all players cards simultaneously after deal', async () => {
+  it('broadcast state NEVER contains any player cards after multiple requests', async () => {
     const p1 = makePlayer({ id: 'p1', seatIndex: 0 })
     const p2 = makePlayer({ id: 'p2', seatIndex: 1 })
     const p3 = makePlayer({ id: 'p3', seatIndex: 2 })
@@ -217,23 +245,36 @@ describe('CRITICAL #1: Hole Card Leakage Prevention', () => {
       ]),
     })
 
-    // Each player requests their cards independently
-    const { ctx: ctx1, getState: getState1 } = createMockCtx(state, 'p1', 'test-session')
+    // Register mock connections
+    for (const pid of ['p1', 'p2', 'p3']) {
+      registerConnection('test-session', pid, {
+        emit: () => {},
+        isDisposed: false,
+        metadata: {} as any,
+        onDisconnect: () => {},
+        onMessage: () => {},
+        dispose: () => {},
+      } as any)
+    }
+
+    // All three players request their cards sequentially
+    const { ctx: ctx1, getState } = createMockCtx(state, 'p1', 'test-session')
     await getThunk('requestMyHoleCards')(ctx1)
-    const afterP1 = getState1()
 
-    // After p1 requests: only p1's cards visible
-    expect(Object.keys(afterP1.holeCards)).toEqual(['p1'])
+    // After p1: broadcast state STILL empty
+    expect(getState().holeCards).toEqual({})
 
-    // p2 requests from a state that already has p1's cards (simulates sequential)
-    const { ctx: ctx2, getState: getState2 } = createMockCtx(afterP1, 'p2', 'test-session')
+    const { ctx: ctx2, getState: getState2 } = createMockCtx(getState(), 'p2', 'test-session')
     await getThunk('requestMyHoleCards')(ctx2)
-    const afterP2 = getState2()
 
-    // After p2 requests: p1 and p2's cards visible, but NOT p3
-    expect(afterP2.holeCards['p1']).toBeDefined()
-    expect(afterP2.holeCards['p2']).toBeDefined()
-    expect(afterP2.holeCards['p3']).toBeUndefined()
+    // After p2: broadcast state STILL empty
+    expect(getState2().holeCards).toEqual({})
+
+    const { ctx: ctx3, getState: getState3 } = createMockCtx(getState2(), 'p3', 'test-session')
+    await getThunk('requestMyHoleCards')(ctx3)
+
+    // After all three: broadcast state STILL empty
+    expect(getState3().holeCards).toEqual({})
   })
 })
 

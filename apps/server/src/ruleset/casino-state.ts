@@ -102,6 +102,17 @@ export const casinoRemovePlayer: Reducer<[string]> = (state, playerId) => ({
 })
 
 /**
+ * Set a player's ready state in the game state.
+ * Called alongside VGF's toggleReady() to keep CasinoPlayer.isReady in sync.
+ */
+export const casinoSetPlayerReady: Reducer<[string, boolean]> = (state, playerId, ready) => ({
+  ...state,
+  players: state.players.map(p =>
+    p.id === playerId ? { ...p, isReady: ready } : p,
+  ),
+})
+
+/**
  * Mark a player as disconnected (but keep them in the roster).
  */
 export const casinoMarkPlayerDisconnected: Reducer<[string]> = (state, playerId) => ({
@@ -518,6 +529,7 @@ export const casinoActivateRemoteMode: Thunk = async (ctx) => {
 export const casinoReducers = {
   addPlayer: casinoAddPlayer,
   removePlayer: casinoRemovePlayer,
+  setPlayerReady: casinoSetPlayerReady,
   markPlayerDisconnected: casinoMarkPlayerDisconnected,
   markPlayerReconnected: casinoMarkPlayerReconnected,
   updateWallet: casinoUpdateWallet,

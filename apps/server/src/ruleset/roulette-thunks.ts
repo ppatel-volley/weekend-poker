@@ -16,6 +16,7 @@ import {
   resolveAllBets,
 } from '../roulette-engine/index.js'
 import { getServerGameState, setServerGameState } from '../server-game-state.js'
+import { validatePlayerIdOrBot } from './security.js'
 
 type ThunkCtx = {
   getState: () => CasinoGameState
@@ -48,12 +49,15 @@ export const rouletteThunks = {
    */
   roulettePlaceBet: async (
     ctx: ThunkCtx,
-    playerId: string,
+    claimedPlayerId: string,
     betType: RouletteBetType,
     amount: number,
     numbers?: number[],
   ) => {
     const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     const roulette = state.roulette
     if (!roulette) return
 
@@ -110,8 +114,11 @@ export const rouletteThunks = {
   /**
    * Remove a bet.
    */
-  rouletteRemoveBet: async (ctx: ThunkCtx, playerId: string, betId: string) => {
+  rouletteRemoveBet: async (ctx: ThunkCtx, claimedPlayerId: string, betId: string) => {
     const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     const roulette = state.roulette
     if (!roulette) return
 
@@ -124,8 +131,11 @@ export const rouletteThunks = {
   /**
    * Repeat all bets from the previous round.
    */
-  rouletteRepeatLastBets: async (ctx: ThunkCtx, playerId: string, previousBets: RouletteBet[]) => {
+  rouletteRepeatLastBets: async (ctx: ThunkCtx, claimedPlayerId: string, previousBets: RouletteBet[]) => {
     const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     const roulette = state.roulette
     if (!roulette) return
 
@@ -157,7 +167,11 @@ export const rouletteThunks = {
   /**
    * Clear all bets for a player.
    */
-  rouletteClearBets: async (ctx: ThunkCtx, playerId: string) => {
+  rouletteClearBets: async (ctx: ThunkCtx, claimedPlayerId: string) => {
+    const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     ctx.dispatch('rouletteClearPlayerBets', playerId)
   },
 
@@ -165,7 +179,11 @@ export const rouletteThunks = {
    * Confirm bets for a player.
    * Checks if all players have confirmed to advance phase.
    */
-  rouletteConfirmBets: async (ctx: ThunkCtx, playerId: string) => {
+  rouletteConfirmBets: async (ctx: ThunkCtx, claimedPlayerId: string) => {
+    const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     ctx.dispatch('rouletteConfirmBets', playerId)
 
     const updated = ctx.getState()
@@ -179,7 +197,11 @@ export const rouletteThunks = {
   /**
    * Skip betting (no bet this round).
    */
-  rouletteNoBet: async (ctx: ThunkCtx, playerId: string) => {
+  rouletteNoBet: async (ctx: ThunkCtx, claimedPlayerId: string) => {
+    const state = ctx.getState()
+    const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
+    if (!playerId) return
+
     ctx.dispatch('rouletteClearPlayerBets', playerId)
     ctx.dispatch('rouletteConfirmBets', playerId)
 

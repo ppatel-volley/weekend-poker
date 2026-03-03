@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import type { PlayerAction, PokerGameState, Card } from '@weekend-casino/shared'
+import type { PlayerAction, PokerGameState } from '@weekend-casino/shared'
 import { CasinoPhase, BETTING_PHASES, getPhaseLabel } from '@weekend-casino/shared'
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition.js'
 import { useDispatchThunk, useSessionMember, useStateSync } from '../hooks/useVGFHooks.js'
+import { usePrivateHoleCards } from '../hooks/usePrivateHoleCards.js'
 
 /**
  * Main gameplay controller screen.
@@ -29,8 +30,9 @@ export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
   const bigBlind = state?.blindLevel?.bigBlind ?? 20
   const minRaise = state?.minRaiseIncrement ?? bigBlind
 
-  // SECURITY: Request own hole cards from server-side state.
-  // Cards are no longer broadcast in game state — each player must request their own.
+  // SECURITY: Hole cards are delivered via targeted private events,
+  // never through broadcast state. state.holeCards is always {}.
+  const myCards = usePrivateHoleCards(playerId)
   const requestedHandRef = useRef(0)
   useEffect(() => {
     const handNumber = (state as any)?.handNumber ?? 0
@@ -41,10 +43,6 @@ export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
       }
     }
   }, [phase, state, dispatchThunk])
-
-  const myCards: [Card, Card] | undefined = playerId && state?.holeCards
-    ? state.holeCards[playerId] as [Card, Card] | undefined
-    : undefined
 
   const [raiseAmount, setRaiseAmount] = useState(0)
 

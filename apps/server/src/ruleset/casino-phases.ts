@@ -32,6 +32,12 @@ export const lobbyPhase = {
       ...state,
       lobbyReady: true,
     }),
+    setPlayerReady: (state: CasinoGameState, playerId: string, ready: boolean) => ({
+      ...state,
+      players: state.players.map(p =>
+        p.id === playerId ? { ...p, isReady: ready } : p,
+      ),
+    }),
   },
 
   thunks: {},

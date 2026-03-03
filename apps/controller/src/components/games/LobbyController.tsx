@@ -41,18 +41,24 @@ export function LobbyController() {
   }
 
   const handleReady = () => {
+    if (!member?.sessionMemberId) return // Guard: wait for handshake
     toggleReady()
     if (name.trim()) {
       ;(dispatch as (name: string, ...args: unknown[]) => void)(
-        'updatePlayerName', member?.sessionMemberId, name.trim(),
+        'updatePlayerName', member.sessionMemberId, name.trim(),
       )
     }
+    // Sync CasinoPlayer.isReady with VGF member ready state
+    ;(dispatch as (name: string, ...args: unknown[]) => void)(
+      'setPlayerReady', member.sessionMemberId, true,
+    )
     ;(dispatch as (name: string, ...args: unknown[]) => void)(
       'checkLobbyReady',
     )
   }
 
   const handleSelectGame = (game: CasinoGame) => {
+    if (!member?.sessionMemberId) return // Guard: wait for handshake
     ;(dispatchThunk as (name: string, ...args: unknown[]) => void)(
       'selectGameAsHost', game,
     )

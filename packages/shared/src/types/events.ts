@@ -41,7 +41,6 @@ export type DealerCharacterId = 'vincent' | 'maya' | 'remy' | 'jade'
 export interface ControllerMemberState {
   displayName: string
   avatarId: string
-  holeCards?: [string, string]
 }
 
 /**
