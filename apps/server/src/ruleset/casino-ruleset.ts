@@ -248,7 +248,12 @@ const holdemReducers = {
     return { ...state, dealingComplete: complete ?? true }
   }),
 
-  setHoleCards: ((state: CasinoGameState, holeCards: Record<string, [Card, Card]>): CasinoGameState => {
+  /**
+   * SECURITY: Internal-only reducer for setting hole cards.
+   * Only server-side thunks and phase lifecycle hooks should use this.
+   * Client dispatch of 'setHoleCards' is blocked (see top-level reducer override).
+   */
+  _setHoleCardsInternal: ((state: CasinoGameState, holeCards: Record<string, [Card, Card]>): CasinoGameState => {
     return { ...state, holeCards }
   }),
 
@@ -439,14 +444,20 @@ const holdemThunks = {
     const result = parseVoiceIntent(transcript)
     console.log('[voice]', JSON.stringify(result))
 
-    const actionIntents = ['fold', 'check', 'call', 'bet', 'raise', 'all_in']
-    if (actionIntents.includes(result.intent)) {
-      // Only dispatch if current phase accepts betting/wagering actions
-      const state = ctx.getState()
-      if ((BETTING_PHASES as readonly string[]).includes(state.phase)) {
-        ctx.dispatch('setPlayerLastAction', ctx.getClientId(), result.intent)
-      }
+    const state = ctx.getState()
+    if (!(BETTING_PHASES as readonly string[]).includes(state.phase)) return
+
+    // Hold'em betting actions: route through processPlayerAction for full validation
+    const holdemActions = ['fold', 'check', 'call', 'bet', 'raise', 'all_in']
+    if (holdemActions.includes(result.intent)) {
+      const playerId = ctx.getClientId()
+      const amount = result.entities?.amount !== undefined ? result.entities.amount : undefined
+      await ctx.dispatchThunk('processPlayerAction', playerId, result.intent, amount)
+      return
     }
+
+    // TODO: Non-Hold'em game actions (hit/stand/draw/ante) — route through
+    // their respective processAction thunks once voice support is expanded.
   }),
 
   startHand: (async (ctx: ThunkCtx) => {
@@ -561,8 +572,9 @@ const holdemThunks = {
 
     // Set only this player's cards in the broadcast state.
     // Other players' entries are NOT included.
+    // SECURITY: Uses internal reducer — 'setHoleCards' is blocked for clients.
     const state = ctx.getState()
-    ctx.dispatch('setHoleCards', {
+    ctx.dispatch('_setHoleCardsInternal', {
       ...state.holeCards,
       [authorizedId]: myCards,
     })
@@ -590,7 +602,8 @@ const holdemThunks = {
       console.warn('[SECURITY] Non-host attempted to confirm game selection. Rejecting.')
       return
     }
-    ctx.dispatch('confirmGameSelection')
+    // SECURITY: Use internal reducer — 'confirmGameSelection' is blocked for clients.
+    ctx.dispatch('_confirmGameSelectionInternal')
   }),
 
   // Full sit-out logic (skip in turn order, hold seat) deferred to v2.1
@@ -845,7 +858,7 @@ const dealingHoleCardsPhase = makePhase({
     // SECURITY: Do NOT broadcast hole cards to all clients.
     // Cards are stored server-side only (ServerHandState).
     // Each player retrieves their own cards via requestMyHoleCards thunk.
-    ctx.dispatch('setHoleCards', {})
+    ctx.dispatch('_setHoleCardsInternal', {})
     ctx.dispatch('markDealingComplete', true)
     return ctx.getState()
   },
@@ -1200,8 +1213,28 @@ export const casinoRuleset = {
     drawAwardPot,
     drawSetCurrentBet,
     drawSetMinRaiseIncrement,
-    // Controller dispatch aliases (controller uses short names)
-    selectGame: casinoReducers.setSelectedGame,
+    // SECURITY: setHoleCards is blocked for client dispatch — always returns empty.
+    // Server-side code uses _setHoleCardsInternal instead.
+    setHoleCards: ((state: CasinoGameState, _holeCards: Record<string, [Card, Card]>): CasinoGameState => {
+      console.warn('[SECURITY] Client attempted direct setHoleCards dispatch. Blocked.')
+      return { ...state, holeCards: {} }
+    }),
+    // SECURITY: selectGame and confirmGameSelection are blocked for direct client dispatch.
+    // Use selectGameAsHost and confirmGameSelectAsHost thunks instead.
+    // These no-ops prevent clients from bypassing host authorization.
+    selectGame: ((state: CasinoGameState, _game: unknown): CasinoGameState => {
+      console.warn('[SECURITY] Client attempted direct selectGame dispatch. Use selectGameAsHost thunk.')
+      return state
+    }),
+    confirmGameSelection: ((state: CasinoGameState): CasinoGameState => {
+      console.warn('[SECURITY] Client attempted direct confirmGameSelection dispatch. Use confirmGameSelectAsHost thunk.')
+      return state
+    }),
+    // Internal-only confirmation reducer used by confirmGameSelectAsHost thunk.
+    _confirmGameSelectionInternal: ((state: CasinoGameState): CasinoGameState => ({
+      ...state,
+      gameSelectConfirmed: true,
+    })),
     checkLobbyReady: ((state: CasinoGameState): CasinoGameState => ({
       ...state,
       lobbyReady: true,

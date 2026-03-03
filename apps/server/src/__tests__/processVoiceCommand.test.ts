@@ -6,6 +6,7 @@ import { CasinoPhase } from '@weekend-casino/shared'
 
 function createMockCtx(state: any, clientId = 'player-1') {
   const dispatches: Array<[string, ...unknown[]]> = []
+  const thunkDispatches: Array<[string, ...unknown[]]> = []
   return {
     ctx: {
       getState: () => state,
@@ -13,9 +14,13 @@ function createMockCtx(state: any, clientId = 'player-1') {
       dispatch: (action: string, ...args: unknown[]) => {
         dispatches.push([action, ...args])
       },
+      dispatchThunk: vi.fn(async (name: string, ...args: unknown[]) => {
+        thunkDispatches.push([name, ...args])
+      }),
       getMembers: () => ({}),
     },
     dispatches,
+    thunkDispatches,
   }
 }
 
@@ -42,41 +47,49 @@ describe('processVoiceCommand thunk', () => {
     baseState = createInitialState({ players: [mockPlayer as any], phase: CasinoPhase.PreFlopBetting as any })
   })
 
-  it('should dispatch setPlayerLastAction with fold for "I fold"', async () => {
-    const { ctx, dispatches } = createMockCtx(baseState)
+  it('should route fold through processPlayerAction', async () => {
+    const { ctx, thunkDispatches } = createMockCtx(baseState)
     await processVoiceCommand(ctx as any, 'I fold')
 
-    expect(dispatches).toHaveLength(1)
-    expect(dispatches[0]).toEqual(['setPlayerLastAction', 'player-1', 'fold'])
+    expect(thunkDispatches).toHaveLength(1)
+    expect(thunkDispatches[0]![0]).toBe('processPlayerAction')
+    expect(thunkDispatches[0]![1]).toBe('player-1')
+    expect(thunkDispatches[0]![2]).toBe('fold')
   })
 
-  it('should dispatch setPlayerLastAction with raise for "raise 200"', async () => {
-    const { ctx, dispatches } = createMockCtx(baseState)
+  it('should route raise with amount through processPlayerAction', async () => {
+    const { ctx, thunkDispatches } = createMockCtx(baseState)
     await processVoiceCommand(ctx as any, 'raise 200')
 
-    expect(dispatches).toHaveLength(1)
-    expect(dispatches[0]).toEqual(['setPlayerLastAction', 'player-1', 'raise'])
+    expect(thunkDispatches).toHaveLength(1)
+    expect(thunkDispatches[0]![0]).toBe('processPlayerAction')
+    expect(thunkDispatches[0]![1]).toBe('player-1')
+    expect(thunkDispatches[0]![2]).toBe('raise')
+    expect(thunkDispatches[0]![3]).toBe(200)
   })
 
-  it('should dispatch setPlayerLastAction with check for "check"', async () => {
-    const { ctx, dispatches } = createMockCtx(baseState)
+  it('should route check through processPlayerAction', async () => {
+    const { ctx, thunkDispatches } = createMockCtx(baseState)
     await processVoiceCommand(ctx as any, 'check')
 
-    expect(dispatches).toHaveLength(1)
-    expect(dispatches[0]).toEqual(['setPlayerLastAction', 'player-1', 'check'])
+    expect(thunkDispatches).toHaveLength(1)
+    expect(thunkDispatches[0]![0]).toBe('processPlayerAction')
+    expect(thunkDispatches[0]![2]).toBe('check')
   })
 
   it('should NOT dispatch for gibberish', async () => {
-    const { ctx, dispatches } = createMockCtx(baseState)
+    const { ctx, thunkDispatches, dispatches } = createMockCtx(baseState)
     await processVoiceCommand(ctx as any, 'blah blah nonsense')
 
+    expect(thunkDispatches).toHaveLength(0)
     expect(dispatches).toHaveLength(0)
   })
 
   it('should NOT dispatch for non-action intents like "settings"', async () => {
-    const { ctx, dispatches } = createMockCtx(baseState)
+    const { ctx, thunkDispatches, dispatches } = createMockCtx(baseState)
     await processVoiceCommand(ctx as any, 'settings')
 
+    expect(thunkDispatches).toHaveLength(0)
     expect(dispatches).toHaveLength(0)
   })
 

@@ -63,11 +63,12 @@ pnpm dev:controller
 | State Shape | CasinoGameState, flat state, sub-object, D-002 | 003 |
 | Session Stats | SessionStats, createSessionStats, poker vs casino | 003 |
 | Game Logic | hand evaluator, payout, phase transition, endIf | — |
-| Voice Pipeline | voice, intent, Deepgram, transcript, STT | — |
+| Voice Pipeline | voice, intent, Deepgram, transcript, STT, voice command | 008 |
 | Bot System | bot, Claude, personality, rules engine | — |
 | Wallet | wallet, chips, balance, rebuy, D-005 | — |
 | Type Integration | shared type, required field, CasinoGameState, hook generics, typecheck, build failure | 007 |
 | Multi-Agent Merge | worktree, parallel agent, merge, integration | 007 |
+| Security Fixes | selectGame, host-only, holeCards, processPlayerAction, voice command, security thunk | 008 |
 
 ---
 
@@ -156,7 +157,7 @@ Always create **private/secret** gists by default. Never use `--public` unless t
 
 ## Learnings System
 
-Current count: **3+ documented learnings**
+Current count: **8 documented learnings**
 
 See [`learnings/INDEX.md`](./learnings/INDEX.md) for the complete categorised list.
 

@@ -111,11 +111,27 @@ describe('CRITICAL #1: Hole Card Leakage Prevention', () => {
     expect(state.holeCards).toEqual({})
   })
 
-  it('setHoleCards reducer with empty object keeps holeCards empty', () => {
+  it('setHoleCards reducer BLOCKS client attempts to inject cards', () => {
     const state = makeState()
     const reducer = casinoRuleset.reducers.setHoleCards as any
-    const newState = reducer(state, {})
+    const card1: Card = { rank: 'A', suit: 'spades' }
+    const card2: Card = { rank: 'K', suit: 'hearts' }
+
+    // Client attempts to inject hole cards via direct setHoleCards dispatch
+    const newState = reducer(state, { 'attacker': [card1, card2] })
+
+    // SECURITY: setHoleCards always returns empty holeCards, blocking the injection
     expect(newState.holeCards).toEqual({})
+  })
+
+  it('_setHoleCardsInternal reducer sets hole cards (server-only)', () => {
+    const state = makeState()
+    const reducer = (casinoRuleset.reducers as any)._setHoleCardsInternal
+    const card1: Card = { rank: 'A', suit: 'spades' }
+    const card2: Card = { rank: 'K', suit: 'hearts' }
+
+    const newState = reducer(state, { 'p1': [card1, card2] })
+    expect(newState.holeCards).toEqual({ 'p1': [card1, card2] })
   })
 
   it('requestMyHoleCards only returns the callers own cards', async () => {
@@ -564,5 +580,113 @@ describe('Thunk registration', () => {
 
   it('confirmGameSelectAsHost is registered', () => {
     expect(casinoRuleset.thunks).toHaveProperty('confirmGameSelectAsHost')
+  })
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// NEGATIVE TESTS: Old insecure paths are blocked
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+describe('NEGATIVE: Direct selectGame dispatch is blocked', () => {
+  it('client dispatching selectGame directly does NOT change selectedGame', () => {
+    const state = makeState({ phase: CasinoPhase.GameSelect })
+    const reducer = casinoRuleset.reducers.selectGame as any
+
+    // Client attempts to select a game via direct reducer dispatch
+    const newState = reducer(state, 'holdem')
+
+    // SECURITY: selectGame reducer is a no-op — state unchanged
+    expect(newState.selectedGame).toBeNull()
+  })
+
+  it('client dispatching confirmGameSelection directly does NOT confirm', () => {
+    const state = makeState({
+      phase: CasinoPhase.GameSelect,
+      selectedGame: 'holdem',
+    })
+    const reducer = casinoRuleset.reducers.confirmGameSelection as any
+
+    // Client attempts to confirm game selection via direct dispatch
+    const newState = reducer(state)
+
+    // SECURITY: confirmGameSelection reducer is a no-op — not confirmed
+    expect(newState.gameSelectConfirmed).toBe(false)
+  })
+})
+
+describe('NEGATIVE: Non-host attempting selectGameAsHost is rejected', () => {
+  it('non-host client dispatching selectGameAsHost thunk has no effect', async () => {
+    const host = makePlayer({ id: 'host-id', isHost: true })
+    const nonHost = makePlayer({ id: 'attacker', seatIndex: 1, isHost: false })
+    const state = makeState({
+      players: [host, nonHost],
+      phase: CasinoPhase.GameSelect,
+    })
+
+    // Attacker (non-host) tries to select a game via thunk
+    const { ctx, getState } = createMockCtx(state, 'attacker')
+    await getThunk('selectGameAsHost')(ctx, 'holdem')
+
+    // Game should NOT have been selected
+    expect(getState().selectedGame).toBeNull()
+  })
+})
+
+describe('NEGATIVE: Voice commands route through processPlayerAction', () => {
+  it('voice fold during betting phase dispatches processPlayerAction, not setPlayerLastAction', async () => {
+    const p1 = makePlayer({ id: 'p1', seatIndex: 0 })
+    const p2 = makePlayer({ id: 'p2', seatIndex: 1 })
+    const state = makeState({
+      players: [p1, p2],
+      phase: CasinoPhase.PreFlopBetting,
+      activePlayerIndex: 0,
+      currentBet: 0,
+    })
+
+    const { ctx, dispatched, thunkDispatched } = createMockCtx(state, 'p1')
+    await getThunk('processVoiceCommand')(ctx, 'I fold')
+
+    // Should NOT have dispatched setPlayerLastAction directly
+    const directAction = dispatched.find(d => d.name === 'setPlayerLastAction')
+    expect(directAction).toBeUndefined()
+
+    // Should have routed through processPlayerAction thunk
+    const thunkAction = thunkDispatched.find(d => d.name === 'processPlayerAction')
+    expect(thunkAction).toBeDefined()
+    expect(thunkAction!.args[1]).toBe('fold')
+  })
+
+  it('voice raise with amount passes amount to processPlayerAction', async () => {
+    const p1 = makePlayer({ id: 'p1', seatIndex: 0 })
+    const p2 = makePlayer({ id: 'p2', seatIndex: 1 })
+    const state = makeState({
+      players: [p1, p2],
+      phase: CasinoPhase.PreFlopBetting,
+      activePlayerIndex: 0,
+      currentBet: 20,
+      minRaiseIncrement: 20,
+    })
+
+    const { ctx, thunkDispatched } = createMockCtx(state, 'p1')
+    await getThunk('processVoiceCommand')(ctx, 'raise 200')
+
+    const thunkAction = thunkDispatched.find(d => d.name === 'processPlayerAction')
+    expect(thunkAction).toBeDefined()
+    expect(thunkAction!.args[1]).toBe('raise')
+    expect(thunkAction!.args[2]).toBe(200)
+  })
+
+  it('voice command during non-betting phase does nothing', async () => {
+    const p1 = makePlayer({ id: 'p1', seatIndex: 0 })
+    const state = makeState({
+      players: [p1],
+      phase: CasinoPhase.Lobby,
+    })
+
+    const { ctx, dispatched, thunkDispatched } = createMockCtx(state, 'p1')
+    await getThunk('processVoiceCommand')(ctx, 'I fold')
+
+    expect(dispatched.filter(d => d.name === 'setPlayerLastAction')).toHaveLength(0)
+    expect(thunkDispatched.filter(d => d.name === 'processPlayerAction')).toHaveLength(0)
   })
 })

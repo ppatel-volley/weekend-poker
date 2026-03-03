@@ -48,8 +48,8 @@ export const test = base.extend<CasinoFixtures>({
     await page.goto(DISPLAY_URL)
 
     // Wait for the display to create a session and show the lobby.
-    // The display shows "Weekend Casino" and then a controller URL with sessionId.
-    await expect(page.locator('text=Weekend Casino')).toBeVisible({ timeout: 15_000 })
+    // The display renders an <img alt="Weekend Casino"> logo, not visible text.
+    await expect(page.getByAltText('Weekend Casino')).toBeVisible({ timeout: 15_000 })
 
     // Extract sessionId from the controller link shown on the display lobby.
     const controllerLink = page.locator('a[href*="sessionId"]')
@@ -80,7 +80,7 @@ export const test = base.extend<CasinoFixtures>({
     // Pass the sessionId so the display joins the same session created by
     // the sessionId fixture, instead of auto-creating a new one.
     await page.goto(`${DISPLAY_URL}?sessionId=${sessionId}`)
-    await expect(page.locator('text=Weekend Casino')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByAltText('Weekend Casino')).toBeVisible({ timeout: 15_000 })
 
     await use(page)
     await context.close()

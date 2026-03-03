@@ -18,6 +18,10 @@
 | Vitest vs typecheck/build | 007 |
 | Shared type changes | 003, 007 |
 | Controller-server integration | 006 |
+| Security fixes / closing paths | 008 |
+| Voice pipeline security | 008 |
+| Host-only access control | 008 |
+| Phase config reducer exposure | 006, 008 |
 
 ## Summaries
 
@@ -56,6 +60,11 @@ Controller dispatches actions by string name; VGF looks them up in the ruleset's
 **Category:** Multi-Agent, TypeScript, Build Pipeline
 Vitest strips TypeScript types at transform time and does NOT enforce type correctness. Three parallel agents produced 1,305 passing tests but 80+ TypeScript errors. `pnpm typecheck` and `pnpm build` are MANDATORY verification steps — not optional. After merging multi-agent output, always run all three: typecheck, build, tests.
 
+### 008 — Security fixes must close ALL paths, not just add new ones
+**Severity:** Critical
+**Category:** Security, Multi-Agent, Code Review
+"Additive-only" security fixes — creating a new secure path (thunk with validation) without removing or gating the old insecure path (raw reducer still in phase config, old dispatches still in controllers). Three examples: host-only game selection left old `selectGame` reducer exposed; hole card privacy left `setHoleCards` broadcasting to public state; voice pipeline bypassed `processPlayerAction` validation. For every security fix, map ALL paths to the vulnerability, close every one, and write negative tests proving the old paths are blocked.
+
 ## Cross-Reference
 
 | Topic | Learnings |
@@ -84,3 +93,13 @@ Vitest strips TypeScript types at transform time and does NOT enforce type corre
 | Shared type required fields | 003, 007 |
 | Hook generic migration | 007 |
 | Worktree isolation pitfalls | 007 |
+| Additive-only security fixes | 008 |
+| Close all insecure paths | 008 |
+| Negative security tests | 008 |
+| Host-only access control | 008 |
+| Hole card privacy | 008 |
+| Voice pipeline bypass | 008 |
+| Phase config reducer exposure | 006, 008 |
+| selectGameAsHost | 008 |
+| requestMyHoleCards | 008 |
+| processPlayerAction | 008 |

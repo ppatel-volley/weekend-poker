@@ -5,6 +5,7 @@ import {
   useClientActions,
   useSessionMemberSafe,
   useDispatch,
+  useDispatchThunk,
   useStateSync,
 } from '../../hooks/useVGFHooks.js'
 
@@ -27,6 +28,7 @@ export function LobbyController() {
   const [name, setName] = useState('')
   const { toggleReady, updateState } = useClientActions()
   const dispatch = useDispatch()
+  const dispatchThunk = useDispatchThunk()
   const member = useSessionMemberSafe()
   const state = useStateSync()
   const isReady = member?.isReady ?? false
@@ -51,8 +53,8 @@ export function LobbyController() {
   }
 
   const handleSelectGame = (game: CasinoGame) => {
-    ;(dispatch as (name: string, ...args: unknown[]) => void)(
-      'selectGame', game,
+    ;(dispatchThunk as (name: string, ...args: unknown[]) => void)(
+      'selectGameAsHost', game,
     )
   }
 

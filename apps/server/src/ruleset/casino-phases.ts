@@ -21,11 +21,8 @@ export const lobbyPhase = {
       ...state,
       lobbyReady: ready,
     }),
-    selectGame: (state: CasinoGameState, game: CasinoGame) => ({
-      ...state,
-      selectedGame: game,
-      gameSelectConfirmed: false,
-    }),
+    // SECURITY: selectGame removed — use selectGameAsHost thunk (host-only).
+    // setSelectedGame kept for internal thunk dispatch only.
     setSelectedGame: (state: CasinoGameState, game: CasinoGame) => ({
       ...state,
       selectedGame: game,
@@ -73,18 +70,15 @@ export const lobbyPhase = {
 export const gameSelectPhase = {
   actions: {} as Record<string, never>,
   reducers: {
+    // SECURITY: selectGame and confirmGameSelection removed from phase reducers.
+    // Use selectGameAsHost and confirmGameSelectAsHost thunks (host-only).
+    // setSelectedGame and _confirmGameSelectionInternal are kept for internal thunk dispatch.
     setSelectedGame: (state: CasinoGameState, game: CasinoGame) => ({
       ...state,
       selectedGame: game,
       gameSelectConfirmed: false,
     }),
-    selectGame: (state: CasinoGameState, game: CasinoGame) => ({
-      ...state,
-      selectedGame: game,
-      gameSelectConfirmed: false,
-    }),
-
-    confirmGameSelection: (state: CasinoGameState) => ({
+    _confirmGameSelectionInternal: (state: CasinoGameState) => ({
       ...state,
       gameSelectConfirmed: true,
     }),
