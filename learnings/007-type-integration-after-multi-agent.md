@@ -65,6 +65,22 @@ verification step — it catches cross-agent type conflicts that couldn't be det
 - `as` type casts appearing in new code (often a sign the types don't actually match)
 - Hook/provider generics that haven't been updated after a type migration
 
+## vi.mock Must Stay in Sync with Component Imports (added 2026-03-03)
+
+When a component adds a new import from a mocked module, the test's `vi.mock` factory MUST
+export the new symbol. Vitest throws a clear error:
+
+```
+No "V2_0_GAMES" export is defined on the "@weekend-casino/shared" mock.
+Did you forget to return it from "vi.mock"?
+```
+
+**Example:** `LobbyController.tsx` added `V2_0_GAMES` import → `GameRouter.test.tsx` mock needed
+`V2_0_GAMES: ['roulette', 'three_card_poker']` added to the factory.
+
+**Rule:** After adding an import to any component, grep for `vi.mock` of that module in test files
+and add the new export to every mock factory.
+
 ## Prevention
 
 1. **AGENTS.md updated:** Verification Block now marks typecheck and build as MANDATORY with

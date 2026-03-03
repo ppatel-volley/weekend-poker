@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { CasinoGame } from '@weekend-casino/shared'
-import { CASINO_GAME_LABELS, CASINO_GAME_DESCRIPTIONS, V1_GAMES } from '@weekend-casino/shared'
+import { CASINO_GAME_LABELS, CASINO_GAME_DESCRIPTIONS, V1_GAMES, V2_0_GAMES } from '@weekend-casino/shared'
 import {
   useClientActions,
   useSessionMemberSafe,
@@ -10,11 +10,12 @@ import {
 
 /** Suit icons to decorate game cards. */
 const gameCardSuits: Record<string, string> = {
-  HOLDEM: '♠',
-  FIVE_CARD_DRAW: '♦',
-  BLACKJACK_CLASSIC: '♣',
-  BLACKJACK_COMPETITIVE: '♥',
-  THREE_CARD_POKER: '♠',
+  holdem: '♠',
+  five_card_draw: '♦',
+  blackjack_classic: '♣',
+  blackjack_competitive: '♥',
+  roulette: '♦',
+  three_card_poker: '♠',
 }
 
 /**
@@ -262,7 +263,7 @@ export function LobbyController() {
           marginBottom: '24px',
         }}
       >
-        {V1_GAMES.map((game) => {
+        {[...V1_GAMES, ...V2_0_GAMES].map((game) => {
           const isSelected = selectedGame === game
           const suitChar = gameCardSuits[game] ?? '♠'
           const isRedSuit = suitChar === '♥' || suitChar === '♦'

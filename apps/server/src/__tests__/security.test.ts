@@ -310,13 +310,22 @@ describe('CRITICAL #3: Server-Side Player ID Authorization', () => {
       expect(validatePlayerIdOrBot(ctx, 'p2', state)).toBeNull()
     })
 
-    it('allows bot actions with explicit bot ID', () => {
+    it('rejects bot-claimed IDs from any client dispatch', () => {
+      const bot = makePlayer({ id: 'bot-1', isBot: true, seatIndex: 1 })
+      const state = makeState({ players: [bot] })
+      const { ctx } = createMockCtx(state, 'some-human-client')
+
+      // Clients can NEVER act as bots — bots dispatch reducers directly
+      expect(validatePlayerIdOrBot(ctx, 'bot-1', state)).toBeNull()
+    })
+
+    it('rejects bot-claimed IDs even from server-internal context', () => {
       const bot = makePlayer({ id: 'bot-1', isBot: true, seatIndex: 1 })
       const state = makeState({ players: [bot] })
       const { ctx } = createMockCtx(state, 'server-internal')
 
-      // Server dispatches action for a bot
-      expect(validatePlayerIdOrBot(ctx, 'bot-1', state)).toBe('bot-1')
+      // validatePlayerIdOrBot always rejects bots — they use direct dispatch
+      expect(validatePlayerIdOrBot(ctx, 'bot-1', state)).toBeNull()
     })
 
     it('rejects impersonation of human player', () => {
@@ -347,6 +356,27 @@ describe('CRITICAL #3: Server-Side Player ID Authorization', () => {
       await processPlayerAction(ctx, 'p2', 'fold')
 
       // No fold should have been dispatched
+      const foldDispatches = dispatched.filter(d => d.name === 'foldPlayer')
+      expect(foldDispatches.length).toBe(0)
+    })
+
+    it('rejects client attempting to act as a bot via processPlayerAction', async () => {
+      const p1 = makePlayer({ id: 'attacker', seatIndex: 0 })
+      const bot = makePlayer({ id: 'bot-1', isBot: true, seatIndex: 1, status: 'active' })
+
+      const state = makeState({
+        players: [p1, bot],
+        phase: CasinoPhase.PreFlopBetting,
+        activePlayerIndex: 1, // bot's turn
+        currentBet: 0,
+      })
+
+      // Human client tries to fold the bot
+      const { ctx, dispatched } = createMockCtx(state, 'attacker')
+      const processPlayerAction = getThunk('processPlayerAction')
+      await processPlayerAction(ctx, 'bot-1', 'fold')
+
+      // Bot fold should be rejected — bots use direct dispatch, not client thunks
       const foldDispatches = dispatched.filter(d => d.name === 'foldPlayer')
       expect(foldDispatches.length).toBe(0)
     })
@@ -680,6 +710,7 @@ describe('NEGATIVE: Voice commands route through processPlayerAction', () => {
     const state = makeState({
       players: [p1, p2],
       phase: CasinoPhase.PreFlopBetting,
+      selectedGame: 'holdem',
       activePlayerIndex: 0,
       currentBet: 0,
     })
@@ -703,6 +734,7 @@ describe('NEGATIVE: Voice commands route through processPlayerAction', () => {
     const state = makeState({
       players: [p1, p2],
       phase: CasinoPhase.PreFlopBetting,
+      selectedGame: 'holdem',
       activePlayerIndex: 0,
       currentBet: 20,
       minRaiseIncrement: 20,

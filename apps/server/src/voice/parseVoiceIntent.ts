@@ -127,8 +127,13 @@ export function parseVoiceIntent(transcript: string): ParsedVoiceCommand {
     if (pattern.test(normalised)) {
       const entities: ParsedVoiceCommand['entities'] = {}
 
-      // Extract amount for raise/bet/ante intents
-      if (intent === 'raise' || intent === 'bet' || intent === 'tcp_ante') {
+      // Extract amount for betting intents (poker, BJ, TCP, roulette outside bets)
+      const amountIntents = [
+        'raise', 'bet', 'tcp_ante',
+        'roulette_red', 'roulette_black', 'roulette_odd', 'roulette_even',
+        'roulette_high', 'roulette_low',
+      ]
+      if (amountIntents.includes(intent)) {
         const amount = parseAmount(normalised)
         if (amount !== undefined) {
           entities.amount = amount

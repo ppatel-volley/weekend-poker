@@ -63,6 +63,7 @@ vi.mock('@weekend-casino/shared', () => ({
     blackjack_competitive: 'Beat your friends to 21',
   },
   V1_GAMES: ['holdem', 'five_card_draw', 'blackjack_classic', 'blackjack_competitive'],
+  V2_0_GAMES: ['roulette', 'three_card_poker'],
   getWalletBalance: () => 10000,
   getPhaseLabel: (phase: string) => {
     const labels: Record<string, string> = {

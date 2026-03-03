@@ -43,12 +43,17 @@ export function validatePlayerIdOrBot(
   claimedPlayerId: string,
   state: CasinoGameState,
 ): string | null {
-  // Check if this is a bot action (bots don't have client connections)
+  // SECURITY: Reject bot-claimed IDs from client dispatch.
+  // Bots act via server-side thunks (botDecision) that dispatch reducers directly —
+  // they never go through client-facing validation. If a client claims a bot ID,
+  // it's either spoofing or a code error.
   const player = state.players.find(p => p.id === claimedPlayerId)
   if (player?.isBot) {
-    // Bot actions are dispatched server-side (e.g., from botDecision thunk).
-    // The calling thunk already validated the bot, so allow the claimed ID.
-    return claimedPlayerId
+    const clientId = getAuthorizedPlayerId(ctx)
+    console.warn(
+      `[SECURITY] Client ${clientId} attempted to act as bot ${claimedPlayerId}. Rejecting.`,
+    )
+    return null
   }
 
   // For human players, the client ID IS the player ID

@@ -437,19 +437,127 @@ const holdemThunks = {
     console.log('[voice]', JSON.stringify(result))
 
     const state = ctx.getState()
-    if (!(BETTING_PHASES as readonly string[]).includes(state.phase)) return
+    const playerId = ctx.getClientId()
+    const game = state.selectedGame
+    const phase = state.phase
+    const amount = result.entities?.amount !== undefined ? result.entities.amount : undefined
+    const intent = result.intent
 
-    // Hold'em betting actions: route through processPlayerAction for full validation
-    const holdemActions = ['fold', 'check', 'call', 'bet', 'raise', 'all_in']
-    if (holdemActions.includes(result.intent)) {
-      const playerId = ctx.getClientId()
-      const amount = result.entities?.amount !== undefined ? result.entities.amount : undefined
-      await ctx.dispatchThunk('processPlayerAction', playerId, result.intent, amount)
-      return
+    // ── Hold'em betting ─────────────────────────────────────────
+    if (game === 'holdem' && (BETTING_PHASES as readonly string[]).includes(phase)) {
+      const holdemActions = ['fold', 'check', 'call', 'bet', 'raise', 'all_in']
+      if (holdemActions.includes(intent)) {
+        await ctx.dispatchThunk('processPlayerAction', playerId, intent, amount)
+        return
+      }
     }
 
-    // TODO: Non-Hold'em game actions (hit/stand/draw/ante) — route through
-    // their respective processAction thunks once voice support is expanded.
+    // ── 5-Card Draw betting ─────────────────────────────────────
+    if (game === 'five_card_draw') {
+      const drawBettingPhases = [CasinoPhase.DrawBetting1, CasinoPhase.DrawBetting2] as string[]
+      if (drawBettingPhases.includes(phase)) {
+        const drawActions = ['fold', 'check', 'call', 'bet', 'raise', 'all_in']
+        if (drawActions.includes(intent)) {
+          await ctx.dispatchThunk('drawProcessAction', playerId, intent, amount)
+          return
+        }
+      }
+      if (phase === CasinoPhase.DrawDrawPhase) {
+        if (intent === 'stand_pat') {
+          await ctx.dispatchThunk('drawProcessDiscard', playerId, [])
+          return
+        }
+        // 'discard' and 'draw' — amount represents card count but indices
+        // must come from the controller UI, not voice. Confirm discard with empty.
+        if (intent === 'discard' || intent === 'draw') {
+          await ctx.dispatchThunk('drawProcessDiscard', playerId, [])
+          return
+        }
+      }
+    }
+
+    // ── Blackjack Classic ───────────────────────────────────────
+    if (game === 'blackjack_classic') {
+      if (phase === CasinoPhase.BjPlaceBets && intent === 'bet' && amount !== undefined) {
+        await ctx.dispatchThunk('bjPlaceBet', playerId, amount)
+        return
+      }
+      if (phase === CasinoPhase.BjInsurance && intent === 'bj_insurance') {
+        await ctx.dispatchThunk('bjProcessInsurance', playerId, true)
+        return
+      }
+      if (phase === CasinoPhase.BjPlayerTurns) {
+        if (intent === 'bj_hit') { await ctx.dispatchThunk('bjHit', playerId); return }
+        if (intent === 'bj_stand') { await ctx.dispatchThunk('bjStand', playerId); return }
+        if (intent === 'bj_double') { await ctx.dispatchThunk('bjDoubleDown', playerId); return }
+        if (intent === 'bj_split') { await ctx.dispatchThunk('bjSplit', playerId); return }
+        if (intent === 'bj_surrender') { await ctx.dispatchThunk('bjSurrender', playerId); return }
+      }
+    }
+
+    // ── Blackjack Competitive ───────────────────────────────────
+    if (game === 'blackjack_competitive') {
+      if (phase === CasinoPhase.BjcPlayerTurns) {
+        if (intent === 'bj_hit') { await ctx.dispatchThunk('bjcHit', playerId); return }
+        if (intent === 'bj_stand') { await ctx.dispatchThunk('bjcStand', playerId); return }
+        if (intent === 'bj_double') { await ctx.dispatchThunk('bjcDoubleDown', playerId); return }
+      }
+    }
+
+    // ── Three Card Poker ────────────────────────────────────────
+    if (game === 'three_card_poker') {
+      if (phase === CasinoPhase.TcpPlaceBets && intent === 'tcp_ante') {
+        const tcp = state.threeCardPoker
+        const anteAmount = amount ?? tcp?.config.minAnte ?? 25
+        await ctx.dispatchThunk('tcpPlaceAnteBet', playerId, anteAmount)
+        return
+      }
+      if (phase === CasinoPhase.TcpPlayerDecisions) {
+        if (intent === 'tcp_play') { await ctx.dispatchThunk('tcpMakeDecision', playerId, 'play'); return }
+        if (intent === 'tcp_fold') { await ctx.dispatchThunk('tcpMakeDecision', playerId, 'fold'); return }
+      }
+    }
+
+    // ── Roulette ────────────────────────────────────────────────
+    if (game === 'roulette' && phase === CasinoPhase.RoulettePlaceBets) {
+      const roulette = state.roulette
+      const defaultBet = roulette?.config.minBet ?? 10
+
+      // Outside bets (colour, parity, range)
+      const outsideBetMap: Record<string, string> = {
+        roulette_red: 'red', roulette_black: 'black',
+        roulette_odd: 'odd', roulette_even: 'even',
+        roulette_high: 'high', roulette_low: 'low',
+      }
+      if (outsideBetMap[intent]) {
+        await ctx.dispatchThunk('roulettePlaceBet', playerId, outsideBetMap[intent], amount ?? defaultBet)
+        return
+      }
+
+      // Dozen bets
+      if (intent === 'roulette_dozen' && result.entities?.amount) {
+        const dozenType = `dozen_${result.entities.amount}` as const
+        await ctx.dispatchThunk('roulettePlaceBet', playerId, dozenType, amount ?? defaultBet)
+        return
+      }
+
+      // Straight-up number bet
+      if (intent === 'roulette_straight' && result.entities?.amount !== undefined) {
+        await ctx.dispatchThunk('roulettePlaceBet', playerId, 'straight_up', defaultBet, [result.entities.amount])
+        return
+      }
+
+      // Split bet (two numbers)
+      if (intent === 'roulette_split' && result.entities?.amount !== undefined && result.entities?.splitTarget !== undefined) {
+        await ctx.dispatchThunk('roulettePlaceBet', playerId, 'split', defaultBet, [result.entities.amount, result.entities.splitTarget])
+        return
+      }
+
+      // Meta actions ('confirm' also matches tcp_confirm due to intent priority)
+      if (intent === 'roulette_clear') { await ctx.dispatchThunk('rouletteClearBets', playerId); return }
+      if (intent === 'roulette_confirm' || intent === 'tcp_confirm') { await ctx.dispatchThunk('rouletteConfirmBets', playerId); return }
+      if (intent === 'roulette_no_bet') { await ctx.dispatchThunk('rouletteNoBet', playerId); return }
+    }
   }),
 
   startHand: (async (ctx: ThunkCtx) => {
@@ -545,7 +653,30 @@ const holdemThunks = {
       ctx.dispatch('setDealerMessage', `${bot.name}: ${decision.dialogue}`)
     }
 
-    await ctx.dispatchThunk('processPlayerAction', botId, decision.action, decision.amount)
+    // SECURITY: Bot actions dispatch reducers directly — never go through
+    // client-facing processPlayerAction which would (correctly) reject bot IDs.
+    const action = decision.action
+    switch (action) {
+      case 'fold':
+        ctx.dispatch('foldPlayer', botId)
+        break
+      case 'call':
+        ctx.dispatch('updatePlayerBet', botId, state.currentBet)
+        break
+      case 'bet':
+      case 'raise':
+        if (decision.amount !== undefined) {
+          ctx.dispatch('updatePlayerBet', botId, decision.amount)
+        }
+        break
+      case 'all_in':
+        ctx.dispatch('updatePlayerBet', botId, bot.stack + bot.bet)
+        break
+      // 'check' — no state change needed
+    }
+
+    ctx.dispatch('setPlayerLastAction', botId, action)
+    advanceToNextPlayer(ctx)
   }),
 
   /**

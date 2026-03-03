@@ -13,8 +13,10 @@
 | New game implementation | 004 |
 | Dependencies / pnpm install | 005 |
 | React 19 compatibility | 005 |
-| VGF dispatch / reducers | 006 |
+| VGF dispatch / reducers | 006, 009 |
+| VGF phase internals / cascade | 009 |
 | Multi-agent type integration | 007 |
+| vi.mock factory sync | 007 |
 | Vitest vs typecheck/build | 007 |
 | Shared type changes | 003, 007 |
 | Controller-server integration | 006 |
@@ -111,3 +113,8 @@ Vitest strips TypeScript types at transform time and does NOT enforce type corre
 | Phase transition crash | 009 |
 | VGF endIf limitations | 009 |
 | VGF dev scheduler NoOp | 009 |
+| reducerDispatcher is arrow fn | 009 |
+| Root reducers in all phases | 009 |
+| Phase cascade is recursive | 009 |
+| VGF throws on bad reducer name | 009 |
+| vi.mock sync with imports | 007 |

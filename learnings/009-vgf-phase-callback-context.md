@@ -85,9 +85,64 @@ next: (ctx) => ctx.session.state.selectedGame === 'holdem' ? 'DEALING' : 'OTHER'
 4. Socket.IO "message" handler lost after disconnect — use onAny workaround on all clients.
 5. Sessions must pre-exist — VGF never auto-creates sessions.
 
+## VGF 4.8.0 Internals (confirmed via source analysis 2026-03-03)
+
+Deep dive into `node_modules/@volley/vgf/dist/server.js` confirmed:
+
+### reducerDispatcher is an arrow function — safe to extract via getters
+```javascript
+// StateSyncManager.createReducerDispatcher returns:
+return (reducerName, ...args) => { /* arrow fn — no this binding issue */ }
+```
+The `adaptPhaseCtx` getter pattern is safe:
+```typescript
+get dispatch() { return vgfCtx.reducerDispatcher ?? vgfCtx.dispatch }
+```
+No `this` binding problem because arrow functions capture `this` from enclosing scope.
+
+### Root reducers are available in ALL phases
+```javascript
+const pureReducers = {};
+if (game.reducers) pureReducers.root = game.reducers;     // ALL phases
+for (const [phaseName, phase] of Object.entries(game.phases)) {
+  if (phase.reducers) pureReducers[phaseName] = phase.reducers;  // phase-only
+}
+// processReducerSync checks BOTH:
+const rootPureReducer = this.pureReducers.root?.[reducerType];
+const phasePureReducer = this.pureReducers[phaseName]?.[reducerType];
+```
+Top-level `casinoRuleset.reducers` entries (e.g., `drawResetHand`, `setPlayerLastAction`) are
+available in every phase. Phase `reducers: {}` is fine — the reducer doesn't need to be
+registered in the phase definition.
+
+### Phase cascade is recursive and atomic
+```javascript
+async runPhase(game, phase, session, connection, actionName) {
+  newState = await phase.onBegin(ctx);           // AWAIT — async onBegin is fine
+  if (this.didPhaseEnd(phase, updatedSession)) {
+    return await this.endPhase(...);             // cascades to next phase
+  }
+  return newState;                               // stops here if endIf is false
+}
+```
+- VGF cascades through phases until `endIf` returns false
+- Client receives ONE state broadcast with the final state
+- `reducerDispatcher` mutates `session.state` directly, so `getState()` sees updates immediately
+- Async `onBegin`/`onEnd` work because VGF always `await`s the return value
+
+### If a reducer name is wrong, VGF THROWS (not silent)
+```javascript
+if (!rootPureReducer && !phasePureReducer) {
+  throw new InvalidActionError(`Reducer ${reducerType} is not valid for phase ${phaseName}`);
+}
+```
+Unlike client-side dispatch (which silently times out per learning 006), server-side
+`reducerDispatcher` throws immediately if the reducer name doesn't exist.
+
 ## Prevention
 
 - ALWAYS check the VGF template at `node_modules/@volley/vgf/__template/` for correct patterns
 - Use typed context params instead of `any` — import IOnBeginContext, IOnEndContext, IGameActionContext
 - Add a build-time test that greps for `ctx.dispatch(` in phase files and flags violations
 - Every onBegin/onEnd must have an explicit `return` statement
+- Root-level reducers don't need to be re-registered in phase `reducers` — they're already available

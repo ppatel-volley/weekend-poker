@@ -458,8 +458,8 @@ export const casinoStopCasinoCrawl: Reducer = state => ({
  */
 export const casinoProcessVoiceCommand: Thunk<[string]> = async (ctx, transcript) => {
   console.log('[VOICE] Transcript received:', transcript)
-  // TODO: Implement voice intent parsing for multi-game (Craps, Roulette, etc.)
-  // For now, dispatch a TTS message back
+  // NOTE: This stub is overridden by holdemThunks.processVoiceCommand in casino-ruleset.ts
+  // which has full multi-game voice routing. This fallback only fires if the override is removed.
   ctx.dispatch('enqueueTTS', {
     text: `I heard: "${transcript}". Processing...`,
     priority: 'normal',

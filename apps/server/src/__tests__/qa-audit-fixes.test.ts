@@ -440,6 +440,7 @@ describe('V2 — voice command rejected during non-betting phase', () => {
     const thunkDispatches: Array<[string, ...unknown[]]> = []
     const state = stateWith({
       phase: CasinoPhase.PreFlopBetting,
+      selectedGame: 'holdem',
       players: [makeCasinoPlayer()],
     })
 
