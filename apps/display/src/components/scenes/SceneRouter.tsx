@@ -23,6 +23,9 @@ const ThreeCardPokerScene = React.lazy(() =>
 const RouletteScene = React.lazy(() =>
   import('./RouletteScene.js').then(m => ({ default: m.RouletteScene })),
 )
+const CrapsScene = React.lazy(() =>
+  import('./CrapsScene.js').then(m => ({ default: m.CrapsScene })),
+)
 const GameNightLeaderboardScene = React.lazy(() =>
   import('./GameNightLeaderboardScene.js').then(m => ({ default: m.GameNightLeaderboardScene })),
 )
@@ -38,7 +41,7 @@ const SCENE_MAP: Record<CasinoGame, React.ComponentType> = {
   blackjack_competitive: CompetitiveBlackjackScene,
   roulette: RouletteScene,
   three_card_poker: ThreeCardPokerScene,
-  craps: FiveCardDrawScene,          // reuse placeholder until Craps scene built
+  craps: CrapsScene,
 }
 
 /**

@@ -452,9 +452,36 @@ describe('Game sub-state placeholder types', () => {
     expect(state.dealerQualifies).toBeNull()
   })
 
-  it('CrapsGameState should have index signature', () => {
+  it('CrapsGameState should have required fields', () => {
     const state: CrapsGameState = {
-      [Symbol.toStringTag]: 'CrapsGameState',
+      shooterPlayerId: 'p1',
+      shooterIndex: 0,
+      point: null,
+      puckOn: false,
+      lastRollDie1: 0,
+      lastRollDie2: 0,
+      lastRollTotal: 0,
+      rollHistory: [],
+      bets: [],
+      comeBets: [],
+      players: [],
+      sevenOut: false,
+      pointHit: false,
+      newShooterReady: false,
+      allComeOutBetsPlaced: false,
+      rollComplete: false,
+      comeOutResolutionComplete: false,
+      allPointBetsPlaced: false,
+      pointResolutionComplete: false,
+      roundCompleteReady: false,
+      roundNumber: 0,
+      config: {
+        minBet: 10,
+        maxBet: 500,
+        maxOddsMultiplier: 3,
+        placeBetsWorkOnComeOut: false,
+        simpleMode: true,
+      },
     }
     expect(state).toBeDefined()
   })

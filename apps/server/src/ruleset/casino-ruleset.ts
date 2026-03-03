@@ -60,6 +60,18 @@ import {
   roulettePayoutPhase,
   rouletteRoundCompletePhase,
 } from './roulette-phases.js'
+import { crapsReducers } from './craps-reducers.js'
+import { crapsThunks } from './craps-thunks.js'
+import {
+  crapsNewShooterPhase,
+  crapsComeOutBettingPhase,
+  crapsComeOutRollPhase,
+  crapsComeOutResolutionPhase,
+  crapsPointBettingPhase,
+  crapsPointRollPhase,
+  crapsPointResolutionPhase,
+  crapsRoundCompletePhase,
+} from './craps-phases.js'
 import {
   drawResetHand,
   drawSetHands,
@@ -1243,6 +1255,16 @@ const phases = {
   [CasinoPhase.RoulettePayout]: roulettePayoutPhase,
   [CasinoPhase.RouletteRoundComplete]: rouletteRoundCompletePhase,
 
+  // Craps phases (CRAPS_ prefix per D-003, D-016)
+  [CasinoPhase.CrapsNewShooter]: crapsNewShooterPhase,
+  [CasinoPhase.CrapsComeOutBetting]: crapsComeOutBettingPhase,
+  [CasinoPhase.CrapsComeOutRoll]: crapsComeOutRollPhase,
+  [CasinoPhase.CrapsComeOutResolution]: crapsComeOutResolutionPhase,
+  [CasinoPhase.CrapsPointBetting]: crapsPointBettingPhase,
+  [CasinoPhase.CrapsPointRoll]: crapsPointRollPhase,
+  [CasinoPhase.CrapsPointResolution]: crapsPointResolutionPhase,
+  [CasinoPhase.CrapsRoundComplete]: crapsRoundCompletePhase,
+
   // Game Night phases (GN_ prefix — v2.1, D-014)
   [CasinoPhase.GnSetup]: gnSetupPhase,
   [CasinoPhase.GnLeaderboard]: gnLeaderboardPhase,
@@ -1336,6 +1358,7 @@ export const casinoRuleset = {
     ...bjReducers,
     ...bjcReducers,
     ...rouletteReducers,
+    ...crapsReducers,
     // 5-Card Draw reducers
     drawResetHand,
     drawSetHands,
@@ -1384,6 +1407,7 @@ export const casinoRuleset = {
     ...bjThunks,
     ...bjcThunks,
     ...rouletteThunks,
+    ...crapsThunks,
     // 5-Card Draw thunks
     drawProcessAction,
     drawProcessDiscard,
