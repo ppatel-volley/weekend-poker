@@ -8,6 +8,9 @@ import { BlackjackController } from './games/BlackjackController.js'
 import { CompetitiveBlackjackController } from './games/CompetitiveBlackjackController.js'
 import { ThreeCardPokerController } from './games/ThreeCardPokerController.js'
 import { RouletteController } from './games/RouletteController.js'
+import { GameNightSetupController } from './games/GameNightSetupController.js'
+import { GameNightLeaderboardController } from './games/GameNightLeaderboardController.js'
+import { GameNightChampionController } from './games/GameNightChampionController.js'
 
 /**
  * Derives the active game from the current phase when selectedGame is null.
@@ -44,6 +47,17 @@ export function GameRouter() {
         <p>Connecting to game...</p>
       </div>
     )
+  }
+
+  // Game Night phases — route before lobby check
+  if (phase === CasinoPhase.GnSetup) {
+    return <GameNightSetupController />
+  }
+  if (phase === CasinoPhase.GnLeaderboard) {
+    return <GameNightLeaderboardController />
+  }
+  if (phase === CasinoPhase.GnChampion) {
+    return <GameNightChampionController />
   }
 
   if (phase === CasinoPhase.Lobby || phase === CasinoPhase.GameSelect) {

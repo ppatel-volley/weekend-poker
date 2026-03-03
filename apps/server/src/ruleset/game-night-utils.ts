@@ -36,3 +36,38 @@ export function wrapWithGameNightCheck(innerNext: NextFunction): NextFunction {
     return innerNext(ctx)
   }
 }
+
+/**
+ * Increment Game Night round counter and detect achievements if active.
+ * Called in all 6 hand-complete phase onBegin callbacks.
+ * No-op when gameNight is undefined or inactive (v2.0 safe).
+ *
+ * Supports both raw VGF context (ctx.reducerDispatcher) and
+ * adapted context (ctx.dispatch from adaptPhaseCtx/makePhase).
+ */
+export function incrementGameNightRoundIfActive(ctx: any): void {
+  const state: CasinoGameState = ctx.getState()
+  if (state.gameNight?.active) {
+    const dispatch = ctx.reducerDispatcher ?? ctx.dispatch
+    if (dispatch) {
+      dispatch('gnIncrementRoundsPlayed')
+
+      // Detect and record achievements for the completed round
+      try {
+        // Dynamic import to avoid circular dependencies
+        const { detectAchievements } = require('../game-night-engine/achievements.js')
+        const achievements = detectAchievements(state)
+        for (const ach of achievements) {
+          dispatch('gnRecordAchievement', {
+            playerId: ach.playerId,
+            type: ach.type,
+            gameIndex: state.gameNight!.currentGameIndex,
+            timestamp: Date.now(),
+          })
+        }
+      } catch (_e) {
+        // Achievement detection is non-critical — don't break the game
+      }
+    }
+  }
+}

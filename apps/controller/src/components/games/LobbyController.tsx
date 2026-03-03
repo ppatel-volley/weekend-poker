@@ -333,6 +333,38 @@ export function LobbyController() {
         })}
       </div>
 
+      {/* Game Night mode button */}
+      <button
+        data-testid="game-night-button"
+        onClick={() => {
+          if (!member?.sessionMemberId) return
+          ;(dispatch as (name: string, ...args: unknown[]) => void)(
+            'gnInitGameNight',
+            [...V1_GAMES, ...V2_0_GAMES].slice(0, 3),
+            5,
+            'classic',
+          )
+        }}
+        style={{
+          width: '100%',
+          marginBottom: '16px',
+          padding: '14px',
+          fontSize: '15px',
+          fontWeight: 'bold',
+          borderRadius: '14px',
+          border: '2px solid rgba(212, 175, 55, 0.5)',
+          cursor: 'pointer',
+          background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(139, 105, 20, 0.3) 50%, rgba(212, 175, 55, 0.15) 100%)',
+          color: '#f5d680',
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          fontFamily: 'system-ui, sans-serif',
+          boxShadow: '0 4px 20px rgba(212, 175, 55, 0.2), inset 0 0 20px rgba(212, 175, 55, 0.05)',
+        }}
+      >
+        GAME NIGHT
+      </button>
+
       <p
         style={{
           color: 'rgba(255, 255, 255, 0.25)',

@@ -12,7 +12,7 @@
 
 import type { CasinoGameState } from '@weekend-casino/shared'
 import { CasinoPhase } from '@weekend-casino/shared'
-import { wrapWithGameNightCheck } from './game-night-utils.js'
+import { wrapWithGameNightCheck, incrementGameNightRoundIfActive } from './game-night-utils.js'
 
 /**
  * BJC_PLACE_BETS: Auto-post antes from all players' wallets.
@@ -164,6 +164,7 @@ export const bjcHandCompletePhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
+    incrementGameNightRoundIfActive(ctx)
     await ctx.thunkDispatcher('bjcCompleteRound')
     return ctx.getState()
   },

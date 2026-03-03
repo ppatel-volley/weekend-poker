@@ -18,7 +18,7 @@ import {
 } from '../poker-engine/index.js'
 import { createDeck, shuffleDeck } from '../poker-engine/deck.js'
 import { getServerGameState, setServerGameState } from '../server-game-state.js'
-import { wrapWithGameNightCheck } from './game-night-utils.js'
+import { wrapWithGameNightCheck, incrementGameNightRoundIfActive } from './game-night-utils.js'
 
 // ── Phase helpers ────────────────────────────────────────────────
 
@@ -297,6 +297,7 @@ export const drawHandCompletePhase = makePhase({
         ctx.dispatch('markPlayerBusted', player.id)
       }
     }
+    incrementGameNightRoundIfActive(ctx)
     return ctx.getState()
   },
   endIf: () => true,

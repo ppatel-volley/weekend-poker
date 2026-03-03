@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Suspense } from 'react'
+import React, { useState, useEffect, useMemo, Suspense } from 'react'
 import {
   VGFProvider,
   createSocketIOClientTransport,
@@ -17,6 +17,13 @@ import { usePhase } from './hooks/useVGFHooks.js'
 import { MaybePlatformProvider, InputModeProvider } from './platform/index.js'
 import { getDisplayUserId } from './utils/getDisplayUserId.js'
 import { getDevParams } from './utils/getDevParams.js'
+
+const GameNightLeaderboardScene = React.lazy(() =>
+  import('./components/scenes/GameNightLeaderboardScene.js').then(m => ({ default: m.GameNightLeaderboardScene })),
+)
+const GameNightChampionScene = React.lazy(() =>
+  import('./components/scenes/GameNightChampionScene.js').then(m => ({ default: m.GameNightChampionScene })),
+)
 
 const SERVER_URL =
   (import.meta.env['VITE_SERVER_URL'] as string | undefined) ??
@@ -40,6 +47,24 @@ const CANVAS_GL_CONFIG = {
  */
 function DisplayRouter() {
   const phase = usePhase()
+
+  // Game Night overlay phases — full-screen 2D HTML (no Canvas)
+  if (phase === 'GN_LEADERBOARD') {
+    return (
+      <Suspense fallback={null}>
+        <GameNightLeaderboardScene />
+        <ReactionOverlay />
+      </Suspense>
+    )
+  }
+  if (phase === 'GN_CHAMPION') {
+    return (
+      <Suspense fallback={null}>
+        <GameNightChampionScene />
+        <ReactionOverlay />
+      </Suspense>
+    )
+  }
 
   const isLobby = !phase || phase === 'LOBBY' || phase === 'GAME_SELECT'
 

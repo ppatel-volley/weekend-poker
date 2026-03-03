@@ -543,6 +543,60 @@ export interface CrapsGameState {
   // TBD: Will include shooter, come-out roll, point, bets, etc.
 }
 
+/** Game Night achievement type — MVP set for scoring bonuses. */
+export type GameNightAchievementType =
+  | 'ROYAL_FLUSH'
+  | 'STRAIGHT_FLUSH'
+  | 'FOUR_OF_A_KIND'
+  | 'NATURAL_BLACKJACK'
+  | 'TCP_STRAIGHT_FLUSH'
+  | 'TCP_MINI_ROYAL'
+  | 'STRAIGHT_UP_HIT'
+
+/** A recorded achievement during a Game Night session. */
+export interface GameNightAchievement {
+  playerId: string
+  type: GameNightAchievementType
+  gameIndex: number
+  timestamp: number
+}
+
+/** Visual theme for Game Night. */
+export type GameNightTheme = 'classic' | 'neon' | 'high_roller' | 'tropical'
+
+/** Per-player accumulated scores across all games. */
+export interface GameNightPlayerTotal {
+  playerId: string
+  playerName: string
+  totalScore: number
+  gamesPlayed: number
+  rankPoints: number
+  marginBonus: number
+  achievementBonus: number
+  bestFinish: number
+}
+
+/** Per-player ranking within a single game result. */
+export interface GameNightPlayerRanking {
+  playerId: string
+  playerName: string
+  rank: number
+  chipResult: number
+  rankPoints: number
+  marginBonus: number
+  achievementBonus: number
+  totalGameScore: number
+}
+
+/** Result of a single game within a Game Night session. */
+export interface GameNightGameResult {
+  game: CasinoGame
+  gameIndex: number
+  rankings: GameNightPlayerRanking[]
+  roundsPlayed: number
+  completedAt: number
+}
+
 /** v2.1 Game Night Mode state. Defined in TDD-backend.md Section 13. */
 export interface GameNightGameState {
   [key: string]: unknown
@@ -550,10 +604,34 @@ export interface GameNightGameState {
   active: boolean
   /** Maximum rounds before transitioning to leaderboard. */
   roundLimit: number
-  /** Number of rounds played so far. */
+  /** Number of rounds played so far in the current game. */
   roundsPlayed: number
-  /** Player scores (playerId -> score). */
+  /** Player scores (playerId -> score) — kept for backwards compat. */
   scores: Record<string, number>
+  /** Ordered list of games to play. */
+  gameLineup: CasinoGame[]
+  /** Index into gameLineup of the current game (0-based). */
+  currentGameIndex: number
+  /** Rounds to play per game before showing leaderboard. */
+  roundsPerGame: number
+  /** Detailed per-player score totals. */
+  playerScores: Record<string, GameNightPlayerTotal>
+  /** Results for each completed game. */
+  gameResults: GameNightGameResult[]
+  /** Visual theme. */
+  theme: GameNightTheme
+  /** Winner's playerId (set during GN_CHAMPION). */
+  championId: string | null
+  /** Session start timestamp. */
+  startedAt: number
+  /** Whether leaderboard display is ready to advance. */
+  leaderboardReady: boolean
+  /** Whether champion ceremony is ready to advance. */
+  championReady: boolean
+  /** Achievements recorded during the session. */
+  achievements: GameNightAchievement[]
+  /** Whether GN setup is confirmed and ready to start. */
+  setupConfirmed: boolean
 }
 
 /**

@@ -11,7 +11,7 @@
 
 import type { CasinoGameState } from '@weekend-casino/shared'
 import { CasinoPhase } from '@weekend-casino/shared'
-import { wrapWithGameNightCheck } from './game-night-utils.js'
+import { wrapWithGameNightCheck, incrementGameNightRoundIfActive } from './game-night-utils.js'
 
 type PhaseCtx = {
   getState: () => CasinoGameState
@@ -141,6 +141,7 @@ export const rouletteRoundCompletePhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
+    incrementGameNightRoundIfActive(ctx)
     const adapted = adaptPhaseCtx(ctx)
     await adapted.dispatchThunk('rouletteCompleteRound')
     return adapted.getState()

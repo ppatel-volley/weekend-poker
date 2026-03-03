@@ -113,7 +113,8 @@ import {
 import type { HandRank } from '../poker-engine/index.js'
 import { parseVoiceIntent } from '../voice/parseVoiceIntent.js'
 import { BotManager } from '../bot-engine/index.js'
-import { wrapWithGameNightCheck } from './game-night-utils.js'
+import { wrapWithGameNightCheck, incrementGameNightRoundIfActive } from './game-night-utils.js'
+import { gnSetupPhase, gnLeaderboardPhase, gnChampionPhase } from './gn-phases.js'
 import { validatePlayerIdOrBot, getAuthorizedPlayerId, isCallerHost, validateBetAmount } from './security.js'
 import { registerConnection, unregisterConnection, emitToClient } from './connection-registry.js'
 
@@ -1159,6 +1160,8 @@ const handCompletePhase = makePhase({
         ctx.dispatch('markPlayerBusted', player.id)
       }
     }
+    // Game Night round tracking (no-op when GN inactive)
+    incrementGameNightRoundIfActive(ctx)
     return ctx.getState()
   },
   endIf: () => true,
@@ -1239,6 +1242,11 @@ const phases = {
   [CasinoPhase.RouletteResult]: rouletteResultPhase,
   [CasinoPhase.RoulettePayout]: roulettePayoutPhase,
   [CasinoPhase.RouletteRoundComplete]: rouletteRoundCompletePhase,
+
+  // Game Night phases (GN_ prefix — v2.1, D-014)
+  [CasinoPhase.GnSetup]: gnSetupPhase,
+  [CasinoPhase.GnLeaderboard]: gnLeaderboardPhase,
+  [CasinoPhase.GnChampion]: gnChampionPhase,
 }
 
 // ── Connection handlers ────────────────────────────────────────────

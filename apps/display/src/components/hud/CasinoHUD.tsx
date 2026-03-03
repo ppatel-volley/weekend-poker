@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { CASINO_GAME_LABELS, MAX_PLAYERS } from '@weekend-casino/shared'
-import type { CasinoGame } from '@weekend-casino/shared'
+import type { CasinoGame, GameNightGameState } from '@weekend-casino/shared'
 import { QRCodeSVG } from 'qrcode.react'
 import { useFocusable } from '@noriginmedia/norigin-spatial-navigation'
 import { useCurrentGame, useStateSyncSelector } from '../../hooks/useVGFHooks.js'
@@ -67,6 +67,7 @@ export function CasinoHUD() {
   const wallet = useStateSyncSelector((s) => s.wallet)
   const players = useStateSyncSelector((s) => s.players)
   const dealerMessage = useStateSyncSelector((s) => s.dealerMessage)
+  const gameNight = useStateSyncSelector((s) => s.gameNight) as GameNightGameState | undefined
   const sessionId = useSessionId()
   const { inputMode } = useInputMode()
   const isRemote = inputMode === 'remote'
@@ -106,6 +107,24 @@ export function CasinoHUD() {
           <span style={{ fontSize: '1rem', fontWeight: 600 }}>
             {gameLabel}
           </span>
+          {gameNight?.active && (
+            <span
+              style={{
+                marginLeft: '0.75rem',
+                fontSize: '0.75rem',
+                color: 'rgba(212, 175, 55, 0.9)',
+                fontWeight: 600,
+                letterSpacing: '0.05em',
+              }}
+              data-testid="gn-hud-indicator"
+            >
+              Game {(gameNight.currentGameIndex ?? 0) + 1}/{gameNight.gameLineup?.length ?? 0}
+              {' \u00B7 '}
+              {Object.values(gameNight.playerScores ?? {}).reduce(
+                (max, p) => Math.max(max, (p as any)?.totalScore ?? 0), 0,
+              )} pts
+            </span>
+          )}
         </FocusableHUDItem>
         <span style={{ fontSize: '0.875rem', opacity: 0.8 }}>
           {formatSessionTime(sessionSeconds)}
