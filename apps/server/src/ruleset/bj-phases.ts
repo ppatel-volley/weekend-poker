@@ -14,22 +14,6 @@ import { CasinoPhase } from '@weekend-casino/shared'
 import { rankToNumeric } from '@weekend-casino/shared'
 import { wrapWithGameNightCheck } from './game-night-utils.js'
 
-type PhaseCtx = {
-  getState: () => CasinoGameState
-  getSessionId: () => string
-  dispatch: (name: string, ...args: unknown[]) => void
-  dispatchThunk: (name: string, ...args: unknown[]) => Promise<void>
-}
-
-function adaptPhaseCtx(vgfCtx: any): PhaseCtx {
-  return {
-    get dispatch() { return vgfCtx.reducerDispatcher ?? vgfCtx.dispatch },
-    get dispatchThunk() { return vgfCtx.thunkDispatcher ?? vgfCtx.dispatchThunk },
-    getState: () => vgfCtx.getState?.() ?? vgfCtx.session?.state,
-    getSessionId: () => vgfCtx.getSessionId?.() ?? vgfCtx.session?.sessionId,
-  }
-}
-
 /**
  * BJ_PLACE_BETS: Players place bets (min 10, max 500 per D-006).
  */
@@ -38,19 +22,18 @@ export const bjPlaceBetsPhase = {
   reducers: {},
   thunks: {},
   onBegin: (ctx: any) => {
-    const adapted = adaptPhaseCtx(ctx)
-    const state = adapted.getState()
+    const state: CasinoGameState = ctx.getState()
     const activePlayers = state.players
-      .filter(p => p.status !== 'busted' && p.status !== 'sitting_out')
-      .map(p => p.id)
+      .filter((p: any) => p.status !== 'busted' && p.status !== 'sitting_out')
+      .map((p: any) => p.id)
 
     const roundNumber = (state.blackjack?.roundNumber ?? 0) + 1
-    adapted.dispatch('bjInitRound', activePlayers, roundNumber)
-    adapted.dispatch('setDealerMessage', 'Place your bets!')
-    return adapted.getState()
+    ctx.reducerDispatcher('bjInitRound', activePlayers, roundNumber)
+    ctx.reducerDispatcher('setDealerMessage', 'Place your bets!')
+    return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.blackjack?.allBetsPlaced === true
   },
   next: CasinoPhase.BjDealInitial,
@@ -65,12 +48,11 @@ export const bjDealInitialPhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
-    const adapted = adaptPhaseCtx(ctx)
-    await adapted.dispatchThunk('bjDealInitial')
-    return adapted.getState()
+    await ctx.thunkDispatcher('bjDealInitial')
+    return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.blackjack?.dealComplete === true
   },
   next: CasinoPhase.BjInsurance,
@@ -85,30 +67,29 @@ export const bjInsurancePhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
-    const adapted = adaptPhaseCtx(ctx)
-    const state = adapted.getState()
+    const state: CasinoGameState = ctx.getState()
     const bj = state.blackjack
 
-    if (!bj) return adapted.getState()
+    if (!bj) return ctx.getState()
 
     // Check if dealer's face-up card is an Ace
     const dealerUpCard = bj.dealerHand.cards[0]
     const isAce = dealerUpCard && rankToNumeric(dealerUpCard.rank) === 14
 
     if (!isAce || !bj.config.insuranceEnabled) {
-      await adapted.dispatchThunk('bjSkipInsurance')
+      await ctx.thunkDispatcher('bjSkipInsurance')
     } else {
-      adapted.dispatch('setDealerMessage', 'Insurance?')
+      ctx.reducerDispatcher('setDealerMessage', 'Insurance?')
     }
 
-    return adapted.getState()
+    return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.blackjack?.insuranceComplete === true
   },
   next: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     const bj = state.blackjack
 
     // If dealer has blackjack, skip player turns and go straight to settlement
@@ -117,7 +98,7 @@ export const bjInsurancePhase = {
     }
 
     // If all players have blackjack, skip player turns
-    const allPlayersBj = bj?.playerStates.every(ps => ps.hands[0]?.isBlackjack) ?? false
+    const allPlayersBj = bj?.playerStates.every((ps: any) => ps.hands[0]?.isBlackjack) ?? false
     if (allPlayersBj) {
       return CasinoPhase.BjDealerTurn
     }
@@ -134,12 +115,11 @@ export const bjPlayerTurnsPhase = {
   reducers: {},
   thunks: {},
   onBegin: (ctx: any) => {
-    const adapted = adaptPhaseCtx(ctx)
-    adapted.dispatch('setDealerMessage', 'Your turn!')
-    return adapted.getState()
+    ctx.reducerDispatcher('setDealerMessage', 'Your turn!')
+    return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.blackjack?.playerTurnsComplete === true
   },
   next: CasinoPhase.BjDealerTurn,
@@ -153,12 +133,11 @@ export const bjDealerTurnPhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
-    const adapted = adaptPhaseCtx(ctx)
-    await adapted.dispatchThunk('bjDealerPlay')
-    return adapted.getState()
+    await ctx.thunkDispatcher('bjDealerPlay')
+    return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.blackjack?.dealerTurnComplete === true
   },
   next: CasinoPhase.BjSettlement,
@@ -172,12 +151,11 @@ export const bjSettlementPhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
-    const adapted = adaptPhaseCtx(ctx)
-    await adapted.dispatchThunk('bjSettleBets')
-    return adapted.getState()
+    await ctx.thunkDispatcher('bjSettleBets')
+    return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.blackjack?.settlementComplete === true
   },
   next: CasinoPhase.BjHandComplete,
@@ -191,26 +169,24 @@ export const bjHandCompletePhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
-    const adapted = adaptPhaseCtx(ctx)
-
     // Check for busted players (wallet depleted) — matching Hold'em's pattern
-    const state = adapted.getState()
+    const state: CasinoGameState = ctx.getState()
     for (const player of state.players) {
       const walletBalance = state.wallet[player.id] ?? 0
       if (walletBalance === 0 && player.status !== 'busted') {
-        adapted.dispatch('markPlayerBusted', player.id)
+        ctx.reducerDispatcher('markPlayerBusted', player.id)
       }
     }
 
-    await adapted.dispatchThunk('bjCompleteRound')
-    return adapted.getState()
+    await ctx.thunkDispatcher('bjCompleteRound')
+    return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.blackjack?.roundCompleteReady === true
   },
   next: wrapWithGameNightCheck((ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     if (state.gameChangeRequested) return CasinoPhase.GameSelect
     return CasinoPhase.BjPlaceBets
   }),

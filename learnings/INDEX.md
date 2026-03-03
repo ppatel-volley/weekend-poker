@@ -103,3 +103,11 @@ Vitest strips TypeScript types at transform time and does NOT enforce type corre
 | selectGameAsHost | 008 |
 | requestMyHoleCards | 008 |
 | processPlayerAction | 008 |
+| VGF phase callback context | 009 |
+| ctx.dispatch in onBegin | 009 |
+| reducerDispatcher vs dispatch | 009 |
+| thunkDispatcher vs dispatchThunk | 009 |
+| onBegin must return GameState | 009 |
+| Phase transition crash | 009 |
+| VGF endIf limitations | 009 |
+| VGF dev scheduler NoOp | 009 |

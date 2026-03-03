@@ -106,11 +106,13 @@ describe('wrapWithGameNightCheck', () => {
     expect(wrapped(ctx3)).toBe(CasinoPhase.GnLeaderboard)
   })
 
-  it('should work with ctx that only provides getState (no session)', () => {
+  it('should work with ctx.session.state (VGF IGameActionContext)', () => {
+    // VGF 4.8.0: `next` receives IGameActionContext which always has ctx.session.state.
+    // There is no getState() on this context type — see learnings/009.
     const state = createInitialCasinoState({
       gameNight: { active: true, roundLimit: 2, roundsPlayed: 2, scores: {} },
     })
-    const ctx = { getState: () => state }
+    const ctx = { session: { state } }
     const wrapped = wrapWithGameNightCheck(innerNext)
     expect(wrapped(ctx)).toBe(CasinoPhase.GnLeaderboard)
   })

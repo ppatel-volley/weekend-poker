@@ -46,7 +46,7 @@ function makePhase(overrides: {
 }) {
   const wrappedOnBegin = overrides.onBegin
     ? (ctx: any) => overrides.onBegin!(adaptPhaseCtx(ctx))
-    : (ctx: any) => ctx.session.state
+    : (ctx: any) => ctx.getState()
 
   const wrappedOnEnd = overrides.onEnd
     ? (ctx: any) => overrides.onEnd!(adaptPhaseCtx(ctx))
@@ -208,9 +208,9 @@ export const drawDrawPhasePhase = makePhase({
     // Stand pat (discard 0) is the default — players must confirm
     return ctx.getState()
   },
-  onEnd: (ctx: any) => {
+  onEnd: async (ctx: any) => {
     // Apply card replacements before moving to betting round 2
-    ctx.dispatchThunk('drawExecuteReplace')
+    await ctx.dispatchThunk('drawExecuteReplace')
     return ctx.getState()
   },
   endIf: (ctx: any) => {
@@ -277,9 +277,9 @@ export const drawShowdownPhase = makePhase({
  * DRAW_POT_DISTRIBUTION: Award pot to winner(s).
  */
 export const drawPotDistributionPhase = makePhase({
-  onBegin: (ctx: any) => {
+  onBegin: async (ctx: any) => {
     // Thunk call to evaluate and distribute
-    ctx.dispatchThunk('drawEvaluateAndDistribute')
+    await ctx.dispatchThunk('drawEvaluateAndDistribute')
     return ctx.getState()
   },
   endIf: () => true,

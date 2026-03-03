@@ -5,7 +5,6 @@ import {
   useClientActions,
   useSessionMemberSafe,
   useDispatch,
-  useDispatchThunk,
   useStateSync,
 } from '../../hooks/useVGFHooks.js'
 
@@ -28,7 +27,6 @@ export function LobbyController() {
   const [name, setName] = useState('')
   const { toggleReady, updateState } = useClientActions()
   const dispatch = useDispatch()
-  const dispatchThunk = useDispatchThunk()
   const member = useSessionMemberSafe()
   const state = useStateSync()
   const isReady = member?.isReady ?? false
@@ -59,8 +57,15 @@ export function LobbyController() {
 
   const handleSelectGame = (game: CasinoGame) => {
     if (!member?.sessionMemberId) return // Guard: wait for handshake
-    ;(dispatchThunk as (name: string, ...args: unknown[]) => void)(
-      'selectGameAsHost', game,
+    ;(dispatch as (name: string, ...args: unknown[]) => void)(
+      'setSelectedGame', game,
+    )
+  }
+
+  const handleStartGame = () => {
+    if (!member?.sessionMemberId) return
+    ;(dispatch as (name: string, ...args: unknown[]) => void)(
+      '_confirmGameSelectionInternal',
     )
   }
 
@@ -373,6 +378,31 @@ export function LobbyController() {
         ) : 'READY'}
       </button>
 
+      {/* Start Game button — shown only when ready and a game is selected */}
+      {isReady && selectedGame && (
+        <button
+          style={{
+            width: '100%',
+            marginTop: '12px',
+            padding: '16px',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            borderRadius: '14px',
+            border: '2px solid rgba(212, 175, 55, 0.4)',
+            cursor: 'pointer',
+            background: 'linear-gradient(135deg, #8B6914 0%, #6B4F10 100%)',
+            color: 'white',
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            fontFamily: 'system-ui, sans-serif',
+            boxShadow: '0 4px 20px rgba(212, 175, 55, 0.3)',
+          }}
+          onClick={handleStartGame}
+        >
+          START {CASINO_GAME_LABELS[selectedGame].toUpperCase()}
+        </button>
+      )}
+
       <p
         style={{
           marginTop: '20px',
@@ -382,7 +412,11 @@ export function LobbyController() {
           letterSpacing: '0.03em',
         }}
       >
-        {isReady ? 'Waiting for host to start...' : 'Enter your name and tap READY'}
+        {isReady && selectedGame
+          ? 'Tap START to begin!'
+          : isReady
+            ? 'Select a game to start'
+            : 'Enter your name and tap READY'}
       </p>
     </div>
   )

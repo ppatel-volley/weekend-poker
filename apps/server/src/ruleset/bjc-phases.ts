@@ -14,22 +14,6 @@ import type { CasinoGameState } from '@weekend-casino/shared'
 import { CasinoPhase } from '@weekend-casino/shared'
 import { wrapWithGameNightCheck } from './game-night-utils.js'
 
-type PhaseCtx = {
-  getState: () => CasinoGameState
-  getSessionId: () => string
-  dispatch: (name: string, ...args: unknown[]) => void
-  dispatchThunk: (name: string, ...args: unknown[]) => Promise<void>
-}
-
-function adaptPhaseCtx(vgfCtx: any): PhaseCtx {
-  return {
-    get dispatch() { return vgfCtx.reducerDispatcher ?? vgfCtx.dispatch },
-    get dispatchThunk() { return vgfCtx.thunkDispatcher ?? vgfCtx.dispatchThunk },
-    getState: () => vgfCtx.getState?.() ?? vgfCtx.session?.state,
-    getSessionId: () => vgfCtx.getSessionId?.() ?? vgfCtx.session?.sessionId,
-  }
-}
-
 /**
  * BJC_PLACE_BETS: Auto-post antes from all players' wallets.
  * Ante = blind level's big blind (per PRD 19.4).
@@ -39,24 +23,23 @@ export const bjcPlaceBetsPhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
-    const adapted = adaptPhaseCtx(ctx)
-    const state = adapted.getState()
+    const state: CasinoGameState = ctx.getState()
     const activePlayers = state.players
-      .filter(p => p.status !== 'busted' && p.status !== 'sitting_out')
-      .map(p => p.id)
+      .filter((p: any) => p.status !== 'busted' && p.status !== 'sitting_out')
+      .map((p: any) => p.id)
 
     const roundNumber = (state.blackjackCompetitive?.roundNumber ?? 0) + 1
     const anteAmount = state.blindLevel.bigBlind
 
-    adapted.dispatch('bjcInitRound', activePlayers, roundNumber, anteAmount)
-    adapted.dispatch('setDealerMessage', 'Posting antes...')
+    ctx.reducerDispatcher('bjcInitRound', activePlayers, roundNumber, anteAmount)
+    ctx.reducerDispatcher('setDealerMessage', 'Posting antes...')
 
     // Auto-post antes
-    await adapted.dispatchThunk('bjcPostAntes')
-    return adapted.getState()
+    await ctx.thunkDispatcher('bjcPostAntes')
+    return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.blackjackCompetitive?.allAntesPlaced === true
   },
   next: CasinoPhase.BjcDealInitial,
@@ -70,20 +53,19 @@ export const bjcDealInitialPhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
-    const adapted = adaptPhaseCtx(ctx)
-    await adapted.dispatchThunk('bjcDealInitial')
-    return adapted.getState()
+    await ctx.thunkDispatcher('bjcDealInitial')
+    return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.blackjackCompetitive?.dealComplete === true
   },
   next: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     const bjc = state.blackjackCompetitive
 
     // If all players have natural blackjack, skip to showdown
-    const allBj = bjc?.playerStates.every(ps => ps.hand.isBlackjack) ?? false
+    const allBj = bjc?.playerStates.every((ps: any) => ps.hand.isBlackjack) ?? false
     if (allBj) {
       return CasinoPhase.BjcShowdown
     }
@@ -101,8 +83,7 @@ export const bjcPlayerTurnsPhase = {
   reducers: {},
   thunks: {},
   onBegin: (ctx: any) => {
-    const adapted = adaptPhaseCtx(ctx)
-    const state = adapted.getState()
+    const state: CasinoGameState = ctx.getState()
     const bjc = state.blackjackCompetitive
 
     if (bjc) {
@@ -110,10 +91,10 @@ export const bjcPlayerTurnsPhase = {
       let skipCount = 0
       while (skipCount < bjc.playerStates.length) {
         const currentId = bjc.turnOrder[bjc.currentTurnIndex + skipCount]
-        const ps = bjc.playerStates.find(p => p.playerId === currentId)
+        const ps = bjc.playerStates.find((p: any) => p.playerId === currentId)
         if (ps && ps.hand.isBlackjack) {
-          adapted.dispatch('bjcStandHand', currentId)
-          adapted.dispatch('bjcAdvanceTurn')
+          ctx.reducerDispatcher('bjcStandHand', currentId)
+          ctx.reducerDispatcher('bjcAdvanceTurn')
           skipCount++
         } else {
           break
@@ -121,19 +102,19 @@ export const bjcPlayerTurnsPhase = {
       }
 
       // Check if all turns are done after skipping
-      const updated = adapted.getState()
+      const updated: CasinoGameState = ctx.getState()
       const bjcUpdated = updated.blackjackCompetitive!
       if (bjcUpdated.currentTurnIndex >= bjcUpdated.turnOrder.length) {
-        adapted.dispatch('bjcSetPlayerTurnsComplete', true)
+        ctx.reducerDispatcher('bjcSetPlayerTurnsComplete', true)
       } else {
-        adapted.dispatch('setDealerMessage', 'Your turn!')
+        ctx.reducerDispatcher('setDealerMessage', 'Your turn!')
       }
     }
 
-    return adapted.getState()
+    return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.blackjackCompetitive?.playerTurnsComplete === true
   },
   next: CasinoPhase.BjcShowdown,
@@ -147,12 +128,11 @@ export const bjcShowdownPhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
-    const adapted = adaptPhaseCtx(ctx)
-    await adapted.dispatchThunk('bjcShowdown')
-    return adapted.getState()
+    await ctx.thunkDispatcher('bjcShowdown')
+    return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.blackjackCompetitive?.showdownComplete === true
   },
   next: CasinoPhase.BjcSettlement,
@@ -166,12 +146,11 @@ export const bjcSettlementPhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
-    const adapted = adaptPhaseCtx(ctx)
-    await adapted.dispatchThunk('bjcSettleBets')
-    return adapted.getState()
+    await ctx.thunkDispatcher('bjcSettleBets')
+    return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.blackjackCompetitive?.settlementComplete === true
   },
   next: CasinoPhase.BjcHandComplete,
@@ -185,16 +164,15 @@ export const bjcHandCompletePhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
-    const adapted = adaptPhaseCtx(ctx)
-    await adapted.dispatchThunk('bjcCompleteRound')
-    return adapted.getState()
+    await ctx.thunkDispatcher('bjcCompleteRound')
+    return ctx.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.blackjackCompetitive?.roundCompleteReady === true
   },
   next: wrapWithGameNightCheck((ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     if (state.gameChangeRequested) return CasinoPhase.GameSelect
     return CasinoPhase.BjcPlaceBets
   }),

@@ -26,7 +26,7 @@ type NextFunction = (ctx: any) => string
  */
 export function wrapWithGameNightCheck(innerNext: NextFunction): NextFunction {
   return (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState?.()
+    const state: CasinoGameState = ctx.session.state
     if (
       state.gameNight?.active &&
       state.gameNight.roundsPlayed >= state.gameNight.roundLimit

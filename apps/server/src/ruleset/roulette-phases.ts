@@ -49,7 +49,7 @@ export const roulettePlaceBetsPhase = {
     return adapted.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.roulette?.allBetsPlaced === true
   },
   next: CasinoPhase.RouletteNoMoreBets,
@@ -69,7 +69,7 @@ export const rouletteNoMoreBetsPhase = {
     return adapted.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.roulette?.bettingClosed === true
   },
   next: CasinoPhase.RouletteSpin,
@@ -89,7 +89,7 @@ export const rouletteSpinPhase = {
     return adapted.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.roulette?.spinComplete === true
   },
   next: CasinoPhase.RouletteResult,
@@ -108,7 +108,7 @@ export const rouletteResultPhase = {
     return adapted.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.roulette?.resultAnnounced === true
   },
   next: CasinoPhase.RoulettePayout,
@@ -127,7 +127,7 @@ export const roulettePayoutPhase = {
     return adapted.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.roulette?.payoutComplete === true
   },
   next: CasinoPhase.RouletteRoundComplete,
@@ -146,11 +146,11 @@ export const rouletteRoundCompletePhase = {
     return adapted.getState()
   },
   endIf: (ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     return state.roulette?.roundCompleteReady === true
   },
   next: wrapWithGameNightCheck((ctx: any) => {
-    const state: CasinoGameState = ctx.session?.state ?? ctx.getState()
+    const state: CasinoGameState = ctx.session.state
     if (state.gameChangeRequested) return CasinoPhase.GameSelect
     return CasinoPhase.RoulettePlaceBets
   }),
