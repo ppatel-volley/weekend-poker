@@ -12,6 +12,7 @@
 
 import type { CasinoGameState } from '@weekend-casino/shared'
 import { CasinoPhase } from '@weekend-casino/shared'
+import { detectAchievements } from '../game-night-engine/achievements.js'
 
 type NextFunction = (ctx: any) => string
 
@@ -53,20 +54,14 @@ export function incrementGameNightRoundIfActive(ctx: any): void {
       dispatch('gnIncrementRoundsPlayed')
 
       // Detect and record achievements for the completed round
-      try {
-        // Dynamic import to avoid circular dependencies
-        const { detectAchievements } = require('../game-night-engine/achievements.js')
-        const achievements = detectAchievements(state)
-        for (const ach of achievements) {
-          dispatch('gnRecordAchievement', {
-            playerId: ach.playerId,
-            type: ach.type,
-            gameIndex: state.gameNight!.currentGameIndex,
-            timestamp: Date.now(),
-          })
-        }
-      } catch (_e) {
-        // Achievement detection is non-critical — don't break the game
+      const achievements = detectAchievements(state)
+      for (const ach of achievements) {
+        dispatch('gnRecordAchievement', {
+          playerId: ach.playerId,
+          type: ach.type,
+          gameIndex: state.gameNight!.currentGameIndex,
+          timestamp: Date.now(),
+        })
       }
     }
   }

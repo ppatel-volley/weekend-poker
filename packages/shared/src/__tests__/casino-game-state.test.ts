@@ -504,6 +504,7 @@ describe('Game sub-state placeholder types', () => {
       championReady: false,
       achievements: [],
       setupConfirmed: false,
+      walletSnapshot: {},
     }
     expect(state).toBeDefined()
     expect(state.active).toBe(false)

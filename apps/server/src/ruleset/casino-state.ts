@@ -495,6 +495,7 @@ export const gnInitGameNight: Reducer<[CasinoGame[], number, GameNightTheme]> = 
       championReady: false,
       achievements: [],
       setupConfirmed: false,
+      walletSnapshot: { ...state.wallet },
     },
   }
 }
@@ -587,6 +588,7 @@ export const gnAdvanceGame: Reducer = state => {
       currentGameIndex: state.gameNight.currentGameIndex + 1,
       roundsPlayed: 0,
       leaderboardReady: false,
+      walletSnapshot: { ...state.wallet },
     },
   }
 }
@@ -772,17 +774,11 @@ export const gnCalculateScoresThunk: Thunk = async (ctx) => {
 
   const { rankPlayersByChipResult, calculateGameScores } = await import('../game-night-engine/scoring.js')
 
-  // Wallet snapshot: use the wallet at start of game vs now
-  // For MVP, use the current wallet directly — the wallet before game start
-  // can be computed from the previous game result or initial values
-  const walletBefore: Record<string, number> = {}
+  // Use wallet snapshot taken at game start vs current wallet
+  const walletBefore = gn.walletSnapshot ?? {}
   const walletAfter: Record<string, number> = {}
   for (const player of state.players) {
-    // Approximate: use playerScores.totalScore as baseline, or starting wallet
-    const prevTotal = gn.playerScores[player.id]?.totalScore ?? 0
-    walletBefore[player.id] = 10_000 // Standard starting balance per game
     walletAfter[player.id] = state.wallet[player.id] ?? 0
-    void prevTotal // tracking info only
   }
 
   const players = state.players.map(p => ({ id: p.id, name: p.name }))

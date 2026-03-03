@@ -61,34 +61,10 @@ export function detectAchievements(state: CasinoGameState): DetectedAchievement[
 function detectPokerAchievements(state: CasinoGameState): DetectedAchievement[] {
   const achievements: DetectedAchievement[] = []
 
-  // Check handHistory for hand ranks — the last entry may contain winner info
-  // For MVP, we check the communityCards + holeCards for Hold'em patterns
-  // Since holeCards are wiped from broadcast state for security, we check
-  // the sessionStats or handHistory for recorded hand ranks
-
-  // Hold'em specific: check if any player's last hand was exceptional
-  // The hand evaluator stores results, but we don't have direct access
-  // in the broadcast state. For MVP, we'll detect based on communityCards
-  // having the right pattern (conservative — only detects community-based hands)
-
-  // Check community cards for four-of-a-kind potential
-  const communityCards = state.communityCards ?? []
-  if (communityCards.length >= 5) {
-    const rankCounts: Record<string, number> = {}
-    for (const card of communityCards) {
-      rankCounts[card.rank] = (rankCounts[card.rank] ?? 0) + 1
-    }
-    // If community has 4 of a kind, award to all active players
-    for (const [, count] of Object.entries(rankCounts)) {
-      if (count >= 4) {
-        for (const player of state.players) {
-          if (player.status === 'active') {
-            achievements.push({ playerId: player.id, type: 'FOUR_OF_A_KIND' })
-          }
-        }
-      }
-    }
-  }
+  // Hold'em: hole cards are wiped from broadcast state for security (D-010),
+  // so we cannot reliably detect hand-based achievements from state alone.
+  // Hold'em achievements would require the hand evaluator to record results
+  // in sessionStats — deferred to a future pass.
 
   // 5-Card Draw: check hands for special combinations
   if (state.fiveCardDraw?.hands) {

@@ -108,7 +108,7 @@ export function calculateGameScores(
 
 /**
  * Determine the champion (highest totalScore across all games).
- * Tiebreaker: most 1st-place finishes, then alphabetical by playerId.
+ * Tiebreaker: best finish (lowest rank number), then alphabetical by playerId.
  */
 export function determineChampion(
   playerScores: Record<string, GameNightPlayerTotal>,

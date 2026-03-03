@@ -758,6 +758,8 @@ export interface GameNightGameState {
   achievements: GameNightAchievement[]
   /** Whether GN setup is confirmed and ready to start. */
   setupConfirmed: boolean
+  /** Wallet snapshot taken at start of each game (playerId → balance). */
+  walletSnapshot: Record<string, number>
 }
 
 /**

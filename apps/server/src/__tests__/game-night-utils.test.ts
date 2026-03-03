@@ -19,6 +19,7 @@ function makeGN(overrides: Partial<GameNightGameState> & Pick<GameNightGameState
     championReady: false,
     achievements: [],
     setupConfirmed: false,
+    walletSnapshot: {},
     ...overrides,
   }
 }

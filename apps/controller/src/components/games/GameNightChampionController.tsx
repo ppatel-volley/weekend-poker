@@ -1,4 +1,4 @@
-import { useStateSync } from '../../hooks/useVGFHooks.js'
+import { useStateSync, useDispatch } from '../../hooks/useVGFHooks.js'
 
 interface PlayerScore {
   playerId: string
@@ -13,6 +13,7 @@ interface PlayerScore {
  */
 export function GameNightChampionController() {
   const state = useStateSync()
+  const dispatch = useDispatch()
   const gn = state?.gameNight as {
     championId?: string | null
     playerScores?: Record<string, PlayerScore>
@@ -167,6 +168,9 @@ export function GameNightChampionController() {
 
         <button
           data-testid="gn-return-lobby"
+          onClick={() => {
+            ;(dispatch as (name: string, ...args: unknown[]) => void)('gnSetChampionReady')
+          }}
           style={{
             width: '100%',
             padding: '16px',
