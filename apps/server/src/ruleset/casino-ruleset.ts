@@ -114,6 +114,7 @@ import type { HandRank } from '../poker-engine/index.js'
 import { parseVoiceIntent } from '../voice/parseVoiceIntent.js'
 import { BotManager } from '../bot-engine/index.js'
 import { wrapWithGameNightCheck } from './game-night-utils.js'
+import { validatePlayerIdOrBot, getAuthorizedPlayerId, isCallerHost, validateBetAmount } from './security.js'
 
 // ── Bot Manager (module-level singleton per server process) ─────
 const botManager = new BotManager()
@@ -377,8 +378,13 @@ const holdemReducers = {
 // ── Hold'em-specific thunks ────────────────────────────────────────
 
 const holdemThunks = {
-  processPlayerAction: (async (ctx: ThunkCtx, playerId: string, action: string, amount?: number) => {
+  processPlayerAction: (async (ctx: ThunkCtx, claimedPlayerId: string, action: string, amount?: number) => {
     const state = ctx.getState()
+
+    // SECURITY: Validate player identity — client-supplied playerId is untrusted
+    const playerId = validatePlayerIdOrBot(ctx, claimedPlayerId, state)
+    if (!playerId) return
+
     const player = state.players.find(p => p.id === playerId)
     if (!player) return
 
@@ -386,6 +392,22 @@ const holdemThunks = {
 
     const legalActions = getLegalActions(asPokerState(state), playerId)
     if (!legalActions.includes(action as PlayerAction)) return
+
+    // SECURITY: Validate bet/raise amounts (High #4)
+    if ((action === 'bet' || action === 'raise') && amount !== undefined) {
+      const error = validateBetAmount(
+        amount,
+        player.stack,
+        player.bet,
+        state.currentBet,
+        state.minRaiseIncrement,
+        action,
+      )
+      if (error) {
+        ctx.dispatch('setBetError', playerId, error, Date.now() + 3000)
+        return
+      }
+    }
 
     switch (action) {
       case 'fold':
@@ -480,8 +502,9 @@ const holdemThunks = {
       botManager.addBot(bot.seatIndex, difficulty, personalityId)
     }
 
-    const botHoleCards = state.holeCards[botId]
-    const holeCards: Card[] = botHoleCards ? [...botHoleCards] : []
+    // Read hole cards from server-side state (not broadcast state)
+    const serverHoleCards = getServerHandState(ctx.getSessionId())?.holeCards.get(botId)
+    const holeCards: Card[] = serverHoleCards ? [...serverHoleCards] : []
 
     const BOT_TIMEOUT_MS = 10_000
     const timeoutPromise = new Promise<never>((_, reject) =>
@@ -520,6 +543,54 @@ const holdemThunks = {
     }
 
     await ctx.dispatchThunk('processPlayerAction', botId, decision.action, decision.amount)
+  }),
+
+  /**
+   * Securely delivers the calling player's own hole cards.
+   * SECURITY: Only returns the caller's own cards from server-side state.
+   * This thunk is called by the controller after the dealing phase begins.
+   */
+  requestMyHoleCards: (async (ctx: ThunkCtx) => {
+    const authorizedId = getAuthorizedPlayerId(ctx)
+    const sessionId = ctx.getSessionId()
+    const serverState = getServerHandState(sessionId)
+    if (!serverState) return
+
+    const myCards = serverState.holeCards.get(authorizedId)
+    if (!myCards) return
+
+    // Set only this player's cards in the broadcast state.
+    // Other players' entries are NOT included.
+    const state = ctx.getState()
+    ctx.dispatch('setHoleCards', {
+      ...state.holeCards,
+      [authorizedId]: myCards,
+    })
+  }),
+
+  /**
+   * Host-only game selection (High #5).
+   * Moves selectGame from a plain reducer to a thunk with host authorization.
+   */
+  selectGameAsHost: (async (ctx: ThunkCtx, game: string) => {
+    const state = ctx.getState()
+    if (!isCallerHost(ctx, state)) {
+      console.warn('[SECURITY] Non-host attempted to select game. Rejecting.')
+      return
+    }
+    ctx.dispatch('setSelectedGame', game)
+  }),
+
+  /**
+   * Host-only game selection confirmation (High #5).
+   */
+  confirmGameSelectAsHost: (async (ctx: ThunkCtx) => {
+    const state = ctx.getState()
+    if (!isCallerHost(ctx, state)) {
+      console.warn('[SECURITY] Non-host attempted to confirm game selection. Rejecting.')
+      return
+    }
+    ctx.dispatch('confirmGameSelection')
   }),
 
   // Full sit-out logic (skip in turn order, hold seat) deferred to v2.1
@@ -771,11 +842,10 @@ const dealingHoleCardsPhase = makePhase({
       holeCards,
     })
 
-    const holeCardsRecord: Record<string, [Card, Card]> = {}
-    for (const [playerId, cards] of holeCards) {
-      holeCardsRecord[playerId] = cards
-    }
-    ctx.dispatch('setHoleCards', holeCardsRecord)
+    // SECURITY: Do NOT broadcast hole cards to all clients.
+    // Cards are stored server-side only (ServerHandState).
+    // Each player retrieves their own cards via requestMyHoleCards thunk.
+    ctx.dispatch('setHoleCards', {})
     ctx.dispatch('markDealingComplete', true)
     return ctx.getState()
   },

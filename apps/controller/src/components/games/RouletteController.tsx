@@ -13,7 +13,7 @@
  */
 
 import { useState } from 'react'
-import { usePhase, useStateSync, useDispatchThunk } from '../../hooks/useVGFHooks.js'
+import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
 import type { RouletteGameState, RouletteBetType } from '@weekend-casino/shared'
 
 const CHIP_VALUES = [5, 10, 25, 50, 100]
@@ -241,9 +241,9 @@ export function RouletteController() {
   const [activeTab, setActiveTab] = useState<'quick' | 'numbers'>('quick')
   const [chipValue, setChipValue] = useState(5)
 
+  const member = useSessionMember()
   const roulette = state?.roulette
-  const players = state?.players ?? []
-  const playerId = players[0]?.id ?? ''
+  const playerId = member?.sessionMemberId ?? ''
   const walletBalance = state?.wallet?.[playerId] ?? 0
   const phaseStr = phase ?? ''
 

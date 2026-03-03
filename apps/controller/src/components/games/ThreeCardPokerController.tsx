@@ -9,7 +9,7 @@
  */
 
 import { useState } from 'react'
-import { usePhase, useStateSync, useDispatchThunk } from '../../hooks/useVGFHooks.js'
+import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
 import type { ThreeCardPokerGameState, Card } from '@weekend-casino/shared'
 
 const ANTE_AMOUNTS = [10, 25, 50, 100, 250, 500]
@@ -315,10 +315,9 @@ export function ThreeCardPokerController() {
   const state = useStateSync()
   const dispatchThunk = useDispatchThunk()
 
+  const member = useSessionMember()
   const tcp = state?.threeCardPoker
-  // Use first player as placeholder until we have proper client ID
-  const players = state?.players ?? []
-  const playerId = players[0]?.id ?? ''
+  const playerId = member?.sessionMemberId ?? ''
   const walletBalance = state?.wallet?.[playerId] ?? 0
 
   const phaseStr = phase ?? ''

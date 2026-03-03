@@ -24,7 +24,18 @@ type ThunkCtx = {
   getClientId: () => string
   dispatch: (name: string, ...args: unknown[]) => void
   dispatchThunk: (name: string, ...args: unknown[]) => Promise<void>
-  scheduler?: any
+  scheduler: {
+    upsertTimeout(opts: {
+      name: string
+      delayMs?: number
+      dueAt?: number
+      dispatch: { kind: 'reducer' | 'thunk'; name: string; args?: unknown[] }
+      mode?: 'hold' | 'catch-up'
+      paused?: boolean
+    }): Promise<void>
+    cancel(name: string): Promise<void>
+    [key: string]: any
+  }
   logger?: any
 }
 
@@ -215,6 +226,24 @@ export const rouletteThunks = {
     }
 
     ctx.dispatch('setDealerMessage', 'The wheel spins!')
+
+    // Schedule fallback: if the Display never reports spin completion,
+    // force-complete after 8 seconds to prevent deadlock.
+    // Production uses VGF's Redis-backed scheduler; dev uses setTimeout fallback.
+    const SPIN_TIMEOUT_MS = 8_000
+    try {
+      await ctx.scheduler.upsertTimeout({
+        name: 'roulette-force-complete-spin',
+        delayMs: SPIN_TIMEOUT_MS,
+        dispatch: { kind: 'thunk', name: 'rouletteForceCompleteSpin' },
+      })
+    } catch {
+      // Dev-mode no-op scheduler — fall back to plain setTimeout.
+      // Production MUST use a real scheduler (Redis-backed) for persistence.
+      setTimeout(() => {
+        ctx.dispatchThunk('rouletteForceCompleteSpin').catch(() => {})
+      }, SPIN_TIMEOUT_MS)
+    }
   },
 
   /**
@@ -226,6 +255,13 @@ export const rouletteThunks = {
     if (state.phase !== 'ROULETTE_SPIN') return
     ctx.dispatch('rouletteSetSpinComplete', true)
     ctx.dispatch('rouletteSetSpinState', 'stopped')
+
+    // Cancel the fallback timer since the client reported completion
+    try {
+      await ctx.scheduler.cancel('roulette-force-complete-spin')
+    } catch {
+      // Scheduler may not have the timer (dev no-op scheduler); safe to ignore
+    }
   },
 
   /**

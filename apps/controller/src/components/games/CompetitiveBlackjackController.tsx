@@ -11,7 +11,7 @@
  * Opponent hand values visible after they stand.
  */
 
-import { usePhase, useStateSync, useDispatchThunk } from '../../hooks/useVGFHooks.js'
+import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
 import type { CasinoGameState, BlackjackCompetitiveGameState, BjcPlayerState, Card } from '@weekend-casino/shared'
 
 /** Card display component. */
@@ -335,9 +335,10 @@ export function CompetitiveBlackjackController() {
   const state = useStateSync()
   const dispatchThunk = useDispatchThunk()
 
+  const member = useSessionMember()
   const bjc = state?.blackjackCompetitive
   const players = state?.players ?? []
-  const playerId = players[0]?.id ?? ''
+  const playerId = member?.sessionMemberId ?? ''
 
   const phaseStr = phase ?? ''
 

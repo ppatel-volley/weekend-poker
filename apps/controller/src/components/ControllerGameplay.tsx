@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { PlayerAction, PokerGameState, Card } from '@weekend-casino/shared'
 import { CasinoPhase, BETTING_PHASES, getPhaseLabel } from '@weekend-casino/shared'
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition.js'
@@ -28,6 +28,19 @@ export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
   const callAmount = currentBet - myBet
   const bigBlind = state?.blindLevel?.bigBlind ?? 20
   const minRaise = state?.minRaiseIncrement ?? bigBlind
+
+  // SECURITY: Request own hole cards from server-side state.
+  // Cards are no longer broadcast in game state — each player must request their own.
+  const requestedHandRef = useRef(0)
+  useEffect(() => {
+    const handNumber = (state as any)?.handNumber ?? 0
+    if (phase === CasinoPhase.DealingHoleCards || phase === CasinoPhase.PreFlopBetting) {
+      if (handNumber > 0 && requestedHandRef.current !== handNumber) {
+        requestedHandRef.current = handNumber
+        dispatchThunk('requestMyHoleCards')
+      }
+    }
+  }, [phase, state, dispatchThunk])
 
   const myCards: [Card, Card] | undefined = playerId && state?.holeCards
     ? state.holeCards[playerId] as [Card, Card] | undefined

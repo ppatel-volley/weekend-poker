@@ -11,6 +11,7 @@ import { SceneRouter } from './components/scenes/index.js'
 import { LobbyScene } from './components/scenes/LobbyScene.js'
 import { CasinoHUD } from './components/hud/CasinoHUD.js'
 import { LobbyView } from './components/LobbyView.js'
+import { ReactionOverlay } from './components/ReactionOverlay.js'
 import { SessionIdContext } from './hooks/useSessionId.js'
 import { usePhase } from './hooks/useVGFHooks.js'
 import { MaybePlatformProvider, InputModeProvider } from './platform/index.js'
@@ -58,6 +59,7 @@ function DisplayRouter() {
         </Canvas>
         {/* 2D overlay on top of the 3D lobby scene */}
         <LobbyView />
+        <ReactionOverlay />
       </>
     )
   }
@@ -76,6 +78,7 @@ function DisplayRouter() {
         </Suspense>
       </Canvas>
       <CasinoHUD />
+      <ReactionOverlay />
     </>
   )
 }

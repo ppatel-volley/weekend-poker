@@ -10,7 +10,7 @@
  */
 
 import { useState } from 'react'
-import { usePhase, useStateSync, useDispatchThunk } from '../../hooks/useVGFHooks.js'
+import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
 import type { BlackjackGameState, Card } from '@weekend-casino/shared'
 
 const BET_AMOUNTS = [10, 25, 50, 100, 250, 500]
@@ -407,9 +407,9 @@ export function BlackjackController() {
   const state = useStateSync()
   const dispatchThunk = useDispatchThunk()
 
+  const member = useSessionMember()
   const bj = state?.blackjack
-  const players = state?.players ?? []
-  const playerId = players[0]?.id ?? ''
+  const playerId = member?.sessionMemberId ?? ''
   const walletBalance = state?.wallet?.[playerId] ?? 0
 
   const phaseStr = phase ?? ''
