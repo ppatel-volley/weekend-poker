@@ -197,3 +197,34 @@ export type {
   ServerToClientEvents,
   ControllerActions,
 } from './events.js'
+
+// ────────────────────────────────────────────────────────────────────
+// v2.2 Retention Types
+// ────────────────────────────────────────────────────────────────────
+
+export type {
+  IdentitySource,
+  PlayerIdentity,
+  GameTypeStats,
+  PersistentPlayerStats,
+  DailyBonusState,
+  DailyBonusResult,
+  ChallengeTier,
+  ChallengeDefinition,
+  ActiveChallenge,
+  ChallengeSummary,
+  PersistentAchievementCategory,
+  AchievementDefinition,
+  EarnedAchievement,
+  CosmeticCategory,
+  CosmeticDefinition,
+  EquippedLoadout,
+  OwnedCosmetics,
+  PlayerProfile,
+} from './retention.js'
+
+export {
+  createEmptyPersistentStats,
+  calculatePlayerLevel,
+  PLAYER_LEVEL_XP_THRESHOLDS,
+} from './retention.js'

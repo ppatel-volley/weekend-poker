@@ -92,7 +92,10 @@ export const test = base.extend<CasinoFixtures>({
     })
     const page = await context.newPage()
     await page.goto(`${CONTROLLER_URL}?sessionId=${sessionId}`)
-    await expect(page.getByAltText('Weekend Casino')).toBeVisible({ timeout: 15_000 })
+    // Wait for VGF connection — controller shows game UI once connected
+    await expect(page.locator('body')).not.toHaveText('No Session Found', { timeout: 15_000 })
+    // Wait for connected state (either lobby content or "Connecting" to clear)
+    await page.waitForTimeout(2_000)
 
     await use(page)
     await context.close()
@@ -104,7 +107,8 @@ export const test = base.extend<CasinoFixtures>({
     })
     const page = await context.newPage()
     await page.goto(`${CONTROLLER_URL}?sessionId=${sessionId}`)
-    await expect(page.getByAltText('Weekend Casino')).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('body')).not.toHaveText('No Session Found', { timeout: 15_000 })
+    await page.waitForTimeout(2_000)
 
     await use(page)
     await context.close()

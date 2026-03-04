@@ -8,6 +8,7 @@ import type { BlindLevel, TTSMessage, SidePot } from './game-state.js'
 import type { InputMode } from './platform.js'
 import type { ReactionEvent } from './reactions.js'
 import type { Card } from './cards.js'
+import type { ChallengeSummary } from './retention.js'
 
 /**
  * Root Casino Game State — Multi-game platform unified state (D-002, D-001).
@@ -161,6 +162,22 @@ export interface CasinoGameState {
   // ───────────────────────────────────────────────────────────────
   gameNight?: GameNightGameState
   jackpot?: ProgressiveJackpot
+
+  // ───────────────────────────────────────────────────────────────
+  // v2.2 Retention — Challenge Summary (display-only projection)
+  // Source of truth is Redis; this is a lightweight summary for UI
+  // ───────────────────────────────────────────────────────────────
+  challengeSummary?: Record<string, ChallengeSummary[]>
+
+  // ───────────────────────────────────────────────────────────────
+  // v2.2 Retention — Daily Bonus (transient, set by server on claim)
+  // ───────────────────────────────────────────────────────────────
+  lastDailyBonus?: {
+    amount: number
+    streakDay: number
+    multiplierApplied: boolean
+    timestamp: number
+  }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -44,6 +44,7 @@ export interface CasinoPlayer {
 
   // ─── v2.2: Persistence (optional, not used in v1) ───
   persistentId?: string        // from Player Identity Service
+  playerLevel?: number         // calculated from XP
   cosmeticLoadout?: CosmeticLoadout
 }
 

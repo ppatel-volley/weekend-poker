@@ -129,6 +129,8 @@ import { wrapWithGameNightCheck, incrementGameNightRoundIfActive } from './game-
 import { gnSetupPhase, gnLeaderboardPhase, gnChampionPhase } from './gn-phases.js'
 import { validatePlayerIdOrBot, getAuthorizedPlayerId, isCallerHost, validateBetAmount } from './security.js'
 import { registerConnection, unregisterConnection, emitToClient } from './connection-registry.js'
+import { resolveIdentity, playerStore, dailyBonusStore } from '../persistence/index.js'
+import { clearSessionTracker } from '../persistence/challenge-utils.js'
 
 // ── Bot Manager (module-level singleton per server process) ─────
 const botManager = new BotManager()
@@ -1304,6 +1306,44 @@ const onConnect = async (ctx: ConnCtx) => {
     ?? member?.state?.name
     ?? `Player ${seatIndex + 1}`
 
+  // ── v2.2: Resolve persistent identity and load profile ──────
+  let persistentId: string | undefined
+  let playerLevel: number | undefined
+  let pendingBonus: { amount: number; streakDay: number; multiplierApplied: boolean } | null = null
+  let originalBonusState: import('@weekend-casino/shared').DailyBonusState | null = null
+  try {
+    const identity = resolveIdentity(ctx.connection.metadata as unknown as Record<string, unknown>)
+    const profile = await playerStore.getOrCreateByDeviceToken(
+      identity.token,
+      identity.source,
+      displayName,
+    )
+    persistentId = profile.identity.persistentId
+    playerLevel = profile.level
+
+    // Check daily bonus eligibility
+    const bonusResult = dailyBonusStore.calculateDailyBonus(profile.dailyBonus)
+    if (bonusResult.eligible) {
+      // Snapshot original state for safe rollback
+      originalBonusState = { ...profile.dailyBonus }
+      // Store bonus data for dispatch after addPlayer (atomic from player perspective)
+      pendingBonus = {
+        amount: bonusResult.amount,
+        streakDay: bonusResult.streakDay,
+        multiplierApplied: bonusResult.multiplierApplied,
+      }
+      // Persist bonus state to Redis
+      const updatedBonus = dailyBonusStore.applyDailyBonusClaim(
+        profile.dailyBonus,
+        bonusResult,
+      )
+      await playerStore.updateDailyBonus(persistentId, updatedBonus)
+    }
+  } catch (err) {
+    // Non-blocking: persistence failures should NOT prevent joining
+    console.error('[persistence] onConnect identity resolution failed:', err)
+  }
+
   const newPlayer: CasinoPlayer = {
     id: clientId,
     name: displayName,
@@ -1319,9 +1359,31 @@ const onConnect = async (ctx: ConnCtx) => {
     isBot: false,
     isConnected: true,
     sittingOutHandCount: 0,
+    persistentId,
+    playerLevel,
   }
 
   ctx.dispatch('addPlayer', newPlayer)
+
+  // Apply daily bonus AFTER player is added — synchronous, no setTimeout.
+  // Bonus state was already persisted above; wallet credit is dispatched here.
+  if (pendingBonus) {
+    try {
+      ctx.dispatch('updateWallet', clientId, pendingBonus.amount)
+      ctx.dispatch('setDailyBonus', {
+        amount: pendingBonus.amount,
+        streakDay: pendingBonus.streakDay,
+        multiplierApplied: pendingBonus.multiplierApplied,
+        timestamp: Date.now(),
+      })
+    } catch {
+      // If wallet credit fails, restore the ORIGINAL bonus state (not synthetic)
+      if (persistentId && originalBonusState) {
+        playerStore.updateDailyBonus(persistentId, originalBonusState)
+          .catch(() => { /* best-effort revert */ })
+      }
+    }
+  }
 }
 
 const onDisconnect = async (ctx: ConnCtx) => {
@@ -1336,8 +1398,13 @@ const onDisconnect = async (ctx: ConnCtx) => {
   if (!player) return
 
   if (state.phase === CasinoPhase.Lobby) {
+    // True session leave — clear session tracker to prevent cross-session leakage
+    if (player.persistentId) {
+      clearSessionTracker(sessionId, player.persistentId)
+    }
     ctx.dispatch('removePlayer', clientId)
   } else {
+    // Transient disconnect mid-game — preserve session tracker for reconnect
     ctx.dispatch('markPlayerDisconnected', clientId)
   }
 }

@@ -13,6 +13,7 @@
 import type { CasinoGameState } from '@weekend-casino/shared'
 import { CasinoPhase, GAME_FIRST_PHASE } from '@weekend-casino/shared'
 import { switchGameServerState } from '../server-game-state.js'
+import { emitGameNightWonEvent } from '../persistence/challenge-utils.js'
 
 /**
  * GN_SETUP phase: Host configures Game Night (games, rounds, theme).
@@ -182,6 +183,9 @@ export const gnChampionPhase = {
 
     // Determine champion
     await ctx.thunkDispatcher('gnDetermineChampion')
+
+    // Emit game_night_won challenge event for the champion (non-blocking)
+    emitGameNightWonEvent(ctx).catch(() => { /* non-critical */ })
 
     // Auto-advance after champion ceremony timer
     setTimeout(() => {
