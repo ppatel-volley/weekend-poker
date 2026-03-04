@@ -143,14 +143,12 @@ export async function playCrapsRound(page: Page): Promise<void> {
   const confirmBtn = page.getByTestId('confirm-bets-btn')
   const rollBtn = page.getByTestId('roll-btn')
 
-  // Wait for betting phase
-  await expect(passLineBtn.or(confirmBtn)).toBeVisible({ timeout: 30_000 })
-
-  if (await passLineBtn.isVisible().catch(() => false)) {
-    await crapsPassLine(page)
-  }
+  // Wait for betting phase — pass-line-btn is the anchor element
+  await expect(passLineBtn).toBeVisible({ timeout: 30_000 })
+  await crapsPassLine(page)
 
   await page.waitForTimeout(500)
+  // Confirm bets
   if (await confirmBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
     await crapsConfirmBets(page)
   }
