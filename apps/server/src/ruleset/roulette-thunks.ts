@@ -262,8 +262,15 @@ export const rouletteThunks = {
     } catch {
       // Dev-mode no-op scheduler — fall back to plain setTimeout.
       // Production MUST use a real scheduler (Redis-backed) for persistence.
+      // Use dispatch (reducer) instead of dispatchThunk — thunk context may
+      // be stale when setTimeout fires after the async phase returns.
       setTimeout(() => {
-        ctx.dispatchThunk('rouletteForceCompleteSpin').catch(() => {})
+        try {
+          ctx.dispatch('rouletteSetSpinComplete', true)
+          ctx.dispatch('rouletteSetSpinState', 'stopped')
+        } catch {
+          // Context may be fully gone; ignore (production uses real scheduler)
+        }
       }, SPIN_TIMEOUT_MS)
     }
   },

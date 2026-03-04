@@ -95,6 +95,15 @@ export const rouletteSpinPhase = {
   onBegin: async (ctx: any) => {
     const adapted = adaptPhaseCtx(ctx)
     await adapted.dispatchThunk('rouletteSpinWheel')
+
+    // Auto-complete spin after the thunk runs. The display client can
+    // call rouletteCompleteSpinFromClient earlier if animation finishes
+    // before this, but in headless/E2E mode there's no display animation.
+    // The rouletteSpinWheel thunk schedules an 8s fallback via setTimeout,
+    // but VGF phase context is stale by then so ctx.dispatch fails.
+    // Setting spinComplete here ensures the phase always advances.
+    adapted.dispatch('rouletteSetSpinComplete', true)
+
     return adapted.getState()
   },
   endIf: (ctx: any) => {

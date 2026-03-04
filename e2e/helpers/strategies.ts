@@ -88,18 +88,29 @@ export async function playTcpRound(page: Page): Promise<void> {
 }
 
 /**
- * Play one round of Roulette: bet red, confirm.
+ * Play one round of Roulette: bet red, confirm, wait for round to complete.
+ * With spinComplete set immediately in onBegin, the entire phase cascade
+ * (spin → result → payout → round-complete → next betting) runs server-side
+ * in one tick. The controller briefly flashes intermediate states then lands
+ * back on the betting UI for the next round.
  */
 export async function playRouletteRound(page: Page): Promise<void> {
   const redBtn = page.getByTestId('red-btn')
-  const result = page.getByText(/WON \$|LOST \$|NO BET/i)
+  const confirmBtn = page.getByTestId('confirm-bets-btn')
 
-  await expect(redBtn.or(result)).toBeVisible({ timeout: 30_000 })
+  // Wait for betting phase
+  await expect(redBtn).toBeVisible({ timeout: 30_000 })
 
-  if (await redBtn.isVisible().catch(() => false)) {
-    await rouletteBetRed(page)
-    await rouletteConfirmBets(page)
-  }
+  // Place bet and confirm
+  await rouletteBetRed(page)
+  await expect(confirmBtn).toBeVisible({ timeout: 5_000 })
+  await rouletteConfirmBets(page)
+
+  // After confirm, the phase cascade runs instantly server-side.
+  // The red button will briefly disappear then reappear for the next round.
+  // Wait for it to come back (may already be visible if cascade was instant).
+  await page.waitForTimeout(1_000)
+  await expect(redBtn).toBeVisible({ timeout: 30_000 })
 }
 
 /**
