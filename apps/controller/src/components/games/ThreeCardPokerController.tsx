@@ -140,6 +140,7 @@ function AnteBettingView({
       </div>
 
       <button
+        data-testid="confirm-ante-btn"
         onClick={handleConfirm}
         disabled={!canAfford}
         style={{
@@ -199,6 +200,7 @@ function DecisionView({
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: 'auto' }}>
         <button
+          data-testid="play-btn"
           onClick={() => dispatchThunk('tcpMakeDecision', playerId, 'play')}
           style={{
             padding: '22px',
@@ -214,6 +216,7 @@ function DecisionView({
           PLAY ${myHand.anteBet}
         </button>
         <button
+          data-testid="fold-btn"
           onClick={() => dispatchThunk('tcpMakeDecision', playerId, 'fold')}
           style={{
             padding: '22px',
@@ -333,7 +336,7 @@ export function ThreeCardPokerController() {
         fontFamily: 'system-ui, sans-serif',
       }}
     >
-      <h2 style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>Three Card Poker</h2>
+      <h2 data-testid="game-heading" style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>Three Card Poker</h2>
 
       {!tcp ? (
         <div style={{ textAlign: 'center', padding: '32px', color: '#aaa', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -204,12 +204,14 @@ function PlayerActionsView({
       {isMyTurn && !allDone && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: 'auto' }}>
           <button
+            data-testid="hit-btn"
             onClick={() => dispatchThunk('bjcHit', playerId)}
             style={actionBtnStyle('#2ecc71')}
           >
             HIT
           </button>
           <button
+            data-testid="stand-btn"
             onClick={() => dispatchThunk('bjcStand', playerId)}
             style={actionBtnStyle('#e74c3c')}
           >
@@ -217,6 +219,7 @@ function PlayerActionsView({
           </button>
           {hand.cards.length === 2 && !hand.doubled && (
             <button
+              data-testid="double-btn"
               onClick={() => dispatchThunk('bjcDoubleDown', playerId)}
               style={{
                 ...actionBtnStyle('#f39c12'),
@@ -353,7 +356,7 @@ export function CompetitiveBlackjackController() {
         fontFamily: 'system-ui, sans-serif',
       }}
     >
-      <h2 style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>
+      <h2 data-testid="game-heading" style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>
         Blackjack Arena
       </h2>
 

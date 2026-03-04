@@ -77,6 +77,7 @@ export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
         padding: '16px',
       }}
     >
+      <h2 data-testid="game-heading" style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>Texas Hold&apos;em</h2>
       {/* Game info bar */}
       <div
         style={{
@@ -158,24 +159,24 @@ export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
               marginBottom: '12px',
             }}
           >
-            <button style={actionButtonStyle('#e74c3c')} onClick={handleFold}>
+            <button data-testid="fold-btn" style={actionButtonStyle('#e74c3c')} onClick={handleFold}>
               FOLD
             </button>
             {canCheck ? (
-              <button style={actionButtonStyle('#3498db')} onClick={handleCheck}>
+              <button data-testid="check-btn" style={actionButtonStyle('#3498db')} onClick={handleCheck}>
                 CHECK
               </button>
             ) : canCall ? (
-              <button style={actionButtonStyle('#3498db')} onClick={handleCall}>
+              <button data-testid="call-btn" style={actionButtonStyle('#3498db')} onClick={handleCall}>
                 CALL ${callAmount}
               </button>
             ) : null}
             {canRaise && (
-              <button style={actionButtonStyle('#f39c12')} onClick={handleRaise}>
+              <button data-testid="raise-btn" style={actionButtonStyle('#f39c12')} onClick={handleRaise}>
                 RAISE TO ${currentBet + (raiseAmount > 0 ? raiseAmount : minRaise)}
               </button>
             )}
-            <button style={actionButtonStyle('#e91e63')} onClick={handleAllIn}>
+            <button data-testid="allin-btn" style={actionButtonStyle('#e91e63')} onClick={handleAllIn}>
               ALL IN ${myStack}
             </button>
           </div>

@@ -87,6 +87,7 @@ function BettingView({
       {isMyTurn && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: 'auto' }}>
           <button
+            data-testid="fold-btn"
             onClick={() => dispatchThunk('drawProcessAction', playerId, 'fold')}
             style={actionBtnStyle('#e74c3c')}
           >
@@ -94,6 +95,7 @@ function BettingView({
           </button>
           {player.bet >= draw.currentBet ? (
             <button
+              data-testid="check-btn"
               onClick={() => dispatchThunk('drawProcessAction', playerId, 'check')}
               style={actionBtnStyle('#2ecc71')}
             >
@@ -101,6 +103,7 @@ function BettingView({
             </button>
           ) : (
             <button
+              data-testid="call-btn"
               onClick={() => dispatchThunk('drawProcessAction', playerId, 'call')}
               style={actionBtnStyle('#f39c12')}
             >
@@ -108,6 +111,7 @@ function BettingView({
             </button>
           )}
           <button
+            data-testid="raise-btn"
             onClick={() => dispatchThunk('drawProcessAction', playerId, 'raise', draw.currentBet + draw.minRaiseIncrement)}
             disabled={player.stack <= draw.currentBet - player.bet}
             style={actionBtnStyle('#9b59b6', player.stack <= draw.currentBet - player.bet)}
@@ -115,6 +119,7 @@ function BettingView({
             RAISE
           </button>
           <button
+            data-testid="allin-btn"
             onClick={() => dispatchThunk('drawProcessAction', playerId, 'all_in')}
             style={actionBtnStyle('#e91e63')}
           >
@@ -216,6 +221,7 @@ function DiscardView({
       {/* Action buttons */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
         <button
+          data-testid="draw-btn"
           onClick={() => dispatchThunk('drawProcessDiscard', playerId, [...selectedIndices])}
           disabled={selectedIndices.size === 0}
           style={actionBtnStyle('#3498db', selectedIndices.size === 0)}
@@ -223,6 +229,7 @@ function DiscardView({
           DRAW ({selectedIndices.size})
         </button>
         <button
+          data-testid="keep-all-btn"
           onClick={() => dispatchThunk('drawProcessDiscard', playerId, [])}
           style={actionBtnStyle('#2ecc71')}
         >
@@ -295,7 +302,7 @@ export function FiveCardDrawController() {
         fontFamily: 'system-ui, sans-serif',
       }}
     >
-      <h2 style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>5-Card Draw</h2>
+      <h2 data-testid="game-heading" style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>5-Card Draw</h2>
 
       {phaseStr === 'DRAW_POSTING_BLINDS' || phaseStr === 'DRAW_DEALING' ? (
         <div style={{ textAlign: 'center', padding: '32px', color: '#aaa', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -59,8 +59,8 @@ function QuickBetsTab({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 16px' }}>
       {/* Red / Black */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-        <button onClick={() => placeBet('red')} style={btnStyle('#e74c3c')}>RED</button>
-        <button onClick={() => placeBet('black')} style={btnStyle('#2c3e50')}>BLACK</button>
+        <button data-testid="red-btn" onClick={() => placeBet('red')} style={btnStyle('#e74c3c')}>RED</button>
+        <button data-testid="black-btn" onClick={() => placeBet('black')} style={btnStyle('#2c3e50')}>BLACK</button>
       </div>
 
       {/* Odd / Even */}
@@ -263,7 +263,7 @@ export function RouletteController() {
       color: 'white',
       fontFamily: 'system-ui, sans-serif',
     }}>
-      <h2 style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>Roulette</h2>
+      <h2 data-testid="game-heading" style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>Roulette</h2>
 
       {!roulette ? (
         <div style={{ textAlign: 'center', padding: '32px', color: '#aaa', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -351,6 +351,7 @@ export function RouletteController() {
           {/* Confirm / Clear buttons (sticky bottom) */}
           <div style={{ padding: '12px 16px', display: 'flex', gap: '8px' }}>
             <button
+              data-testid="clear-btn"
               onClick={() => dispatchThunk('rouletteClearBets', playerId)}
               style={{
                 flex: 1,
@@ -367,6 +368,7 @@ export function RouletteController() {
               CLEAR ALL
             </button>
             <button
+              data-testid="confirm-bets-btn"
               onClick={() => dispatchThunk('rouletteConfirmBets', playerId)}
               style={{
                 flex: 2,

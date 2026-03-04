@@ -654,7 +654,7 @@ export function CrapsController() {
 
   return (
     <div style={containerStyle}>
-      <h2 style={headerStyle}>CRAPS</h2>
+      <h2 data-testid="game-heading" style={headerStyle}>CRAPS</h2>
 
       {!craps ? (
         <div style={waitingStyle}>
