@@ -82,7 +82,7 @@ export const crapsComeOutBettingPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: (ctx: any) => {
+  onBegin: async (ctx: any) => {
     const adapted = adaptPhaseCtx(ctx)
     adapted.dispatch('setDealerMessage', 'Place your come-out bets!')
     // Reset confirmation flags for new betting round
@@ -92,6 +92,14 @@ export const crapsComeOutBettingPhase = {
         adapted.dispatch('crapsSetPlayerConfirmed', player.playerId, false)
       }
     }
+
+    // Auto-confirm bots (they bet nothing, just confirm — no controller UI)
+    const afterInit = adapted.getState()
+    const botPlayers = afterInit.players.filter((p: any) => p.isBot && p.status !== 'busted' && p.status !== 'sitting_out')
+    for (const bot of botPlayers) {
+      await adapted.dispatchThunk('crapsConfirmBets', bot.id)
+    }
+
     return adapted.getState()
   },
   endIf: (ctx: any) => {
@@ -161,7 +169,7 @@ export const crapsPointBettingPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: (ctx: any) => {
+  onBegin: async (ctx: any) => {
     const adapted = adaptPhaseCtx(ctx)
     const state = adapted.getState()
     adapted.dispatch('setDealerMessage', `Point is ${state.craps?.point}. Place your bets!`)
@@ -179,6 +187,14 @@ export const crapsPointBettingPhase = {
       // We need to explicitly set these false for the new betting round
       adapted.dispatch('crapsSetAllBetsPlaced', false)
     }
+
+    // Auto-confirm bots (they bet nothing, just confirm — no controller UI)
+    const afterReset = adapted.getState()
+    const botPlayers = afterReset.players.filter((p: any) => p.isBot && p.status !== 'busted' && p.status !== 'sitting_out')
+    for (const bot of botPlayers) {
+      await adapted.dispatchThunk('crapsConfirmBets', bot.id)
+    }
+
     return adapted.getState()
   },
   endIf: (ctx: any) => {

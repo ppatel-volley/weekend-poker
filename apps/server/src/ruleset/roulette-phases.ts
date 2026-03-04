@@ -46,6 +46,15 @@ export const roulettePlaceBetsPhase = {
     const roundNumber = (state.roulette?.roundNumber ?? 0) + 1
     adapted.dispatch('rouletteInitRound', activePlayers, roundNumber)
     adapted.dispatch('setDealerMessage', 'Place your bets!')
+
+    // Auto-confirm bots' bets so the phase can advance when human players confirm.
+    // Bots have no controller UI so they'd otherwise hang the betting phase forever.
+    const updatedState = adapted.getState()
+    const botPlayers = updatedState.players.filter((p: any) => p.isBot)
+    for (const bot of botPlayers) {
+      adapted.dispatch('rouletteConfirmBets', bot.id)
+    }
+
     return adapted.getState()
   },
   endIf: (ctx: any) => {

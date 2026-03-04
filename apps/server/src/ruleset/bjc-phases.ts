@@ -82,7 +82,7 @@ export const bjcPlayerTurnsPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: (ctx: any) => {
+  onBegin: async (ctx: any) => {
     const state: CasinoGameState = ctx.getState()
     const bjc = state.blackjackCompetitive
 
@@ -108,6 +108,24 @@ export const bjcPlayerTurnsPhase = {
         ctx.reducerDispatcher('bjcSetPlayerTurnsComplete', true)
       } else {
         ctx.reducerDispatcher('setDealerMessage', 'Your turn!')
+
+        // Auto-stand bots whose turn it currently is (they have no controller UI)
+        // Loop: keep auto-standing while the current turn player is a bot
+        let loopState: CasinoGameState = ctx.getState()
+        while (loopState.blackjackCompetitive) {
+          const bjcLoop = loopState.blackjackCompetitive
+          if (bjcLoop.currentTurnIndex >= bjcLoop.turnOrder.length) break
+          const currentPlayerId = bjcLoop.turnOrder[bjcLoop.currentTurnIndex]
+          const currentPlayer = loopState.players.find((p: any) => p.id === currentPlayerId)
+          if (!currentPlayer?.isBot) break
+          const ps = bjcLoop.playerStates.find((p: any) => p.playerId === currentPlayerId)
+          if (ps && !ps.hand.stood && !ps.hand.busted) {
+            await ctx.thunkDispatcher('bjcStand', currentPlayerId)
+          } else {
+            break
+          }
+          loopState = ctx.getState()
+        }
       }
     }
 

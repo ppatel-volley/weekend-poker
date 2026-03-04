@@ -35,7 +35,7 @@ export const tcpPlaceBetsPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: (ctx: any) => {
+  onBegin: async (ctx: any) => {
     const adapted = adaptPhaseCtx(ctx)
     const state = adapted.getState()
     const activePlayers = state.players
@@ -45,6 +45,14 @@ export const tcpPlaceBetsPhase = {
     const roundNumber = (state.threeCardPoker?.roundNumber ?? 0) + 1
     adapted.dispatch('tcpInitRound', activePlayers, roundNumber)
     adapted.dispatch('setDealerMessage', 'Ante up!')
+
+    // Auto-ante for bots (they have no controller UI)
+    const afterInit = adapted.getState()
+    const botPlayers = afterInit.players.filter((p: any) => p.isBot && p.status !== 'busted' && p.status !== 'sitting_out')
+    for (const bot of botPlayers) {
+      await adapted.dispatchThunk('tcpPlaceAnteBet', bot.id, afterInit.threeCardPoker?.config.minAnte ?? 10, 0)
+    }
+
     return adapted.getState()
   },
   endIf: (ctx: any) => {
@@ -80,9 +88,17 @@ export const tcpPlayerDecisionsPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: (ctx: any) => {
+  onBegin: async (ctx: any) => {
     const adapted = adaptPhaseCtx(ctx)
     adapted.dispatch('setDealerMessage', 'Play or fold!')
+
+    // Bots always play (they have no controller UI)
+    const state = adapted.getState()
+    const botPlayers = state.players.filter((p: any) => p.isBot && p.status !== 'busted' && p.status !== 'sitting_out')
+    for (const bot of botPlayers) {
+      await adapted.dispatchThunk('tcpMakeDecision', bot.id, 'play')
+    }
+
     return adapted.getState()
   },
   endIf: (ctx: any) => {

@@ -21,7 +21,7 @@ export const bjPlaceBetsPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: (ctx: any) => {
+  onBegin: async (ctx: any) => {
     const state: CasinoGameState = ctx.getState()
     const activePlayers = state.players
       .filter((p: any) => p.status !== 'busted' && p.status !== 'sitting_out')
@@ -30,6 +30,14 @@ export const bjPlaceBetsPhase = {
     const roundNumber = (state.blackjack?.roundNumber ?? 0) + 1
     ctx.reducerDispatcher('bjInitRound', activePlayers, roundNumber)
     ctx.reducerDispatcher('setDealerMessage', 'Place your bets!')
+
+    // Auto-place minimum bet for bots (they have no controller UI)
+    const afterInit: CasinoGameState = ctx.getState()
+    const botPlayers = afterInit.players.filter((p: any) => p.isBot && p.status !== 'busted' && p.status !== 'sitting_out')
+    for (const bot of botPlayers) {
+      await ctx.thunkDispatcher('bjPlaceBet', bot.id, afterInit.blackjack?.config.minBet ?? 10)
+    }
+
     return ctx.getState()
   },
   endIf: (ctx: any) => {
@@ -114,8 +122,27 @@ export const bjPlayerTurnsPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: (ctx: any) => {
+  onBegin: async (ctx: any) => {
     ctx.reducerDispatcher('setDealerMessage', 'Your turn!')
+
+    // Auto-stand bots whose turn it currently is (they have no controller UI)
+    // Loop: keep auto-standing while the current turn player is a bot
+    let state: CasinoGameState = ctx.getState()
+    while (state.blackjack) {
+      const bj = state.blackjack
+      if (bj.currentTurnIndex >= bj.turnOrder.length) break
+      const currentPlayerId = bj.turnOrder[bj.currentTurnIndex]
+      const currentPlayer = state.players.find((p: any) => p.id === currentPlayerId)
+      if (!currentPlayer?.isBot) break
+      const ps = bj.playerStates.find((p: any) => p.playerId === currentPlayerId)
+      if (ps && !ps.hands[0]?.stood && !ps.hands[0]?.busted) {
+        await ctx.thunkDispatcher('bjStand', currentPlayerId)
+      } else {
+        break
+      }
+      state = ctx.getState()
+    }
+
     return ctx.getState()
   },
   endIf: (ctx: any) => {
