@@ -54,7 +54,7 @@ function ensureBjcShoe(sessionId: string, numberOfDecks: number = 6): Card[] {
  * - Ties: pot split equally
  * - Tie-break: fewer cards, then first to stand (turnOrder position)
  */
-function determineWinners(
+export function determineWinners(
   playerStates: CasinoGameState['blackjackCompetitive'] extends infer T
     ? T extends { playerStates: infer P } ? P : never : never,
   turnOrder: string[],
