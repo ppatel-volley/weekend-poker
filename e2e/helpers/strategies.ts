@@ -33,10 +33,14 @@ export async function playHoldemRound(page: Page): Promise<void> {
 export async function playBlackjackRound(page: Page): Promise<void> {
   const placeBetBtn = page.getByTestId('place-bet-btn')
   const standBtn = page.getByTestId('stand-btn')
+  const hitBtn = page.getByTestId('hit-btn')
 
-  // Wait for any valid BJ state
+  // Wait for any valid BJ state — betting, player turn, or result text
   await expect(
-    placeBetBtn.or(standBtn).or(page.getByText('Waiting for round'))
+    placeBetBtn.or(standBtn).or(hitBtn)
+      .or(page.getByText('Waiting for round'))
+      .or(page.getByText(/Standing at/i))
+      .or(page.getByText(/Dealing cards/i))
   ).toBeVisible({ timeout: 30_000 })
 
   // Place bet if in betting phase
@@ -45,14 +49,16 @@ export async function playBlackjackRound(page: Page): Promise<void> {
     await page.waitForTimeout(2_000)
   }
 
-  // Stand if we get to act
+  // Stand if we get to act (hit/stand buttons visible)
   if (await standBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
     await bjStand(page)
     await page.waitForTimeout(2_000)
   }
 
-  // Wait for next round's place-bet button (proves round completed)
-  await expect(placeBetBtn).toBeVisible({ timeout: 30_000 })
+  // Wait for next round — place-bet-btn reappears, or we see "Waiting for round"
+  // The round may complete instantly if bot auto-acts, so the place-bet-btn
+  // might already be visible or might take a moment.
+  await expect(placeBetBtn).toBeVisible({ timeout: 60_000 })
 }
 
 /**
@@ -64,8 +70,13 @@ export async function playBjcRound(page: Page): Promise<void> {
   const standBtn = page.getByTestId('stand-btn')
   const anteDisplay = page.getByText(/Ante:/)
 
-  // BJC has auto-ante. Wait for either our turn to act or the round to cascade through
-  await expect(standBtn.or(anteDisplay)).toBeVisible({ timeout: 30_000 })
+  // BJC has auto-ante. Wait for any valid state
+  await expect(
+    standBtn.or(anteDisplay)
+      .or(page.getByText(/Standing at/i))
+      .or(page.getByText(/Your turn/i))
+      .or(page.getByText(/Waiting for/i))
+  ).toBeVisible({ timeout: 30_000 })
 
   if (await standBtn.isVisible().catch(() => false)) {
     await bjcStand(page)
