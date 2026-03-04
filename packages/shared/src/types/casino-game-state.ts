@@ -537,10 +537,190 @@ export interface ThreeCardPokerGameState {
   config: TcpConfig
 }
 
+/** Craps bet type — core bets + odds. */
+export type CrapsBetType =
+  | 'pass_line'
+  | 'dont_pass'
+  | 'come'
+  | 'dont_come'
+  | 'place'
+  | 'field'
+  | 'pass_odds'
+  | 'dont_pass_odds'
+  | 'come_odds'
+  | 'dont_come_odds'
+
+/** Single craps bet. */
+export interface CrapsBet {
+  id: string
+  playerId: string
+  type: CrapsBetType
+  amount: number
+  /** For Place bets: which number (4,5,6,8,9,10). */
+  targetNumber?: number
+  /** For Odds bets: which bet this is behind. */
+  parentBetId?: string
+  /** Whether this bet is currently "working" (active for resolution). */
+  working: boolean
+  status: 'active' | 'won' | 'lost' | 'push' | 'returned'
+  /** Payout amount (set on resolution). */
+  payout: number
+}
+
+/** Come/Don't Come bet with its own point. */
+export interface CrapsComeBet {
+  id: string
+  playerId: string
+  type: 'come' | 'dont_come'
+  amount: number
+  /** Come bet's established point (null until established). */
+  comePoint: number | null
+  /** Odds behind this come bet. */
+  oddsAmount: number
+  status: 'active' | 'won' | 'lost' | 'push' | 'returned'
+}
+
+/** Roll result for history tracking. */
+export interface CrapsRollResult {
+  die1: number
+  die2: number
+  total: number
+  rollNumber: number
+  /** Both dice same (e.g., 4+4 = hard 8). */
+  isHardway: boolean
+}
+
+/** Per-player craps state. */
+export interface CrapsPlayerState {
+  playerId: string
+  /** Total chips at risk on table. */
+  totalAtRisk: number
+  /** Whether player confirmed bets for current phase. */
+  betsConfirmed: boolean
+  /** Net result for current round. */
+  roundResult: number
+}
+
+/** Craps table configuration. */
+export interface CrapsConfig {
+  minBet: number
+  maxBet: number
+  /** Max odds multiplier (1x, 2x, 3x default, 5x, 10x). */
+  maxOddsMultiplier: number
+  /** Place bets "off" during come-out (default: true). */
+  placeBetsWorkOnComeOut: boolean
+  /** Simple mode: Pass/Don't Pass only (default: true). */
+  simpleMode: boolean
+}
+
 /** v2.1 Craps game state. Defined in TDD-backend.md Section 10. */
 export interface CrapsGameState {
   [key: string]: unknown
-  // TBD: Will include shooter, come-out roll, point, bets, etc.
+
+  // ── Shooter Management ────────────────────────────────────────
+  /** Current shooter's player ID. */
+  shooterPlayerId: string
+  /** Shooter seat index (for rotation). */
+  shooterIndex: number
+
+  // ── Point Tracking ────────────────────────────────────────────
+  /** Established point (null during come-out). */
+  point: number | null
+  /** Whether puck is ON (point set) or OFF (come-out). */
+  puckOn: boolean
+
+  // ── Roll Results ──────────────────────────────────────────────
+  /** First die (1-6). */
+  lastRollDie1: number
+  /** Second die (1-6). */
+  lastRollDie2: number
+  /** Sum (2-12). */
+  lastRollTotal: number
+  /** History of all rolls in this shooter's turn. */
+  rollHistory: CrapsRollResult[]
+
+  // ── Betting State ─────────────────────────────────────────────
+  /** All active bets across all players. */
+  bets: CrapsBet[]
+  /** Come/Don't Come bets with own points. */
+  comeBets: CrapsComeBet[]
+  /** Per-player state. */
+  players: CrapsPlayerState[]
+
+  // ── Round Outcome Flags ───────────────────────────────────────
+  /** Set true when 7 rolled and point active (shooter loses dice). */
+  sevenOut: boolean
+  /** Set true when point number rolled (shooter retains dice). */
+  pointHit: boolean
+
+  // ── Phase Transition Flags (C1 pattern) ───────────────────────
+  newShooterReady: boolean
+  allComeOutBetsPlaced: boolean
+  rollComplete: boolean
+  comeOutResolutionComplete: boolean
+  allPointBetsPlaced: boolean
+  pointResolutionComplete: boolean
+  roundCompleteReady: boolean
+
+  // ── Round Counter ─────────────────────────────────────────────
+  roundNumber: number
+
+  // ── Configuration ─────────────────────────────────────────────
+  config: CrapsConfig
+}
+
+/** Game Night achievement type — MVP set for scoring bonuses. */
+export type GameNightAchievementType =
+  | 'ROYAL_FLUSH'
+  | 'STRAIGHT_FLUSH'
+  | 'FOUR_OF_A_KIND'
+  | 'NATURAL_BLACKJACK'
+  | 'TCP_STRAIGHT_FLUSH'
+  | 'TCP_MINI_ROYAL'
+  | 'STRAIGHT_UP_HIT'
+
+/** A recorded achievement during a Game Night session. */
+export interface GameNightAchievement {
+  playerId: string
+  type: GameNightAchievementType
+  gameIndex: number
+  timestamp: number
+}
+
+/** Visual theme for Game Night. */
+export type GameNightTheme = 'classic' | 'neon' | 'high_roller' | 'tropical'
+
+/** Per-player accumulated scores across all games. */
+export interface GameNightPlayerTotal {
+  playerId: string
+  playerName: string
+  totalScore: number
+  gamesPlayed: number
+  rankPoints: number
+  marginBonus: number
+  achievementBonus: number
+  bestFinish: number
+}
+
+/** Per-player ranking within a single game result. */
+export interface GameNightPlayerRanking {
+  playerId: string
+  playerName: string
+  rank: number
+  chipResult: number
+  rankPoints: number
+  marginBonus: number
+  achievementBonus: number
+  totalGameScore: number
+}
+
+/** Result of a single game within a Game Night session. */
+export interface GameNightGameResult {
+  game: CasinoGame
+  gameIndex: number
+  rankings: GameNightPlayerRanking[]
+  roundsPlayed: number
+  completedAt: number
 }
 
 /** v2.1 Game Night Mode state. Defined in TDD-backend.md Section 13. */
@@ -550,10 +730,36 @@ export interface GameNightGameState {
   active: boolean
   /** Maximum rounds before transitioning to leaderboard. */
   roundLimit: number
-  /** Number of rounds played so far. */
+  /** Number of rounds played so far in the current game. */
   roundsPlayed: number
-  /** Player scores (playerId -> score). */
+  /** Player scores (playerId -> score) — kept for backwards compat. */
   scores: Record<string, number>
+  /** Ordered list of games to play. */
+  gameLineup: CasinoGame[]
+  /** Index into gameLineup of the current game (0-based). */
+  currentGameIndex: number
+  /** Rounds to play per game before showing leaderboard. */
+  roundsPerGame: number
+  /** Detailed per-player score totals. */
+  playerScores: Record<string, GameNightPlayerTotal>
+  /** Results for each completed game. */
+  gameResults: GameNightGameResult[]
+  /** Visual theme. */
+  theme: GameNightTheme
+  /** Winner's playerId (set during GN_CHAMPION). */
+  championId: string | null
+  /** Session start timestamp. */
+  startedAt: number
+  /** Whether leaderboard display is ready to advance. */
+  leaderboardReady: boolean
+  /** Whether champion ceremony is ready to advance. */
+  championReady: boolean
+  /** Achievements recorded during the session. */
+  achievements: GameNightAchievement[]
+  /** Whether GN setup is confirmed and ready to start. */
+  setupConfirmed: boolean
+  /** Wallet snapshot taken at start of each game (playerId → balance). */
+  walletSnapshot: Record<string, number>
 }
 
 /**

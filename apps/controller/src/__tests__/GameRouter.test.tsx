@@ -64,6 +64,9 @@ vi.mock('@weekend-casino/shared', () => ({
   },
   V1_GAMES: ['holdem', 'five_card_draw', 'blackjack_classic', 'blackjack_competitive'],
   V2_0_GAMES: ['roulette', 'three_card_poker'],
+  CRAPS_PLACE_NUMBERS: [4, 5, 6, 8, 9, 10],
+  CRAPS_MIN_BET: 10,
+  CRAPS_MAX_BET: 500,
   getWalletBalance: () => 10000,
   getPhaseLabel: (phase: string) => {
     const labels: Record<string, string> = {
@@ -155,11 +158,11 @@ describe('GameRouter', () => {
     expect(screen.getByText('Blackjack Arena')).toBeDefined()
   })
 
-  it('shows loading for unknown game', () => {
+  it('routes craps game to CrapsController', () => {
     mockPhase.mockReturnValue('CRAPS_NEW_SHOOTER')
-    mockState.mockReturnValue({ selectedGame: 'craps' })
+    mockState.mockReturnValue({ selectedGame: 'craps', craps: undefined, wallet: {} })
 
     render(<GameRouter />)
-    expect(screen.getByText('Game loading...')).toBeDefined()
+    expect(screen.getByText('CRAPS')).toBeDefined()
   })
 })

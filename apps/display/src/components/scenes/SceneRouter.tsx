@@ -23,6 +23,15 @@ const ThreeCardPokerScene = React.lazy(() =>
 const RouletteScene = React.lazy(() =>
   import('./RouletteScene.js').then(m => ({ default: m.RouletteScene })),
 )
+const CrapsScene = React.lazy(() =>
+  import('./CrapsScene.js').then(m => ({ default: m.CrapsScene })),
+)
+const GameNightLeaderboardScene = React.lazy(() =>
+  import('./GameNightLeaderboardScene.js').then(m => ({ default: m.GameNightLeaderboardScene })),
+)
+const GameNightChampionScene = React.lazy(() =>
+  import('./GameNightChampionScene.js').then(m => ({ default: m.GameNightChampionScene })),
+)
 
 /** Maps CasinoGame to its scene component. */
 const SCENE_MAP: Record<CasinoGame, React.ComponentType> = {
@@ -32,7 +41,7 @@ const SCENE_MAP: Record<CasinoGame, React.ComponentType> = {
   blackjack_competitive: CompetitiveBlackjackScene,
   roulette: RouletteScene,
   three_card_poker: ThreeCardPokerScene,
-  craps: FiveCardDrawScene,          // reuse placeholder until Craps scene built
+  craps: CrapsScene,
 }
 
 /**
@@ -45,6 +54,24 @@ const SCENE_MAP: Record<CasinoGame, React.ComponentType> = {
 export function SceneRouter() {
   const currentGame = useCurrentGame()
   const phase = usePhase()
+
+  // Game Night overlay phases — 2D HTML, not 3D R3F scenes.
+  // Primary routing lives in DisplayRouter (App.tsx); these are here
+  // for completeness if SceneRouter is used outside a Canvas context.
+  if (phase === 'GN_LEADERBOARD') {
+    return (
+      <Suspense fallback={<SceneLoadingFallback />}>
+        <GameNightLeaderboardScene />
+      </Suspense>
+    )
+  }
+  if (phase === 'GN_CHAMPION') {
+    return (
+      <Suspense fallback={<SceneLoadingFallback />}>
+        <GameNightChampionScene />
+      </Suspense>
+    )
+  }
 
   const isLobby =
     !phase ||

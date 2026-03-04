@@ -9,6 +9,12 @@ import type {
   ThreeCardPokerGameState,
   CrapsGameState,
   GameNightGameState,
+  GameNightPlayerTotal,
+  GameNightGameResult,
+  GameNightPlayerRanking,
+  GameNightAchievement,
+  GameNightAchievementType,
+  GameNightTheme,
   QuickPlayConfig,
   ProgressiveJackpot,
 } from '../types/casino-game-state.js'
@@ -446,9 +452,36 @@ describe('Game sub-state placeholder types', () => {
     expect(state.dealerQualifies).toBeNull()
   })
 
-  it('CrapsGameState should have index signature', () => {
+  it('CrapsGameState should have required fields', () => {
     const state: CrapsGameState = {
-      [Symbol.toStringTag]: 'CrapsGameState',
+      shooterPlayerId: 'p1',
+      shooterIndex: 0,
+      point: null,
+      puckOn: false,
+      lastRollDie1: 0,
+      lastRollDie2: 0,
+      lastRollTotal: 0,
+      rollHistory: [],
+      bets: [],
+      comeBets: [],
+      players: [],
+      sevenOut: false,
+      pointHit: false,
+      newShooterReady: false,
+      allComeOutBetsPlaced: false,
+      rollComplete: false,
+      comeOutResolutionComplete: false,
+      allPointBetsPlaced: false,
+      pointResolutionComplete: false,
+      roundCompleteReady: false,
+      roundNumber: 0,
+      config: {
+        minBet: 10,
+        maxBet: 500,
+        maxOddsMultiplier: 3,
+        placeBetsWorkOnComeOut: false,
+        simpleMode: true,
+      },
     }
     expect(state).toBeDefined()
   })
@@ -459,9 +492,32 @@ describe('Game sub-state placeholder types', () => {
       roundLimit: 10,
       roundsPlayed: 0,
       scores: {},
+      gameLineup: [],
+      currentGameIndex: 0,
+      roundsPerGame: 5,
+      playerScores: {},
+      gameResults: [],
+      theme: 'classic',
+      championId: null,
+      startedAt: Date.now(),
+      leaderboardReady: false,
+      championReady: false,
+      achievements: [],
+      setupConfirmed: false,
+      walletSnapshot: {},
     }
     expect(state).toBeDefined()
     expect(state.active).toBe(false)
+    // Backwards compat: original 4 fields still present
+    expect(state.roundLimit).toBe(10)
+    expect(state.roundsPlayed).toBe(0)
+    expect(state.scores).toEqual({})
+    // New fields
+    expect(state.gameLineup).toEqual([])
+    expect(state.currentGameIndex).toBe(0)
+    expect(state.theme).toBe('classic')
+    expect(state.championId).toBeNull()
+    expect(state.achievements).toEqual([])
   })
 })
 
@@ -494,5 +550,103 @@ describe('QuickPlayConfig and ProgressiveJackpot', () => {
       lastWinPlayerName: null,
     }
     expect(jackpot.lastWinPlayerName).toBeNull()
+  })
+})
+
+describe('Game Night supporting types', () => {
+  it('GameNightPlayerTotal should track accumulated scores', () => {
+    const total: GameNightPlayerTotal = {
+      playerId: 'p1',
+      playerName: 'Alice',
+      totalScore: 270,
+      gamesPlayed: 3,
+      rankPoints: 200,
+      marginBonus: 45,
+      achievementBonus: 25,
+      bestFinish: 1,
+    }
+    expect(total.totalScore).toBe(270)
+    expect(total.bestFinish).toBe(1)
+  })
+
+  it('GameNightPlayerRanking should describe single-game result', () => {
+    const ranking: GameNightPlayerRanking = {
+      playerId: 'p1',
+      playerName: 'Alice',
+      rank: 1,
+      chipResult: 500,
+      rankPoints: 100,
+      marginBonus: 30,
+      achievementBonus: 50,
+      totalGameScore: 180,
+    }
+    expect(ranking.rank).toBe(1)
+    expect(ranking.totalGameScore).toBe(180)
+  })
+
+  it('GameNightGameResult should record a game outcome', () => {
+    const result: GameNightGameResult = {
+      game: 'holdem',
+      gameIndex: 0,
+      rankings: [
+        {
+          playerId: 'p1',
+          playerName: 'Alice',
+          rank: 1,
+          chipResult: 500,
+          rankPoints: 100,
+          marginBonus: 30,
+          achievementBonus: 0,
+          totalGameScore: 130,
+        },
+      ],
+      roundsPlayed: 5,
+      completedAt: Date.now(),
+    }
+    expect(result.game).toBe('holdem')
+    expect(result.rankings).toHaveLength(1)
+    expect(result.rankings[0]!.rank).toBe(1)
+  })
+
+  it('GameNightAchievement should record specific achievement', () => {
+    const achievement: GameNightAchievement = {
+      playerId: 'p1',
+      type: 'ROYAL_FLUSH',
+      gameIndex: 0,
+      timestamp: Date.now(),
+    }
+    expect(achievement.type).toBe('ROYAL_FLUSH')
+    expect(achievement.gameIndex).toBe(0)
+  })
+
+  it('GameNightAchievementType should cover MVP set', () => {
+    const types: GameNightAchievementType[] = [
+      'ROYAL_FLUSH',
+      'STRAIGHT_FLUSH',
+      'FOUR_OF_A_KIND',
+      'NATURAL_BLACKJACK',
+      'TCP_STRAIGHT_FLUSH',
+      'TCP_MINI_ROYAL',
+      'STRAIGHT_UP_HIT',
+    ]
+    expect(types).toHaveLength(7)
+  })
+
+  it('GameNightTheme should accept valid themes', () => {
+    const themes: GameNightTheme[] = ['classic', 'neon', 'high_roller', 'tropical']
+    expect(themes).toHaveLength(4)
+    expect(themes).toContain('classic')
+  })
+
+  it('GameNightGameState should be backwards-compatible superset', () => {
+    // Verify the original 4 fields from v2.0 stub still work
+    const minimal: Pick<GameNightGameState, 'active' | 'roundLimit' | 'roundsPlayed' | 'scores'> = {
+      active: true,
+      roundLimit: 5,
+      roundsPlayed: 3,
+      scores: { p1: 100, p2: 70 },
+    }
+    expect(minimal.active).toBe(true)
+    expect(minimal.scores['p1']).toBe(100)
   })
 })

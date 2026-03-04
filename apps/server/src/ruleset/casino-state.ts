@@ -4,7 +4,7 @@
  * Per TDD-backend Section 3.1-3.3 and D-001, D-002, D-005.
  */
 
-import type { CasinoGameState, CasinoGame, CasinoPlayer, TTSMessage, TTSPriority, InputMode, ReactionType, SpeedConfig } from '@weekend-casino/shared'
+import type { CasinoGameState, CasinoGame, CasinoPlayer, TTSMessage, TTSPriority, InputMode, ReactionType, SpeedConfig, GameNightPlayerTotal, GameNightGameResult, GameNightAchievement, GameNightTheme } from '@weekend-casino/shared'
 import { CasinoPhase, DEFAULT_BLIND_LEVEL, STARTING_WALLET_BALANCE, REACTION_TYPES, REACTION_RATE_LIMIT, MAX_REACTION_QUEUE_SIZE, DEFAULT_QUICK_PLAY_CONFIG } from '@weekend-casino/shared'
 import type { GameReducer, GameThunk } from '@volley/vgf/types'
 
@@ -450,6 +450,193 @@ export const casinoStopCasinoCrawl: Reducer = state => ({
   casinoCrawl: undefined,
 })
 
+// ── Game Night Reducers (v2.1 — D-014) ──────────────────────────
+
+/**
+ * Initialise a Game Night session with full state.
+ * Sets up gameLineup, roundsPerGame, theme, and playerScores for all current players.
+ */
+export const gnInitGameNight: Reducer<[CasinoGame[], number, GameNightTheme]> = (
+  state,
+  gameLineup,
+  roundsPerGame,
+  theme,
+) => {
+  const playerScores: Record<string, GameNightPlayerTotal> = {}
+  for (const player of state.players) {
+    playerScores[player.id] = {
+      playerId: player.id,
+      playerName: player.name,
+      totalScore: 0,
+      gamesPlayed: 0,
+      rankPoints: 0,
+      marginBonus: 0,
+      achievementBonus: 0,
+      bestFinish: 0,
+    }
+  }
+
+  return {
+    ...state,
+    gameNight: {
+      active: true,
+      roundLimit: roundsPerGame,
+      roundsPlayed: 0,
+      scores: {},
+      gameLineup,
+      currentGameIndex: 0,
+      roundsPerGame,
+      playerScores,
+      gameResults: [],
+      theme,
+      championId: null,
+      startedAt: Date.now(),
+      leaderboardReady: false,
+      championReady: false,
+      achievements: [],
+      setupConfirmed: false,
+      walletSnapshot: { ...state.wallet },
+    },
+  }
+}
+
+/**
+ * Mark leaderboard as ready to advance.
+ */
+export const gnSetLeaderboardReady: Reducer = state => {
+  if (!state.gameNight) return state
+  return {
+    ...state,
+    gameNight: { ...state.gameNight, leaderboardReady: true },
+  }
+}
+
+/**
+ * Mark champion ceremony as ready to advance.
+ */
+export const gnSetChampionReady: Reducer = state => {
+  if (!state.gameNight) return state
+  return {
+    ...state,
+    gameNight: { ...state.gameNight, championReady: true },
+  }
+}
+
+/**
+ * Increment the rounds played counter for the current game.
+ */
+export const gnIncrementRoundsPlayed: Reducer = state => {
+  if (!state.gameNight) return state
+  return {
+    ...state,
+    gameNight: {
+      ...state.gameNight,
+      roundsPlayed: state.gameNight.roundsPlayed + 1,
+    },
+  }
+}
+
+/**
+ * Update player scores with new totals.
+ */
+export const gnUpdateScores: Reducer<[Record<string, GameNightPlayerTotal>]> = (
+  state,
+  playerScores,
+) => {
+  if (!state.gameNight) return state
+
+  // Also update the flat scores record for backwards compat
+  const scores: Record<string, number> = { ...state.gameNight.scores }
+  for (const [id, total] of Object.entries(playerScores)) {
+    scores[id] = total.totalScore
+  }
+
+  return {
+    ...state,
+    gameNight: {
+      ...state.gameNight,
+      playerScores,
+      scores,
+    },
+  }
+}
+
+/**
+ * Add a completed game result to the results array.
+ */
+export const gnAddGameResult: Reducer<[GameNightGameResult]> = (state, result) => {
+  if (!state.gameNight) return state
+  return {
+    ...state,
+    gameNight: {
+      ...state.gameNight,
+      gameResults: [...state.gameNight.gameResults, result],
+    },
+  }
+}
+
+/**
+ * Advance to the next game in the lineup.
+ * Increments currentGameIndex, resets roundsPlayed to 0, sets leaderboardReady to false.
+ */
+export const gnAdvanceGame: Reducer = state => {
+  if (!state.gameNight) return state
+  return {
+    ...state,
+    gameNight: {
+      ...state.gameNight,
+      currentGameIndex: state.gameNight.currentGameIndex + 1,
+      roundsPlayed: 0,
+      leaderboardReady: false,
+      walletSnapshot: { ...state.wallet },
+    },
+  }
+}
+
+/**
+ * Set the champion ID (winner of the Game Night).
+ */
+export const gnSetChampion: Reducer<[string]> = (state, championId) => {
+  if (!state.gameNight) return state
+  return {
+    ...state,
+    gameNight: { ...state.gameNight, championId },
+  }
+}
+
+/**
+ * Clear the Game Night state entirely.
+ */
+export const gnClearGameNight: Reducer = state => ({
+  ...state,
+  gameNight: undefined,
+})
+
+/**
+ * Record an achievement during the current Game Night.
+ */
+export const gnRecordAchievement: Reducer<[GameNightAchievement]> = (state, achievement) => {
+  if (!state.gameNight) return state
+  return {
+    ...state,
+    gameNight: {
+      ...state.gameNight,
+      achievements: [...state.gameNight.achievements, achievement],
+    },
+  }
+}
+
+/**
+ * Confirm Game Night setup (host has approved lineup/settings).
+ */
+export const gnConfirmSetup: Reducer = state => {
+  if (!state.gameNight) return state
+  return {
+    ...state,
+    gameNight: { ...state.gameNight, setupConfirmed: true },
+  }
+}
+
 // ── Global Thunks (Mock/Stub) ────────────────────────────────────
 
 /**
@@ -559,6 +746,88 @@ export const casinoReducers = {
   startCasinoCrawl: casinoStartCasinoCrawl,
   advanceCasinoCrawl: casinoAdvanceCasinoCrawl,
   stopCasinoCrawl: casinoStopCasinoCrawl,
+
+  // Game Night (v2.1 — D-014)
+  gnInitGameNight,
+  gnSetLeaderboardReady,
+  gnSetChampionReady,
+  gnIncrementRoundsPlayed,
+  gnUpdateScores,
+  gnAddGameResult,
+  gnAdvanceGame,
+  gnSetChampion,
+  gnClearGameNight,
+  gnRecordAchievement,
+  gnConfirmSetup,
+}
+
+// ── Game Night Thunks (v2.1) ──────────────────────────────────────
+
+/**
+ * Calculate scores for the just-completed game and update state.
+ * Called in GN_LEADERBOARD onBegin.
+ */
+export const gnCalculateScoresThunk: Thunk = async (ctx) => {
+  const state = ctx.getState()
+  const gn = state.gameNight
+  if (!gn?.active) return
+
+  const { rankPlayersByChipResult, calculateGameScores } = await import('../game-night-engine/scoring.js')
+
+  // Use wallet snapshot taken at game start vs current wallet
+  const walletBefore = gn.walletSnapshot ?? {}
+  const walletAfter: Record<string, number> = {}
+  for (const player of state.players) {
+    walletAfter[player.id] = state.wallet[player.id] ?? 0
+  }
+
+  const players = state.players.map(p => ({ id: p.id, name: p.name }))
+  const ranked = rankPlayersByChipResult(walletBefore, walletAfter, players)
+  const gameScores = calculateGameScores(ranked, gn.achievements, gn.currentGameIndex)
+
+  // Build updated player totals
+  const updatedScores: Record<string, GameNightPlayerTotal> = { ...gn.playerScores }
+  for (const gs of gameScores) {
+    const prev = updatedScores[gs.playerId]
+    updatedScores[gs.playerId] = {
+      playerId: gs.playerId,
+      playerName: gs.playerName,
+      totalScore: (prev?.totalScore ?? 0) + gs.totalGameScore,
+      gamesPlayed: (prev?.gamesPlayed ?? 0) + 1,
+      rankPoints: (prev?.rankPoints ?? 0) + gs.rankPoints,
+      marginBonus: (prev?.marginBonus ?? 0) + gs.marginBonus,
+      achievementBonus: (prev?.achievementBonus ?? 0) + gs.achievementBonus,
+      bestFinish: Math.min(prev?.bestFinish || 99, gs.rank),
+    }
+  }
+
+  ctx.dispatch('gnUpdateScores', updatedScores)
+  ctx.dispatch('gnAddGameResult', {
+    game: state.selectedGame ?? 'holdem',
+    gameIndex: gn.currentGameIndex,
+    rankings: gameScores,
+    roundsPlayed: gn.roundsPlayed,
+    completedAt: Date.now(),
+  })
+}
+
+/**
+ * Determine the Game Night champion (highest total score).
+ * Called in GN_CHAMPION onBegin.
+ */
+export const gnDetermineChampionThunk: Thunk = async (ctx) => {
+  const state = ctx.getState()
+  const gn = state.gameNight
+  if (!gn?.active) return
+
+  const { determineChampion } = await import('../game-night-engine/scoring.js')
+  const championId = determineChampion(gn.playerScores)
+
+  if (championId) {
+    ctx.dispatch('gnSetChampion', championId)
+    const name = gn.playerScores[championId]?.playerName ?? championId
+    ctx.dispatch('setDealerMessage', `${name} is the Game Night Champion!`)
+  }
 }
 
 export const casinoThunks = {
@@ -568,4 +837,6 @@ export const casinoThunks = {
   triggerVideo: casinoTriggerVideo,
   completeVideo: casinoCompleteVideo,
   activateRemoteMode: casinoActivateRemoteMode,
+  gnCalculateScores: gnCalculateScoresThunk,
+  gnDetermineChampion: gnDetermineChampionThunk,
 }

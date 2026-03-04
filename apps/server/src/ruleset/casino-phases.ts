@@ -65,13 +65,22 @@ export const lobbyPhase = {
 
   endIf: (ctx: any) => {
     const state: CasinoGameState = ctx.session.state
-    // Transition when host has selected AND confirmed a game.
+    // Game Night mode: transition when GN setup is confirmed
+    if (state.gameNight?.active && state.gameNight.setupConfirmed) {
+      return true
+    }
+    // Normal mode: transition when host has selected AND confirmed a game.
     // No minimum player count — host can start solo (bots fill in).
     return state.selectedGame !== null && state.gameSelectConfirmed === true
   },
 
   next: (ctx: any) => {
     const state: CasinoGameState = ctx.session.state
+    // Game Night mode: route to GN_SETUP
+    if (state.gameNight?.active) {
+      console.log('[LOBBY] Game Night mode → GN_SETUP')
+      return 'GN_SETUP'
+    }
     const selectedGame = state.selectedGame!
     const firstPhase = GAME_FIRST_PHASE[selectedGame]
     console.log(`[LOBBY] Starting ${selectedGame} → ${firstPhase}`)

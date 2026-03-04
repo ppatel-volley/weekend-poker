@@ -12,7 +12,7 @@
 import type { CasinoGameState } from '@weekend-casino/shared'
 import { CasinoPhase } from '@weekend-casino/shared'
 import { rankToNumeric } from '@weekend-casino/shared'
-import { wrapWithGameNightCheck } from './game-night-utils.js'
+import { wrapWithGameNightCheck, incrementGameNightRoundIfActive } from './game-night-utils.js'
 
 /**
  * BJ_PLACE_BETS: Players place bets (min 10, max 500 per D-006).
@@ -178,6 +178,7 @@ export const bjHandCompletePhase = {
       }
     }
 
+    incrementGameNightRoundIfActive(ctx)
     await ctx.thunkDispatcher('bjCompleteRound')
     return ctx.getState()
   },
