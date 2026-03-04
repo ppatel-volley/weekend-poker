@@ -46,11 +46,22 @@ export const tcpPlaceBetsPhase = {
     adapted.dispatch('tcpInitRound', activePlayers, roundNumber)
     adapted.dispatch('setDealerMessage', 'Ante up!')
 
-    // Auto-ante for bots (they have no controller UI)
+    // Auto-ante for bots using reducers directly (dispatchThunk may not
+    // work reliably in VGF onBegin context — see learning 009).
     const afterInit = adapted.getState()
+    const minAnte = afterInit.threeCardPoker?.config.minAnte ?? 10
     const botPlayers = afterInit.players.filter((p: any) => p.isBot && p.status !== 'busted' && p.status !== 'sitting_out')
     for (const bot of botPlayers) {
-      await adapted.dispatchThunk('tcpPlaceAnteBet', bot.id, afterInit.threeCardPoker?.config.minAnte ?? 10, 0)
+      adapted.dispatch('tcpPlaceAnte', bot.id, minAnte)
+      adapted.dispatch('updateWallet', bot.id, -minAnte)
+    }
+    // Check if all antes placed after bot auto-ante
+    if (botPlayers.length > 0) {
+      const postBotState = adapted.getState()
+      const tcp = postBotState.threeCardPoker
+      if (tcp && tcp.playerHands.every((h: any) => h.anteBet > 0)) {
+        adapted.dispatch('tcpSetAllAntesPlaced', true)
+      }
     }
 
     return adapted.getState()
@@ -88,15 +99,36 @@ export const tcpPlayerDecisionsPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: async (ctx: any) => {
+  onBegin: (ctx: any) => {
     const adapted = adaptPhaseCtx(ctx)
     adapted.dispatch('setDealerMessage', 'Play or fold!')
 
-    // Bots always play (they have no controller UI)
+    // Bots always play — use reducers directly (dispatchThunk unreliable in onBegin, learning 009)
     const state = adapted.getState()
     const botPlayers = state.players.filter((p: any) => p.isBot && p.status !== 'busted' && p.status !== 'sitting_out')
     for (const bot of botPlayers) {
-      await adapted.dispatchThunk('tcpMakeDecision', bot.id, 'play')
+      const tcp = adapted.getState().threeCardPoker
+      if (!tcp) break
+      const hand = tcp.playerHands.find((h: any) => h.playerId === bot.id)
+      if (!hand || hand.decision !== 'undecided') continue
+
+      // Check wallet can cover the play bet before committing
+      const walletBalance = adapted.getState().wallet[bot.id] ?? 0
+      if (walletBalance < hand.anteBet) {
+        adapted.dispatch('tcpSetPlayerDecision', bot.id, 'fold')
+      } else {
+        adapted.dispatch('tcpSetPlayerDecision', bot.id, 'play')
+        adapted.dispatch('updateWallet', bot.id, -hand.anteBet)
+      }
+    }
+
+    // Check if all players have decided after bot actions
+    if (botPlayers.length > 0) {
+      const postBotState = adapted.getState()
+      const tcp = postBotState.threeCardPoker
+      if (tcp && tcp.playerHands.every((h: any) => h.decision !== 'undecided')) {
+        adapted.dispatch('tcpSetAllDecisionsMade', true)
+      }
     }
 
     return adapted.getState()

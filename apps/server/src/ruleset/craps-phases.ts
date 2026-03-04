@@ -82,7 +82,7 @@ export const crapsComeOutBettingPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: async (ctx: any) => {
+  onBegin: (ctx: any) => {
     const adapted = adaptPhaseCtx(ctx)
     adapted.dispatch('setDealerMessage', 'Place your come-out bets!')
     // Reset confirmation flags for new betting round
@@ -93,11 +93,20 @@ export const crapsComeOutBettingPhase = {
       }
     }
 
-    // Auto-confirm bots (they bet nothing, just confirm — no controller UI)
+    // Auto-confirm bots — use reducers directly (dispatchThunk unreliable in onBegin, learning 009)
     const afterInit = adapted.getState()
     const botPlayers = afterInit.players.filter((p: any) => p.isBot && p.status !== 'busted' && p.status !== 'sitting_out')
     for (const bot of botPlayers) {
-      await adapted.dispatchThunk('crapsConfirmBets', bot.id)
+      adapted.dispatch('crapsSetPlayerConfirmed', bot.id, true)
+    }
+
+    // Check if all players confirmed after bot auto-confirms
+    if (botPlayers.length > 0) {
+      const postState = adapted.getState()
+      const craps = postState.craps
+      if (craps && craps.players.every((p: any) => p.betsConfirmed)) {
+        adapted.dispatch('crapsSetAllBetsPlaced', true)
+      }
     }
 
     return adapted.getState()
@@ -169,7 +178,7 @@ export const crapsPointBettingPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: async (ctx: any) => {
+  onBegin: (ctx: any) => {
     const adapted = adaptPhaseCtx(ctx)
     const state = adapted.getState()
     adapted.dispatch('setDealerMessage', `Point is ${state.craps?.point}. Place your bets!`)
@@ -188,11 +197,20 @@ export const crapsPointBettingPhase = {
       adapted.dispatch('crapsSetAllBetsPlaced', false)
     }
 
-    // Auto-confirm bots (they bet nothing, just confirm — no controller UI)
+    // Auto-confirm bots — use reducers directly (dispatchThunk unreliable in onBegin, learning 009)
     const afterReset = adapted.getState()
     const botPlayers = afterReset.players.filter((p: any) => p.isBot && p.status !== 'busted' && p.status !== 'sitting_out')
     for (const bot of botPlayers) {
-      await adapted.dispatchThunk('crapsConfirmBets', bot.id)
+      adapted.dispatch('crapsSetPlayerConfirmed', bot.id, true)
+    }
+
+    // Check if all players confirmed after bot auto-confirms
+    if (botPlayers.length > 0) {
+      const postState = adapted.getState()
+      const craps = postState.craps
+      if (craps && craps.players.every((p: any) => p.betsConfirmed)) {
+        adapted.dispatch('crapsSetAllBetsPlaced', true)
+      }
     }
 
     return adapted.getState()

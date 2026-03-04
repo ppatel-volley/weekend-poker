@@ -21,7 +21,7 @@ export const bjPlaceBetsPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: async (ctx: any) => {
+  onBegin: (ctx: any) => {
     const state: CasinoGameState = ctx.getState()
     const activePlayers = state.players
       .filter((p: any) => p.status !== 'busted' && p.status !== 'sitting_out')
@@ -31,11 +31,22 @@ export const bjPlaceBetsPhase = {
     ctx.reducerDispatcher('bjInitRound', activePlayers, roundNumber)
     ctx.reducerDispatcher('setDealerMessage', 'Place your bets!')
 
-    // Auto-place minimum bet for bots (they have no controller UI)
+    // Auto-place minimum bet for bots — use reducers directly (dispatchThunk unreliable in onBegin, learning 009)
     const afterInit: CasinoGameState = ctx.getState()
+    const minBet = afterInit.blackjack?.config.minBet ?? 10
     const botPlayers = afterInit.players.filter((p: any) => p.isBot && p.status !== 'busted' && p.status !== 'sitting_out')
     for (const bot of botPlayers) {
-      await ctx.thunkDispatcher('bjPlaceBet', bot.id, afterInit.blackjack?.config.minBet ?? 10)
+      ctx.reducerDispatcher('bjPlaceBet', bot.id, minBet)
+      ctx.reducerDispatcher('updateWallet', bot.id, -minBet)
+    }
+
+    // Check if all bets placed after bot auto-bets
+    if (botPlayers.length > 0) {
+      const postBotState: CasinoGameState = ctx.getState()
+      const bj = postBotState.blackjack
+      if (bj && bj.playerStates.every((ps: any) => ps.hands[0]?.bet > 0)) {
+        ctx.reducerDispatcher('bjSetAllBetsPlaced', true)
+      }
     }
 
     return ctx.getState()
@@ -122,10 +133,10 @@ export const bjPlayerTurnsPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: async (ctx: any) => {
+  onBegin: (ctx: any) => {
     ctx.reducerDispatcher('setDealerMessage', 'Your turn!')
 
-    // Auto-stand bots whose turn it currently is (they have no controller UI)
+    // Auto-stand bots — use reducers directly (dispatchThunk unreliable in onBegin, learning 009)
     // Loop: keep auto-standing while the current turn player is a bot
     let state: CasinoGameState = ctx.getState()
     while (state.blackjack) {
@@ -136,11 +147,19 @@ export const bjPlayerTurnsPhase = {
       if (!currentPlayer?.isBot) break
       const ps = bj.playerStates.find((p: any) => p.playerId === currentPlayerId)
       if (ps && !ps.hands[0]?.stood && !ps.hands[0]?.busted) {
-        await ctx.thunkDispatcher('bjStand', currentPlayerId)
+        ctx.reducerDispatcher('bjStandHand', currentPlayerId)
+        ctx.reducerDispatcher('bjAdvanceTurn')
       } else {
         break
       }
       state = ctx.getState()
+    }
+
+    // Check if all turns are now complete after bot auto-stands
+    const finalState: CasinoGameState = ctx.getState()
+    const bjFinal = finalState.blackjack
+    if (bjFinal && bjFinal.currentTurnIndex >= bjFinal.turnOrder.length) {
+      ctx.reducerDispatcher('bjSetPlayerTurnsComplete', true)
     }
 
     return ctx.getState()
