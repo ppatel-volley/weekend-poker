@@ -27,27 +27,27 @@ export async function playHoldemRound(page: Page): Promise<void> {
 
 /**
  * Play one round of Blackjack Classic: place min bet, then stand immediately.
+ * After bet, phases cascade: deal -> player turns (bot may auto-stand first).
+ * Detect round completion by watching for place-bet-btn to reappear for the next round.
  */
 export async function playBlackjackRound(page: Page): Promise<void> {
-  // Place bet phase
   const placeBetBtn = page.getByTestId('place-bet-btn')
-  const alreadyInGame = page.getByTestId('hit-btn').or(page.getByTestId('stand-btn'))
-
-  await expect(placeBetBtn.or(alreadyInGame)).toBeVisible({ timeout: 30_000 })
-
-  if (await placeBetBtn.isVisible().catch(() => false)) {
-    await bjPlaceBet(page)
-  }
-
-  // Wait for player turns
   const standBtn = page.getByTestId('stand-btn')
-  const result = page.getByText(/WON \$|LOST \$|PUSH|BUST|BLACKJACK/i)
-  await expect(standBtn.or(result)).toBeVisible({ timeout: 30_000 })
+  const hitBtn = page.getByTestId('hit-btn')
 
-  // If we can act, just stand
+  await expect(placeBetBtn).toBeVisible({ timeout: 30_000 })
+  await bjPlaceBet(page)
+
+  // After bet, phases cascade: deal -> player turns (bot may auto-stand first)
+  await page.waitForTimeout(1_000)
+  await expect(standBtn.or(hitBtn).or(placeBetBtn)).toBeVisible({ timeout: 30_000 })
+
   if (await standBtn.isVisible().catch(() => false)) {
     await bjStand(page)
+    await page.waitForTimeout(1_000)
+    await expect(placeBetBtn).toBeVisible({ timeout: 30_000 })
   }
+  // If placeBetBtn is already visible, round completed via cascade
 }
 
 /**
@@ -66,25 +66,32 @@ export async function playBjcRound(page: Page): Promise<void> {
 
 /**
  * Play one round of Three Card Poker: place ante, then always play.
+ * After ante, phases may cascade instantly through deal -> decision -> reveal -> settlement
+ * when bots auto-act in onBegin. Detect round completion by watching for the next round's
+ * ante button to reappear rather than looking for brief result text.
  */
 export async function playTcpRound(page: Page): Promise<void> {
-  // Place ante
   const anteBtn = page.getByTestId('confirm-ante-btn')
   const playBtn = page.getByTestId('play-btn')
-  const result = page.getByText(/WON \$|LOST \$|PUSH|FOLDED/i)
+  const foldBtn = page.getByTestId('fold-btn')
 
-  await expect(anteBtn.or(playBtn).or(result)).toBeVisible({ timeout: 30_000 })
+  // Wait for ante phase
+  await expect(anteBtn).toBeVisible({ timeout: 30_000 })
+  await tcpPlaceAnte(page)
 
-  if (await anteBtn.isVisible().catch(() => false)) {
-    await tcpPlaceAnte(page)
-  }
+  // After ante, phases may cascade instantly through deal -> decision -> reveal -> settlement
+  // Wait for either play/fold buttons OR the next round's ante button
+  await page.waitForTimeout(1_000)
+  await expect(playBtn.or(foldBtn).or(anteBtn)).toBeVisible({ timeout: 30_000 })
 
-  // Wait for decision phase
-  await expect(playBtn.or(result)).toBeVisible({ timeout: 30_000 })
-
+  // If we see play/fold, make the decision
   if (await playBtn.isVisible().catch(() => false)) {
     await tcpPlay(page)
+    // Wait for cascade to complete and return to ante phase
+    await page.waitForTimeout(1_000)
+    await expect(anteBtn).toBeVisible({ timeout: 30_000 })
   }
+  // If anteBtn is already visible, round completed via cascade
 }
 
 /**

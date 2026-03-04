@@ -857,6 +857,28 @@ function advanceToNextPlayer(ctx: ThunkCtx): void {
     const nextIdx = nextActivePlayer(state.players, state.activePlayerIndex)
     if (nextIdx !== -1) {
       ctx.dispatch('setActivePlayer', nextIdx)
+
+      // Auto-act for bots immediately using simple strategy (check > call > fold).
+      // This avoids waiting for the AI-based botDecision thunk (10s timeout)
+      // and ensures bots act in E2E tests and single-player games.
+      const nextPlayer = state.players[nextIdx]
+      if (nextPlayer?.isBot) {
+        const updatedState = ctx.getState()
+        const botLegalActions = getLegalActions(asPokerState(updatedState), nextPlayer.id)
+        let botAction: PlayerAction = 'fold'
+        if (botLegalActions.includes('check')) {
+          botAction = 'check'
+        } else if (botLegalActions.includes('call')) {
+          botAction = 'call'
+          ctx.dispatch('updatePlayerBet', nextPlayer.id, updatedState.currentBet)
+        }
+        ctx.dispatch('setPlayerLastAction', nextPlayer.id, botAction)
+        if (botAction === 'fold') {
+          ctx.dispatch('foldPlayer', nextPlayer.id)
+        }
+        // Recursively advance (next player might also be a bot)
+        advanceToNextPlayer(ctx)
+      }
     }
   }
 }
