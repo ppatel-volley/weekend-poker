@@ -40,13 +40,10 @@ test.describe('Smoke tests', () => {
     await controllerPage.goto(`http://localhost:5174/?sessionId=${sessionId}`)
 
     // 4. CRITICAL: Controller must NOT get stuck on "Connecting to game..."
-    //    It should reach the lobby UI (showing the name input or game selection).
+    //    It should reach the lobby UI (showing the name input).
     //    This regression test catches the socketOptions.query bug where sessionId
     //    was missing from the WebSocket connection params.
-    await expect(
-      controllerPage.locator('#player-name')
-        .or(controllerPage.getByText('Choose a game'))
-    ).toBeVisible({ timeout: 15_000 })
+    await expect(controllerPage.locator('#player-name')).toBeVisible({ timeout: 15_000 })
 
     // 5. Verify we are NOT stuck on "Connecting to game..."
     await expect(controllerPage.getByText('Connecting to game...')).not.toBeVisible()
