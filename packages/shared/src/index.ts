@@ -68,3 +68,23 @@ export {
   GN_THEMES,
   GN_DEFAULT_THEME,
 } from './constants/game-night.js'
+
+// ── v2.2 Retention Constants ──────────────────────────────────────
+export {
+  DAILY_BONUS_SCHEDULE,
+  DAILY_BONUS_STREAK_MULTIPLIER,
+  DAILY_BONUS_STREAK_WINDOW_HOURS,
+  DAILY_BONUS_XP_REWARD,
+} from './constants/daily-bonus.js'
+export {
+  CHALLENGE_DEFINITIONS,
+  CHALLENGE_XP_REWARDS,
+  CHALLENGE_SLOT_COUNT,
+  getChallengesByTier,
+} from './constants/challenges.js'
+export {
+  COSMETIC_DEFINITIONS,
+  DEFAULT_EQUIPPED_LOADOUT,
+  getCosmeticsByCategory,
+  getCosmeticForAchievement,
+} from './constants/cosmetics.js'

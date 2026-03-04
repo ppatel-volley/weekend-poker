@@ -6,6 +6,8 @@ import type { CasinoGameState } from '@weekend-casino/shared'
 import { pokerRuleset } from './ruleset/index.js'
 import { logger } from './logger.js'
 import { parseAllowedOrigins } from './cors-config.js'
+import { getRedisClient } from './persistence/redis-client.js'
+import { createRetentionRouter } from './persistence/routes.js'
 
 const PORT = Number(process.env['PORT']) || 3000
 
@@ -18,10 +20,15 @@ app.use(cors({
   credentials: true,
 }))
 
+app.use(express.json())
+
 // ── Health endpoint ────────────────────────────────────────────
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() })
 })
+
+// ── v2.2 Retention REST routes ─────────────────────────────────
+app.use(createRetentionRouter())
 
 // ── HTTP server ────────────────────────────────────────────────
 const httpServer = createServer(app)
@@ -74,6 +81,11 @@ const server = new VGFServer<CasinoGameState>({
   app,
   schedulerProvider: noopSchedulerProvider,
 })
+
+// ── v2.2: Initialise Redis for persistence ───────────────────────
+getRedisClient()
+  .then(() => logger.info('Redis client initialised (persistence ready)'))
+  .catch(err => logger.warn({ err }, 'Redis init failed — persistence degraded (dev mode)'))
 
 server.start()
 

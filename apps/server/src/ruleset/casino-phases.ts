@@ -65,8 +65,8 @@ export const lobbyPhase = {
 
   endIf: (ctx: any) => {
     const state: CasinoGameState = ctx.session.state
-    // Game Night mode: transition when GN setup is confirmed
-    if (state.gameNight?.active && state.gameNight.setupConfirmed) {
+    // Game Night mode: transition to GN_SETUP when GN is active
+    if (state.gameNight?.active) {
       return true
     }
     // Normal mode: transition when host has selected AND confirmed a game.

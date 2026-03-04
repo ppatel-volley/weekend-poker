@@ -129,6 +129,8 @@ import { wrapWithGameNightCheck, incrementGameNightRoundIfActive } from './game-
 import { gnSetupPhase, gnLeaderboardPhase, gnChampionPhase } from './gn-phases.js'
 import { validatePlayerIdOrBot, getAuthorizedPlayerId, isCallerHost, validateBetAmount } from './security.js'
 import { registerConnection, unregisterConnection, emitToClient } from './connection-registry.js'
+import { resolveIdentity, playerStore, dailyBonusStore, challengeStore } from '../persistence/index.js'
+import { clearSessionTracker } from '../persistence/challenge-utils.js'
 
 // ── Bot Manager (module-level singleton per server process) ─────
 const botManager = new BotManager()
@@ -547,10 +549,11 @@ const holdemThunks = {
         return
       }
 
-      // Dozen bets
+      // Dozen bets — entities.amount holds the dozen INDEX (1/2/3), not the wager
       if (intent === 'roulette_dozen' && result.entities?.amount) {
-        const dozenType = `dozen_${result.entities.amount}` as const
-        await ctx.dispatchThunk('roulettePlaceBet', playerId, dozenType, amount ?? defaultBet)
+        const dozenIndex = result.entities.amount
+        const dozenType = `dozen_${dozenIndex}` as const
+        await ctx.dispatchThunk('roulettePlaceBet', playerId, dozenType, defaultBet)
         return
       }
 
@@ -570,6 +573,31 @@ const holdemThunks = {
       if (intent === 'roulette_clear') { await ctx.dispatchThunk('rouletteClearBets', playerId); return }
       if (intent === 'roulette_confirm' || intent === 'tcp_confirm') { await ctx.dispatchThunk('rouletteConfirmBets', playerId); return }
       if (intent === 'roulette_no_bet') { await ctx.dispatchThunk('rouletteNoBet', playerId); return }
+    }
+
+    // ── Craps ────────────────────────────────────────────────────
+    if (game === 'craps') {
+      const crapsBettingPhases = [CasinoPhase.CrapsComeOutBetting, CasinoPhase.CrapsPointBetting] as string[]
+      const crapsRollPhases = [CasinoPhase.CrapsComeOutRoll, CasinoPhase.CrapsPointRoll] as string[]
+      const defaultBet = 25
+
+      if (crapsBettingPhases.includes(phase)) {
+        if (intent === 'craps_pass_line') { await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'pass_line', amount ?? defaultBet); return }
+        if (intent === 'craps_dont_pass') { await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'dont_pass', amount ?? defaultBet); return }
+        if (intent === 'craps_come') { await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'come', amount ?? defaultBet); return }
+        if (intent === 'craps_dont_come') { await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'dont_come', amount ?? defaultBet); return }
+        if (intent === 'craps_field') { await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'field', amount ?? defaultBet); return }
+        if (intent === 'craps_place' && result.entities?.amount !== undefined) {
+          await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'place', defaultBet, result.entities.amount)
+          return
+        }
+        if (intent === 'craps_odds') { await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'pass_odds', amount ?? defaultBet); return }
+        if (intent === 'roulette_confirm' || intent === 'tcp_confirm') { await ctx.dispatchThunk('crapsConfirmBets', playerId); return }
+      }
+
+      if (crapsRollPhases.includes(phase)) {
+        if (intent === 'craps_roll') { ctx.dispatch('crapsSetRollComplete', true); return }
+      }
     }
   }),
 
@@ -1304,6 +1332,57 @@ const onConnect = async (ctx: ConnCtx) => {
     ?? member?.state?.name
     ?? `Player ${seatIndex + 1}`
 
+  // ── v2.2: Resolve persistent identity and load profile ──────
+  let persistentId: string | undefined
+  let playerLevel: number | undefined
+  let pendingBonus: { amount: number; streakDay: number; multiplierApplied: boolean } | null = null
+  let originalBonusState: import('@weekend-casino/shared').DailyBonusState | null = null
+  try {
+    const identity = resolveIdentity(ctx.connection.metadata as unknown as Record<string, unknown>)
+    const profile = await playerStore.getOrCreateByDeviceToken(
+      identity.token,
+      identity.source,
+      displayName,
+    )
+    persistentId = profile.identity.persistentId
+    playerLevel = profile.level
+
+    // Proactively assign weekly challenges on session join so progress
+    // from early hands isn't lost. Previously challenges were only assigned
+    // lazily on first GET /api/challenges call. See learning 011.
+    // Called unconditionally — assignChallenges() internally checks the week
+    // identifier and returns existing challenges if already assigned this week,
+    // or rotates to new challenges if a new week has started.
+    try {
+      await challengeStore.assignChallenges(persistentId, profile.stats)
+    } catch (challengeErr) {
+      // Non-blocking: challenge assignment failure should NOT prevent joining
+      console.error('[persistence] Proactive challenge assignment failed:', challengeErr)
+    }
+
+    // Check daily bonus eligibility
+    const bonusResult = dailyBonusStore.calculateDailyBonus(profile.dailyBonus)
+    if (bonusResult.eligible) {
+      // Snapshot original state for safe rollback
+      originalBonusState = { ...profile.dailyBonus }
+      // Store bonus data for dispatch after addPlayer (atomic from player perspective)
+      pendingBonus = {
+        amount: bonusResult.amount,
+        streakDay: bonusResult.streakDay,
+        multiplierApplied: bonusResult.multiplierApplied,
+      }
+      // Persist bonus state to Redis
+      const updatedBonus = dailyBonusStore.applyDailyBonusClaim(
+        profile.dailyBonus,
+        bonusResult,
+      )
+      await playerStore.updateDailyBonus(persistentId, updatedBonus)
+    }
+  } catch (err) {
+    // Non-blocking: persistence failures should NOT prevent joining
+    console.error('[persistence] onConnect identity resolution failed:', err)
+  }
+
   const newPlayer: CasinoPlayer = {
     id: clientId,
     name: displayName,
@@ -1319,9 +1398,31 @@ const onConnect = async (ctx: ConnCtx) => {
     isBot: false,
     isConnected: true,
     sittingOutHandCount: 0,
+    persistentId,
+    playerLevel,
   }
 
   ctx.dispatch('addPlayer', newPlayer)
+
+  // Apply daily bonus AFTER player is added — synchronous, no setTimeout.
+  // Bonus state was already persisted above; wallet credit is dispatched here.
+  if (pendingBonus) {
+    try {
+      ctx.dispatch('updateWallet', clientId, pendingBonus.amount)
+      ctx.dispatch('setDailyBonus', {
+        amount: pendingBonus.amount,
+        streakDay: pendingBonus.streakDay,
+        multiplierApplied: pendingBonus.multiplierApplied,
+        timestamp: Date.now(),
+      })
+    } catch {
+      // If wallet credit fails, restore the ORIGINAL bonus state (not synthetic)
+      if (persistentId && originalBonusState) {
+        playerStore.updateDailyBonus(persistentId, originalBonusState)
+          .catch(() => { /* best-effort revert */ })
+      }
+    }
+  }
 }
 
 const onDisconnect = async (ctx: ConnCtx) => {
@@ -1336,8 +1437,13 @@ const onDisconnect = async (ctx: ConnCtx) => {
   if (!player) return
 
   if (state.phase === CasinoPhase.Lobby) {
+    // True session leave — clear session tracker to prevent cross-session leakage
+    if (player.persistentId) {
+      clearSessionTracker(sessionId, player.persistentId)
+    }
     ctx.dispatch('removePlayer', clientId)
   } else {
+    // Transient disconnect mid-game — preserve session tracker for reconnect
     ctx.dispatch('markPlayerDisconnected', clientId)
   }
 }

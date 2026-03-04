@@ -22,6 +22,8 @@ export type CasinoFixtures = {
   controllerPage: Page
   /** Second controller page for multiplayer tests */
   controllerPage2: Page
+  /** Third controller page for multiplayer tests */
+  controllerPage3: Page
   /** Join a session as a player */
   joinSession: (page: Page, playerName: string) => Promise<void>
   /** Wait for a specific phase string on the display */
@@ -30,6 +32,8 @@ export type CasinoFixtures = {
   selectGame: (page: Page, gameLabel: string) => Promise<void>
   /** Verify both display and controller share the same session (cross-client assertion) */
   assertSameSession: () => Promise<void>
+  /** Start a game from the lobby (enter name, select game, ready, start) */
+  startGame: (controllerPage: Page, displayPage: Page, gameKey: string, playerName: string) => Promise<void>
 }
 
 /**
@@ -92,7 +96,10 @@ export const test = base.extend<CasinoFixtures>({
     })
     const page = await context.newPage()
     await page.goto(`${CONTROLLER_URL}?sessionId=${sessionId}`)
-    await expect(page.getByAltText('Weekend Casino')).toBeVisible({ timeout: 15_000 })
+    // Wait for VGF connection — controller shows game UI once connected
+    await expect(page.locator('body')).not.toHaveText('No Session Found', { timeout: 15_000 })
+    // Wait for connected state (either lobby content or "Connecting" to clear)
+    await page.waitForTimeout(2_000)
 
     await use(page)
     await context.close()
@@ -104,8 +111,21 @@ export const test = base.extend<CasinoFixtures>({
     })
     const page = await context.newPage()
     await page.goto(`${CONTROLLER_URL}?sessionId=${sessionId}`)
-    await expect(page.getByAltText('Weekend Casino')).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('body')).not.toHaveText('No Session Found', { timeout: 15_000 })
+    await page.waitForTimeout(2_000)
 
+    await use(page)
+    await context.close()
+  },
+
+  controllerPage3: async ({ browser, sessionId }, use) => {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    })
+    const page = await context.newPage()
+    await page.goto(`${CONTROLLER_URL}?sessionId=${sessionId}`)
+    await expect(page.locator('body')).not.toHaveText('No Session Found', { timeout: 15_000 })
+    await page.waitForTimeout(2_000)
     await use(page)
     await context.close()
   },
@@ -128,10 +148,12 @@ export const test = base.extend<CasinoFixtures>({
   },
 
   waitForPhase: async ({ displayPage }, use) => {
-    const waitForPhase = async (phase: string) => {
-      // The phase might be shown in the HUD or via the game state.
-      // For now, we rely on visual indicators per phase.
-      await displayPage.waitForTimeout(2_000)
+    const waitForPhase = async (_phase: string) => {
+      // Wait for game heading to be visible as phase indicator
+      await expect(
+        displayPage.getByTestId('game-heading')
+          .or(displayPage.getByText(/Phase|Round|Hand/i))
+      ).toBeVisible({ timeout: 15_000 })
     }
 
     await use(waitForPhase)
@@ -145,6 +167,47 @@ export const test = base.extend<CasinoFixtures>({
     }
 
     await use(selectGame)
+  },
+
+  startGame: async ({}, use) => {
+    const startGame = async (
+      controllerPage: Page,
+      displayPage: Page,
+      gameKey: string,
+      playerName: string,
+    ) => {
+      const GAME_LABELS: Record<string, string> = {
+        holdem: "Texas Hold'em",
+        five_card_draw: '5-Card Draw',
+        blackjack_classic: 'Blackjack',
+        blackjack_competitive: 'Competitive Blackjack',
+        roulette: 'Roulette',
+        three_card_poker: 'Three Card Poker',
+        craps: 'Craps',
+      }
+      const label = GAME_LABELS[gameKey]
+      if (!label) throw new Error(`Unknown game key: ${gameKey}`)
+
+      // Enter name
+      const nameInput = controllerPage.locator('#player-name')
+      await expect(nameInput).toBeVisible({ timeout: 10_000 })
+      await nameInput.fill(playerName)
+
+      // Select game
+      await controllerPage.getByRole('button', { name: label }).click()
+
+      // Ready
+      await controllerPage.getByRole('button', { name: /^READY$/i }).click()
+
+      // Start
+      const startButton = controllerPage.getByRole('button', { name: new RegExp(`START`, 'i') })
+      await expect(startButton).toBeVisible({ timeout: 10_000 })
+      await startButton.click()
+
+      // Wait for game UI
+      await expect(controllerPage.getByTestId('game-heading')).toBeVisible({ timeout: 30_000 })
+    }
+    await use(startGame)
   },
 
   assertSameSession: async ({ displayPage, controllerPage, joinSession }, use) => {

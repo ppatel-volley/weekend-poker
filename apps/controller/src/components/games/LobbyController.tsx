@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { CasinoGame } from '@weekend-casino/shared'
-import { CASINO_GAME_LABELS, CASINO_GAME_DESCRIPTIONS, V1_GAMES, V2_0_GAMES } from '@weekend-casino/shared'
+import { CASINO_GAME_LABELS, CASINO_GAME_DESCRIPTIONS, V1_GAMES, V2_0_GAMES, V2_1_GAMES } from '@weekend-casino/shared'
 import {
   useClientActions,
   useSessionMemberSafe,
@@ -16,6 +16,7 @@ const gameCardSuits: Record<string, string> = {
   blackjack_competitive: '♥',
   roulette: '♦',
   three_card_poker: '♠',
+  craps: '♣',
 }
 
 /**
@@ -41,15 +42,16 @@ export function LobbyController() {
 
   const handleReady = () => {
     if (!member?.sessionMemberId) return // Guard: wait for handshake
+    const newReady = !isReady
     toggleReady()
     if (name.trim()) {
       ;(dispatch as (name: string, ...args: unknown[]) => void)(
         'updatePlayerName', member.sessionMemberId, name.trim(),
       )
     }
-    // Sync CasinoPlayer.isReady with VGF member ready state
+    // Sync CasinoPlayer.isReady with VGF member ready state (toggle, not force-true)
     ;(dispatch as (name: string, ...args: unknown[]) => void)(
-      'setPlayerReady', member.sessionMemberId, true,
+      'setPlayerReady', member.sessionMemberId, newReady,
     )
     ;(dispatch as (name: string, ...args: unknown[]) => void)(
       'checkLobbyReady',
@@ -263,7 +265,7 @@ export function LobbyController() {
           marginBottom: '24px',
         }}
       >
-        {[...V1_GAMES, ...V2_0_GAMES].map((game) => {
+        {[...V1_GAMES, ...V2_0_GAMES, ...V2_1_GAMES].map((game) => {
           const isSelected = selectedGame === game
           const suitChar = gameCardSuits[game] ?? '♠'
           const isRedSuit = suitChar === '♥' || suitChar === '♦'
@@ -340,7 +342,7 @@ export function LobbyController() {
           if (!member?.sessionMemberId) return
           ;(dispatch as (name: string, ...args: unknown[]) => void)(
             'gnInitGameNight',
-            [...V1_GAMES, ...V2_0_GAMES].slice(0, 3),
+            [],
             5,
             'classic',
           )

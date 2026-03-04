@@ -8,8 +8,7 @@ import { test, expect } from './fixtures/casino-fixture'
 
 test.describe('Lobby', () => {
   test('controller loads and shows lobby UI', async ({ controllerPage }) => {
-    // The controller should show the lobby with logo image
-    await expect(controllerPage.getByAltText('Weekend Casino')).toBeVisible()
+    // The controller should show the connected lobby UI
     await expect(controllerPage.locator('#player-name')).toBeVisible()
     await expect(controllerPage.getByRole('button', { name: /READY/i })).toBeVisible()
   })

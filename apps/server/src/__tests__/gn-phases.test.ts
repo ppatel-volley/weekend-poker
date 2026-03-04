@@ -279,9 +279,9 @@ describe('incrementGameNightRoundIfActive', () => {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 describe('lobby GN routing', () => {
-  it('lobby endIf should return true when GN setupConfirmed', () => {
+  it('lobby endIf should return true when GN active', () => {
     const state = makeState({
-      gameNight: makeGN({ setupConfirmed: true }),
+      gameNight: makeGN(),
     })
     const ctx = { session: { state } }
     expect(lobbyPhase.endIf(ctx)).toBe(true)

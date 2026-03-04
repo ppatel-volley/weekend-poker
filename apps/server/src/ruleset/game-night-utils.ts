@@ -13,6 +13,8 @@
 import type { CasinoGameState } from '@weekend-casino/shared'
 import { CasinoPhase } from '@weekend-casino/shared'
 import { detectAchievements } from '../game-night-engine/achievements.js'
+import { persistAchievementsIfNew } from '../achievement-engine/persistent-achievements.js'
+import { updateChallengeProgressIfPersistent } from '../persistence/challenge-utils.js'
 
 type NextFunction = (ctx: any) => string
 
@@ -65,4 +67,8 @@ export function incrementGameNightRoundIfActive(ctx: any): void {
       }
     }
   }
+
+  // v2.2: Persist achievements and update challenge progress (non-blocking)
+  persistAchievementsIfNew(ctx).catch(() => { /* non-critical */ })
+  updateChallengeProgressIfPersistent(ctx).catch(() => { /* non-critical */ })
 }

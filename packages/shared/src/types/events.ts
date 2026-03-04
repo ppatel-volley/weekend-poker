@@ -17,6 +17,9 @@ export type VoiceIntent =
   | 'roulette_high' | 'roulette_low' | 'roulette_straight' | 'roulette_split'
   | 'roulette_dozen' | 'roulette_repeat' | 'roulette_clear' | 'roulette_confirm'
   | 'roulette_no_bet'
+  // Craps intents
+  | 'craps_pass_line' | 'craps_dont_pass' | 'craps_come' | 'craps_dont_come'
+  | 'craps_field' | 'craps_place' | 'craps_odds' | 'craps_roll'
   | 'unknown'
 
 export interface ParsedVoiceCommand {

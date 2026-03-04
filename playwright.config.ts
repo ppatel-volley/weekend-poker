@@ -57,6 +57,42 @@ export default defineConfig({
       },
       testMatch: /\b(lobby|holdem|tv-platform)\b.*\.test\.ts$/,
     },
+    {
+      name: 'gameplay',
+      use: {
+        ...devices['iPhone 14'],
+        baseURL: 'http://localhost:5174',
+      },
+      testDir: './e2e/games',
+      timeout: 120_000,
+    },
+    {
+      name: 'gamenight',
+      use: {
+        ...devices['iPhone 14'],
+        baseURL: 'http://localhost:5174',
+      },
+      testDir: './e2e/gamenight',
+      timeout: 300_000,
+    },
+    {
+      name: 'retention',
+      use: {
+        ...devices['iPhone 14'],
+        baseURL: 'http://localhost:5174',
+      },
+      testDir: './e2e/retention',
+      timeout: 60_000,
+    },
+    {
+      name: 'multiplayer',
+      use: {
+        ...devices['iPhone 14'],
+        baseURL: 'http://localhost:5174',
+      },
+      testDir: './e2e/multi-player',
+      timeout: 180_000,
+    },
   ],
 
   webServer: [

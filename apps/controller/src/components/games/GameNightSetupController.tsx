@@ -4,6 +4,7 @@ import {
   CASINO_GAME_LABELS,
   V1_GAMES,
   V2_0_GAMES,
+  V2_1_GAMES,
   GN_MIN_GAMES,
   GN_MAX_GAMES,
   GN_DEFAULT_ROUNDS_PER_GAME,
@@ -61,7 +62,7 @@ export function GameNightSetupController() {
     ;(dispatch as (name: string, ...args: unknown[]) => void)('gnConfirmSetup')
   }
 
-  const allGames = [...V1_GAMES, ...V2_0_GAMES]
+  const allGames = [...V1_GAMES, ...V2_0_GAMES, ...V2_1_GAMES]
   const canStart = selectedGames.length >= GN_MIN_GAMES
 
   return (

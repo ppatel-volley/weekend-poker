@@ -24,6 +24,15 @@
 | Voice pipeline security | 008 |
 | Host-only access control | 008 |
 | Phase config reducer exposure | 006, 008 |
+| Retention / persistence | 010 |
+| API contract testing | 010 |
+| Session-scoped state | 010 |
+| Atomic state transitions | 010 |
+| Challenge/achievement system | 010, 011 |
+| Weekly challenge backfill | 011 |
+| Voice intent routing | 012 |
+| Playwright multi-page testing | 013 |
+| JS operator precedence | 014 |
 
 ## Summaries
 
@@ -67,6 +76,31 @@ Vitest strips TypeScript types at transform time and does NOT enforce type corre
 **Category:** Security, Multi-Agent, Code Review
 "Additive-only" security fixes — creating a new secure path (thunk with validation) without removing or gating the old insecure path (raw reducer still in phase config, old dispatches still in controllers). Three examples: host-only game selection left old `selectGame` reducer exposed; hole card privacy left `setHoleCards` broadcasting to public state; voice pipeline bypassed `processPlayerAction` validation. For every security fix, map ALL paths to the vulnerability, close every one, and write negative tests proving the old paths are blocked.
 
+### 011 — Weekly challenge backfill must NOT use lifetime stats
+**Severity:** High
+**Category:** Retention, Challenges, Game Economy
+Using lifetime cumulative stats (totalHandsPlayed, totalHandsWon) to initialise weekly challenge progress causes instant completion for returning players. Weekly challenges must only count activity within the challenge period — start at zero if you can't distinguish weekly from lifetime.
+
+### 012 — Voice intents must have both parsing AND routing
+**Severity:** Critical
+**Category:** Voice Pipeline, Client-Server
+Adding intent patterns to `parseVoiceIntent.ts` without adding routing in `processVoiceCommand` creates a silent failure — intents parse correctly but are never dispatched to game actions. Always check both sides (parser + router) when adding new intents.
+
+### 013 — Playwright `.or()` only works with same-page locators
+**Severity:** Critical
+**Category:** E2E Testing, Playwright
+`.or()` combinator silently fails or produces incorrect results when combining locators from different Playwright Page objects. For multi-player tests, always assert on each page separately.
+
+### 014 — JS `??` has lower precedence than comparison operators
+**Severity:** Medium
+**Category:** JavaScript, Operator Precedence
+`a ?? b >= c` evaluates as `a ?? (b >= c)`, not `(a ?? b) >= c`. Always wrap `??` in parentheses when combining with comparison or arithmetic operators.
+
+### 010 — Retention system integration review (13 findings across 3 review passes)
+**Severity:** Critical
+**Category:** Persistence, API Contracts, Session State, Atomicity
+Side-channel persistence systems (profiles, achievements, challenges, cosmetics) need complete write pipelines, not just storage + detection. Key lessons: (1) Define API contracts before building server+client in parallel — mock-heavy tests create false confidence. (2) Module-level Maps for session tracking MUST include sessionId in keys and wire cleanup to disconnect. (3) Never use setTimeout for critical state mutations — dispatch synchronously, snapshot original state for rollback. (4) String cross-references between definition tables need referential integrity tests. (5) Calendar math: never approximate (dayOfYear/7), use explicit day-of-week calculations.
+
 ## Cross-Reference
 
 | Topic | Learnings |
@@ -105,6 +139,20 @@ Vitest strips TypeScript types at transform time and does NOT enforce type corre
 | selectGameAsHost | 008 |
 | requestMyHoleCards | 008 |
 | processPlayerAction | 008 |
+| Retention system integration | 010 |
+| API contract mismatch | 010 |
+| Side-channel write pipeline | 010 |
+| Calendar math approximation | 010 |
+| REST auth in dev mode | 010 |
+| Reward claim completion | 010 |
+| Multi-game challenge counting | 010 |
+| Per-game stats population | 010 |
+| Cross-reference integrity | 010 |
+| setTimeout for state mutations | 010 |
+| Session-scoped module state | 010 |
+| Rollback snapshot vs synthetic | 010 |
+| Single source of truth (browser APIs) | 010 |
+| UI label vs backend semantics | 010 |
 | VGF phase callback context | 009 |
 | ctx.dispatch in onBegin | 009 |
 | reducerDispatcher vs dispatch | 009 |
@@ -118,3 +166,13 @@ Vitest strips TypeScript types at transform time and does NOT enforce type corre
 | Phase cascade is recursive | 009 |
 | VGF throws on bad reducer name | 009 |
 | vi.mock sync with imports | 007 |
+| Weekly backfill from lifetime stats | 011 |
+| Time-bounded vs cumulative counters | 011 |
+| Challenge instant completion | 011 |
+| Voice parse without routing | 012 |
+| processVoiceCommand routing gap | 012 |
+| Silent voice intent drop | 012 |
+| Playwright .or() cross-page | 013 |
+| Multi-page E2E assertions | 013 |
+| Nullish coalescing precedence | 014 |
+| ?? vs >= operator binding | 014 |

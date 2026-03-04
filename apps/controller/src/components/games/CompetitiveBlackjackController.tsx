@@ -17,10 +17,10 @@ import type { CasinoGameState, BlackjackCompetitiveGameState, BjcPlayerState, Ca
 /** Card display component. */
 function CardDisplay({ card }: { card: Card }) {
   const suitSymbols: Record<string, string> = {
-    spades: 'S', hearts: 'H', diamonds: 'D', clubs: 'C',
+    spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663',
   }
   const suitColours: Record<string, string> = {
-    spades: '#333', hearts: '#c0392b', diamonds: '#c0392b', clubs: '#333',
+    spades: '#ecf0f1', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#ecf0f1',
   }
   return (
     <div style={{
@@ -93,8 +93,10 @@ function AnteView({
 /** Opponent summary during player turns. */
 function OpponentSummary({
   opponent,
+  players,
 }: {
   opponent: BjcPlayerState
+  players: Array<{ id: string; name?: string }>
 }) {
   const hand = opponent.hand
 
@@ -108,7 +110,7 @@ function OpponentSummary({
       borderRadius: '6px',
     }}>
       <div style={{ flex: 1, fontSize: '13px' }}>
-        {opponent.playerId.slice(0, 8)}
+        {players.find(p => p.id === opponent.playerId)?.name ?? opponent.playerId.slice(0, 8)}
       </div>
       <div>
         {hand.busted ? (
@@ -176,7 +178,7 @@ function PlayerActionsView({
       {opponents.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {opponents.map(opp => (
-            <OpponentSummary key={opp.playerId} opponent={opp} />
+            <OpponentSummary key={opp.playerId} opponent={opp} players={players} />
           ))}
         </div>
       )}
@@ -204,12 +206,14 @@ function PlayerActionsView({
       {isMyTurn && !allDone && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: 'auto' }}>
           <button
+            data-testid="hit-btn"
             onClick={() => dispatchThunk('bjcHit', playerId)}
             style={actionBtnStyle('#2ecc71')}
           >
             HIT
           </button>
           <button
+            data-testid="stand-btn"
             onClick={() => dispatchThunk('bjcStand', playerId)}
             style={actionBtnStyle('#e74c3c')}
           >
@@ -217,6 +221,7 @@ function PlayerActionsView({
           </button>
           {hand.cards.length === 2 && !hand.doubled && (
             <button
+              data-testid="double-btn"
               onClick={() => dispatchThunk('bjcDoubleDown', playerId)}
               style={{
                 ...actionBtnStyle('#f39c12'),
@@ -353,7 +358,7 @@ export function CompetitiveBlackjackController() {
         fontFamily: 'system-ui, sans-serif',
       }}
     >
-      <h2 style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>
+      <h2 data-testid="game-heading" style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>
         Blackjack Arena
       </h2>
 

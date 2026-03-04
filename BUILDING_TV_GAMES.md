@@ -27,6 +27,7 @@ A comprehensive guide for developers and AI agents building TV games on the Voll
 1. [Project Scaffolding](#1-project-scaffolding)
 2. [Architecture Overview](#2-architecture-overview)
 3. [Platform SDK Setup](#3-platform-sdk-setup)
+   - 3.1. [Server-Side Account Integration (v2.2)](#31-server-side-account-integration-v22)
 4. [VGF Setup](#4-vgf-setup)
 5. [TV Remote Input Handling](#5-tv-remote-input-handling)
 6. [D-pad Navigation Patterns](#6-d-pad-navigation-patterns)
@@ -577,6 +578,52 @@ export function isTV(platform: TVPlatform): boolean {
 | `volley_platform` | TV shell | Platform detection override (FIRE_TV, SAMSUNG_TV, LG_TV) |
 | `volley_account` | TV shell | User account ID for tracking |
 | `sessionId` | VGF | Game session identifier |
+
+### 3.1. Server-Side Account Integration (v2.2)
+
+The Hub passes user identity to games via URL query params → Socket.IO query → VGF server `onConnect`. The server resolves identity for persistence (profiles, achievements, cosmetics).
+
+**Three identity tiers** (strongest to weakest):
+
+| Tier | Source | Field | Context |
+|------|--------|-------|---------|
+| Authenticated | `useAccount()` from Platform SDK | `accountId` / `volley_account` | User completed QR code device auth |
+| Anonymous | `useAnonymousId()` from Platform SDK | `anonymousId` | Device-level, no auth needed |
+| Dev Token | `localStorage` UUID | `deviceToken` / `userId` | Dev-mode fallback |
+
+**Server-side identity resolution pattern:**
+
+```typescript
+// apps/server/src/persistence/identity-resolver.ts
+export function resolveIdentity(metadata: Record<string, unknown>): ResolvedIdentity {
+  // Priority 1: Platform SDK authenticated account
+  const accountId = metadata['accountId'] ?? metadata['volley_account']
+  if (typeof accountId === 'string' && accountId.length > 0) {
+    return { token: accountId, source: 'platform_account' }
+  }
+
+  // Priority 2: Platform SDK anonymous device identity
+  const anonymousId = metadata['anonymousId']
+  if (typeof anonymousId === 'string' && anonymousId.length > 0) {
+    return { token: anonymousId, source: 'platform_anonymous' }
+  }
+
+  // Priority 3: Dev-mode device token
+  const deviceToken = metadata['deviceToken'] ?? metadata['userId']
+  if (typeof deviceToken === 'string' && deviceToken.length > 0) {
+    return { token: deviceToken, source: 'device_token' }
+  }
+
+  return { token: `anon_${Date.now()}`, source: 'device_token' }
+}
+```
+
+**Key points:**
+- The game server does NOT manage auth — it receives identity from the client
+- Client gets identity from Platform SDK (`useAccount()`, `useAnonymousId()`) or generates a dev token
+- The resolved `persistentId` is used as the Redis key for all persistence (profiles, achievements, challenges, cosmetics)
+- Hub auth flow: QR code device authorisation → Volley Identity API (auth.volley.tv) → `account.id` returned via `useAccount()`
+- Identity API endpoints: `https://auth.volley.tv` (prod), staging/dev variants available
 
 ---
 

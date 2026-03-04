@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import type { PlayerAction, PokerGameState } from '@weekend-casino/shared'
 import { CasinoPhase, BETTING_PHASES, getPhaseLabel } from '@weekend-casino/shared'
-import { useVoiceRecognition } from '../hooks/useVoiceRecognition.js'
 import { useDispatchThunk, useSessionMember, useStateSync } from '../hooks/useVGFHooks.js'
 import { usePrivateHoleCards } from '../hooks/usePrivateHoleCards.js'
 
@@ -13,7 +12,6 @@ import { usePrivateHoleCards } from '../hooks/usePrivateHoleCards.js'
  */
 export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
   const isBettingPhase = (BETTING_PHASES as readonly string[]).includes(phase)
-  const { status, pendingTranscript, finalTranscript, startRecording, stopRecording } = useVoiceRecognition()
 
   const dispatchThunk = useDispatchThunk() as (name: string, ...args: unknown[]) => void
   const member = useSessionMember()
@@ -77,6 +75,7 @@ export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
         padding: '16px',
       }}
     >
+      <h2 data-testid="game-heading" style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>Texas Hold&apos;em</h2>
       {/* Game info bar */}
       <div
         style={{
@@ -158,24 +157,24 @@ export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
               marginBottom: '12px',
             }}
           >
-            <button style={actionButtonStyle('#e74c3c')} onClick={handleFold}>
+            <button data-testid="fold-btn" style={actionButtonStyle('#e74c3c')} onClick={handleFold}>
               FOLD
             </button>
             {canCheck ? (
-              <button style={actionButtonStyle('#3498db')} onClick={handleCheck}>
+              <button data-testid="check-btn" style={actionButtonStyle('#3498db')} onClick={handleCheck}>
                 CHECK
               </button>
             ) : canCall ? (
-              <button style={actionButtonStyle('#3498db')} onClick={handleCall}>
+              <button data-testid="call-btn" style={actionButtonStyle('#3498db')} onClick={handleCall}>
                 CALL ${callAmount}
               </button>
             ) : null}
             {canRaise && (
-              <button style={actionButtonStyle('#f39c12')} onClick={handleRaise}>
+              <button data-testid="raise-btn" style={actionButtonStyle('#f39c12')} onClick={handleRaise}>
                 RAISE TO ${currentBet + (raiseAmount > 0 ? raiseAmount : minRaise)}
               </button>
             )}
-            <button style={actionButtonStyle('#e91e63')} onClick={handleAllIn}>
+            <button data-testid="allin-btn" style={actionButtonStyle('#e91e63')} onClick={handleAllIn}>
               ALL IN ${myStack}
             </button>
           </div>
@@ -201,32 +200,6 @@ export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
         </>
       )}
 
-      {/* Push-to-talk */}
-      <button
-        style={{
-          width: '100%',
-          padding: '20px',
-          fontSize: '18px',
-          borderRadius: '12px',
-          border: status === 'recording' ? '2px solid #e74c3c' : '2px solid #666',
-          background: '#333',
-          color: 'white',
-          cursor: 'pointer',
-          touchAction: 'none',
-        }}
-        onMouseDown={startRecording}
-        onMouseUp={stopRecording}
-        onTouchStart={startRecording}
-        onTouchEnd={stopRecording}
-      >
-        {status === 'recording'
-          ? pendingTranscript || 'Listening...'
-          : status === 'processing'
-            ? 'Processing...'
-            : status === 'complete'
-              ? finalTranscript || 'Hold to Talk'
-              : 'Hold to Talk'}
-      </button>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import {
   VGFProvider,
   createSocketIOClientTransport,
@@ -9,26 +9,17 @@ import { WalletDisplay } from './components/shared/WalletDisplay.js'
 import { PlayerInfo } from './components/shared/PlayerInfo.js'
 import { VoiceButton } from './components/shared/VoiceButton.js'
 import { ReactionBar } from './components/shared/ReactionBar.js'
+import { ProfileView } from './components/ProfileView.js'
+import { ChallengesView } from './components/ChallengesView.js'
+import { CosmeticsView } from './components/CosmeticsView.js'
 import { usePhase } from './hooks/useVGFHooks.js'
+import { useDeviceToken } from './hooks/useDeviceToken.js'
 
 const SERVER_URL =
   (import.meta.env['VITE_SERVER_URL'] as string | undefined) ??
   'http://localhost:3000'
 
-/**
- * Retrieve or generate a persistent user ID for this browser session.
- * Stored in sessionStorage so a page refresh within the same tab keeps
- * the same identity, but a new tab gets a fresh one.
- */
-function getOrCreateUserId(): string {
-  const key = 'weekend-casino-user-id'
-  let userId = sessionStorage.getItem(key)
-  if (!userId) {
-    userId = crypto.randomUUID()
-    sessionStorage.setItem(key, userId)
-  }
-  return userId
-}
+type ControllerTab = 'game' | 'profile' | 'challenges' | 'cosmetics'
 
 export function App() {
   const sessionId = useMemo(() => {
@@ -36,7 +27,7 @@ export function App() {
     return params.get('sessionId')
   }, [])
 
-  const [userId] = useState(getOrCreateUserId)
+  const { deviceToken: userId } = useDeviceToken()
 
   if (!sessionId) {
     return (
@@ -70,7 +61,10 @@ export function App() {
         userId,
         clientType: ClientType.Controller,
       },
-      socketOptions: { transports: ['polling', 'websocket'] },
+      socketOptions: {
+        transports: ['polling', 'websocket'],
+        query: { sessionId, userId, clientType: ClientType.Controller, deviceToken: userId },
+      },
     }),
     [sessionId, userId],
   )
@@ -88,6 +82,18 @@ export function App() {
  */
 function ConnectedController() {
   const phase = usePhase()
+  const [activeTab, setActiveTab] = useState<ControllerTab>('game')
+
+  // Reset to game tab when returning to lobby (tab bar is hidden in lobby,
+  // so player would be stuck on profile/challenges/cosmetics with no way back)
+  const isGameplay = phase !== null && phase !== 'LOBBY' && phase !== 'GAME_SELECT'
+  const prevIsGameplay = useRef(isGameplay)
+  useEffect(() => {
+    if (prevIsGameplay.current && !isGameplay && activeTab !== 'game') {
+      setActiveTab('game')
+    }
+    prevIsGameplay.current = isGameplay
+  }, [isGameplay, activeTab])
 
   if (!phase) {
     return (
@@ -108,7 +114,34 @@ function ConnectedController() {
     )
   }
 
-  const isGameplay = phase !== 'LOBBY' && phase !== 'GAME_SELECT'
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'profile':
+        return <ProfileView />
+      case 'challenges':
+        return <ChallengesView />
+      case 'cosmetics':
+        return <CosmeticsView />
+      case 'game':
+      default:
+        return (
+          <>
+            {/* Game-specific content */}
+            <div style={{ flex: 1 }}>
+              <GameRouter />
+            </div>
+
+            {/* Reaction bar — only visible during gameplay, not in lobby */}
+            {isGameplay && <ReactionBar />}
+
+            {/* Voice button footer */}
+            <div style={{ padding: '12px 16px 16px' }}>
+              <VoiceButton />
+            </div>
+          </>
+        )
+    }
+  }
 
   return (
     <div
@@ -135,18 +168,64 @@ function ConnectedController() {
         <WalletDisplay />
       </div>
 
-      {/* Game-specific content */}
-      <div style={{ flex: 1 }}>
-        <GameRouter />
+      {/* Tab content */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {renderTabContent()}
       </div>
 
-      {/* Reaction bar — only visible during gameplay, not in lobby */}
-      {isGameplay && <ReactionBar />}
-
-      {/* Voice button footer */}
-      <div style={{ padding: '12px 16px 16px' }}>
-        <VoiceButton />
-      </div>
+      {/* Bottom tab navigation — visible during gameplay */}
+      {isGameplay && (
+        <div style={tabBarStyle}>
+          <TabButton
+            label="Game"
+            active={activeTab === 'game'}
+            onClick={() => setActiveTab('game')}
+          />
+          <TabButton
+            label="Profile"
+            active={activeTab === 'profile'}
+            onClick={() => setActiveTab('profile')}
+          />
+          <TabButton
+            label="Challenges"
+            active={activeTab === 'challenges'}
+            onClick={() => setActiveTab('challenges')}
+          />
+          <TabButton
+            label="Cosmetics"
+            active={activeTab === 'cosmetics'}
+            onClick={() => setActiveTab('cosmetics')}
+          />
+        </div>
+      )}
     </div>
   )
+}
+
+function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1,
+        padding: '10px 0',
+        background: 'none',
+        border: 'none',
+        color: active ? '#d4af37' : '#666',
+        fontWeight: active ? 'bold' : 'normal',
+        fontSize: 13,
+        fontFamily: 'system-ui, sans-serif',
+        cursor: 'pointer',
+        borderTop: active ? '2px solid #d4af37' : '2px solid transparent',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
+const tabBarStyle: React.CSSProperties = {
+  display: 'flex',
+  borderTop: '1px solid rgba(255,255,255,0.08)',
+  background: '#16162a',
 }

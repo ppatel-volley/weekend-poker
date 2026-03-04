@@ -64,6 +64,7 @@ vi.mock('@weekend-casino/shared', () => ({
   },
   V1_GAMES: ['holdem', 'five_card_draw', 'blackjack_classic', 'blackjack_competitive'],
   V2_0_GAMES: ['roulette', 'three_card_poker'],
+  V2_1_GAMES: ['craps'],
   CRAPS_PLACE_NUMBERS: [4, 5, 6, 8, 9, 10],
   CRAPS_MIN_BET: 10,
   CRAPS_MAX_BET: 500,

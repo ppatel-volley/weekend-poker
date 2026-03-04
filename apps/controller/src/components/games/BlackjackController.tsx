@@ -18,10 +18,10 @@ const BET_AMOUNTS = [10, 25, 50, 100, 250, 500]
 /** Card display component. */
 function CardDisplay({ card }: { card: Card }) {
   const suitSymbols: Record<string, string> = {
-    spades: 'S', hearts: 'H', diamonds: 'D', clubs: 'C',
+    spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663',
   }
   const suitColours: Record<string, string> = {
-    spades: '#333', hearts: '#c0392b', diamonds: '#c0392b', clubs: '#333',
+    spades: '#ecf0f1', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#ecf0f1',
   }
   return (
     <div style={{
@@ -126,6 +126,7 @@ function BetPlacementView({
       </div>
 
       <button
+        data-testid="place-bet-btn"
         onClick={() => dispatchThunk('bjPlaceBet', playerId, selectedBet)}
         disabled={selectedBet > walletBalance}
         style={{
@@ -260,12 +261,14 @@ function PlayerActionsView({
       {isMyTurn && !allDone && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: 'auto' }}>
           <button
+            data-testid="hit-btn"
             onClick={() => dispatchThunk('bjHit', playerId)}
             style={actionBtnStyle('#2ecc71')}
           >
             HIT
           </button>
           <button
+            data-testid="stand-btn"
             onClick={() => dispatchThunk('bjStand', playerId)}
             style={actionBtnStyle('#e74c3c')}
           >
@@ -273,6 +276,7 @@ function PlayerActionsView({
           </button>
           {activeHand.cards.length === 2 && !activeHand.doubled && (
             <button
+              data-testid="double-btn"
               onClick={() => dispatchThunk('bjDoubleDown', playerId)}
               style={actionBtnStyle('#f39c12')}
             >
@@ -281,6 +285,7 @@ function PlayerActionsView({
           )}
           {activeHand.cards.length === 2 && bj.config.splitEnabled && (
             <button
+              data-testid="split-btn"
               onClick={() => dispatchThunk('bjSplit', playerId)}
               style={actionBtnStyle('#9b59b6')}
             >
@@ -425,7 +430,7 @@ export function BlackjackController() {
         fontFamily: 'system-ui, sans-serif',
       }}
     >
-      <h2 style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>Blackjack</h2>
+      <h2 data-testid="game-heading" style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>Blackjack</h2>
 
       {!bj ? (
         <div style={{ textAlign: 'center', padding: '32px', color: '#aaa', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

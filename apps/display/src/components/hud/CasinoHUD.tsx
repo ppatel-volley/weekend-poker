@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { CASINO_GAME_LABELS, MAX_PLAYERS } from '@weekend-casino/shared'
-import type { CasinoGame, GameNightGameState } from '@weekend-casino/shared'
+import type { CasinoGame, GameNightGameState, ChallengeSummary, ChallengeTier } from '@weekend-casino/shared'
 import { QRCodeSVG } from 'qrcode.react'
 import { useFocusable } from '@noriginmedia/norigin-spatial-navigation'
 import { useCurrentGame, useStateSyncSelector } from '../../hooks/useVGFHooks.js'
 import { useSessionId } from '../../hooks/useSessionId.js'
 import { useInputMode } from '../../platform/InputModeProvider.js'
+import { BonusPopup } from './BonusPopup.js'
 
 /** Formats seconds as HH:MM:SS. */
 function formatSessionTime(totalSeconds: number): string {
@@ -16,6 +17,13 @@ function formatSessionTime(totalSeconds: number): string {
   return hrs > 0
     ? `${pad(hrs)}:${pad(mins)}:${pad(secs)}`
     : `${pad(mins)}:${pad(secs)}`
+}
+
+/** Tier colours for challenge progress indicators. */
+const TIER_COLOURS: Record<ChallengeTier, string> = {
+  bronze: '#CD7F32',
+  silver: '#C0C0C0',
+  gold: '#FFD700',
 }
 
 /** Focus indicator styles for TV remote navigation. */
@@ -68,6 +76,10 @@ export function CasinoHUD() {
   const players = useStateSyncSelector((s) => s.players)
   const dealerMessage = useStateSyncSelector((s) => s.dealerMessage)
   const gameNight = useStateSyncSelector((s) => s.gameNight) as GameNightGameState | undefined
+  const challengeSummary = useStateSyncSelector((s) => s.challengeSummary) as Record<string, ChallengeSummary[]> | undefined
+  const lastDailyBonus = useStateSyncSelector((s) => s.lastDailyBonus) as
+    | { amount: number; streakDay: number; multiplierApplied: boolean; timestamp: number }
+    | undefined
   const sessionId = useSessionId()
   const { inputMode } = useInputMode()
   const isRemote = inputMode === 'remote'
@@ -86,6 +98,10 @@ export function CasinoHUD() {
   })
 
   const [sessionSeconds, setSessionSeconds] = useState(0)
+  const [bonusData, setBonusData] = useState<{
+    amount: number; streakDay: number; multiplierApplied: boolean
+  } | null>(null)
+  const lastBonusTimestamp = useRef<number>(0)
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -94,6 +110,23 @@ export function CasinoHUD() {
     return () => clearInterval(interval)
   }, [])
 
+  // Show bonus popup when server sets lastDailyBonus on state
+  useEffect(() => {
+    if (lastDailyBonus && lastDailyBonus.timestamp !== lastBonusTimestamp.current) {
+      lastBonusTimestamp.current = lastDailyBonus.timestamp
+      setBonusData({
+        amount: lastDailyBonus.amount,
+        streakDay: lastDailyBonus.streakDay,
+        multiplierApplied: lastDailyBonus.multiplierApplied,
+      })
+    }
+  }, [lastDailyBonus])
+
+  const dismissBonus = useCallback(() => setBonusData(null), [])
+
+  // Derive challenge indicators from all players' summaries
+  const challengeIndicators = deriveChallengeIndicators(challengeSummary)
+
   // Hide HUD in lobby
   if (!currentGame) return null
 
@@ -101,31 +134,65 @@ export function CasinoHUD() {
 
   return (
     <div ref={hudRef} style={overlayStyle} data-testid="casino-hud">
+      {/* Daily bonus popup */}
+      {bonusData && (
+        <BonusPopup
+          amount={bonusData.amount}
+          streakDay={bonusData.streakDay}
+          multiplierApplied={bonusData.multiplierApplied}
+          onDismiss={dismissBonus}
+        />
+      )}
+
       {/* Top bar */}
       <div style={topBarStyle}>
-        <FocusableHUDItem focusKey="HUD_GAME_LABEL" isRemote={isRemote}>
-          <span style={{ fontSize: '1rem', fontWeight: 600 }}>
-            {gameLabel}
-          </span>
-          {gameNight?.active && (
-            <span
-              style={{
-                marginLeft: '0.75rem',
-                fontSize: '0.75rem',
-                color: 'rgba(212, 175, 55, 0.9)',
-                fontWeight: 600,
-                letterSpacing: '0.05em',
-              }}
-              data-testid="gn-hud-indicator"
-            >
-              Game {(gameNight.currentGameIndex ?? 0) + 1}/{gameNight.gameLineup?.length ?? 0}
-              {' \u00B7 '}
-              {Object.values(gameNight.playerScores ?? {}).reduce(
-                (max, p) => Math.max(max, (p as any)?.totalScore ?? 0), 0,
-              )} pts
+        <div>
+          <FocusableHUDItem focusKey="HUD_GAME_LABEL" isRemote={isRemote}>
+            <span style={{ fontSize: '1rem', fontWeight: 600 }}>
+              {gameLabel}
             </span>
+            {gameNight?.active && (
+              <span
+                style={{
+                  marginLeft: '0.75rem',
+                  fontSize: '0.75rem',
+                  color: 'rgba(212, 175, 55, 0.9)',
+                  fontWeight: 600,
+                  letterSpacing: '0.05em',
+                }}
+                data-testid="gn-hud-indicator"
+              >
+                Game {(gameNight.currentGameIndex ?? 0) + 1}/{gameNight.gameLineup?.length ?? 0}
+                {' \u00B7 '}
+                {Object.values(gameNight.playerScores ?? {}).reduce(
+                  (max, p) => Math.max(max, (p as any)?.totalScore ?? 0), 0,
+                )} pts
+              </span>
+            )}
+          </FocusableHUDItem>
+          {/* Challenge progress indicators */}
+          {challengeIndicators.length > 0 && (
+            <div
+              style={{ display: 'flex', gap: 6, marginTop: 4, marginLeft: 8 }}
+              data-testid="challenge-indicators"
+            >
+              {challengeIndicators.map((ci, i) => (
+                <span
+                  key={i}
+                  style={{
+                    display: 'inline-block',
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    border: `2px solid ${TIER_COLOURS[ci.tier]}`,
+                    background: ci.completed ? TIER_COLOURS[ci.tier] : 'transparent',
+                  }}
+                  data-testid={`challenge-dot-${ci.tier}`}
+                />
+              ))}
+            </div>
           )}
-        </FocusableHUDItem>
+        </div>
         <span style={{ fontSize: '0.875rem', opacity: 0.8 }}>
           {formatSessionTime(sessionSeconds)}
         </span>
@@ -194,14 +261,32 @@ export function CasinoHUD() {
         </div>
       )}
 
-      {/* Bottom bar — player wallets */}
+      {/* Bottom bar — player wallets with level badges */}
       {players && players.length > 0 && wallet && (
         <div style={bottomBarStyle}>
           {players.map((p) => (
             <FocusableHUDItem key={p.id} focusKey={`HUD_WALLET_${p.id}`} isRemote={isRemote}>
-              <span>
-                {p.name || p.id.slice(0, 8)}:{' '}
-                <strong>${wallet[p.id]?.toLocaleString() ?? 0}</strong>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {p.playerLevel != null && (
+                  <span
+                    style={{
+                      fontSize: '0.65rem',
+                      fontWeight: 700,
+                      color: '#d4af37',
+                      border: '1px solid #d4af37',
+                      borderRadius: 8,
+                      padding: '0 5px',
+                      lineHeight: '1.4',
+                    }}
+                    data-testid={`level-badge-${p.id}`}
+                  >
+                    Lv.{p.playerLevel}
+                  </span>
+                )}
+                <span>
+                  {p.name || p.id.slice(0, 8)}:{' '}
+                  <strong>${wallet[p.id]?.toLocaleString() ?? 0}</strong>
+                </span>
               </span>
             </FocusableHUDItem>
           ))}
@@ -209,6 +294,34 @@ export function CasinoHUD() {
       )}
     </div>
   )
+}
+
+/** Derive up to 3 challenge dots (bronze, silver, gold) from all players' summaries. */
+function deriveChallengeIndicators(
+  challengeSummary: Record<string, ChallengeSummary[]> | undefined,
+): { tier: ChallengeTier; completed: boolean }[] {
+  if (!challengeSummary) return []
+
+  const tierOrder: ChallengeTier[] = ['bronze', 'silver', 'gold']
+  const tierMap = new Map<ChallengeTier, boolean>()
+
+  for (const summaries of Object.values(challengeSummary)) {
+    for (const cs of summaries) {
+      const existing = tierMap.get(cs.tier)
+      // If any player has completed this tier, mark it completed
+      if (existing === undefined) {
+        tierMap.set(cs.tier, cs.completed)
+      } else if (cs.completed) {
+        tierMap.set(cs.tier, true)
+      }
+    }
+  }
+
+  if (tierMap.size === 0) return []
+
+  return tierOrder
+    .filter((t) => tierMap.has(t))
+    .map((t) => ({ tier: t, completed: tierMap.get(t)! }))
 }
 
 function FocusableHUDItem({

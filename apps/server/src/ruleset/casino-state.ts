@@ -4,7 +4,7 @@
  * Per TDD-backend Section 3.1-3.3 and D-001, D-002, D-005.
  */
 
-import type { CasinoGameState, CasinoGame, CasinoPlayer, TTSMessage, TTSPriority, InputMode, ReactionType, SpeedConfig, GameNightPlayerTotal, GameNightGameResult, GameNightAchievement, GameNightTheme } from '@weekend-casino/shared'
+import type { CasinoGameState, CasinoGame, CasinoPlayer, TTSMessage, TTSPriority, InputMode, ReactionType, SpeedConfig, GameNightPlayerTotal, GameNightGameResult, GameNightAchievement, GameNightTheme, ChallengeSummary } from '@weekend-casino/shared'
 import { CasinoPhase, DEFAULT_BLIND_LEVEL, STARTING_WALLET_BALANCE, REACTION_TYPES, REACTION_RATE_LIMIT, MAX_REACTION_QUEUE_SIZE, DEFAULT_QUICK_PLAY_CONFIG } from '@weekend-casino/shared'
 import type { GameReducer, GameThunk } from '@volley/vgf/types'
 
@@ -450,6 +450,43 @@ export const casinoStopCasinoCrawl: Reducer = state => ({
   casinoCrawl: undefined,
 })
 
+// ── v2.2 Retention Reducers ──────────────────────────────────────
+
+/**
+ * Set challenge progress summary for a player (display-only projection).
+ * Source of truth is Redis; this is for UI rendering.
+ */
+export const casinoSetChallengeProgress: Reducer<[string, ChallengeSummary[]]> = (
+  state,
+  playerId,
+  summaries,
+) => ({
+  ...state,
+  challengeSummary: {
+    ...state.challengeSummary,
+    [playerId]: summaries,
+  },
+})
+
+/**
+ * Set the daily bonus event on state (transient, for display popup).
+ */
+export const casinoSetDailyBonus: Reducer<[{ amount: number; streakDay: number; multiplierApplied: boolean; timestamp: number }]> = (
+  state,
+  bonusData,
+) => ({
+  ...state,
+  lastDailyBonus: bonusData,
+})
+
+/**
+ * Clear the daily bonus event from state (after display has shown popup).
+ */
+export const casinoClearDailyBonus: Reducer = state => ({
+  ...state,
+  lastDailyBonus: undefined,
+})
+
 // ── Game Night Reducers (v2.1 — D-014) ──────────────────────────
 
 /**
@@ -746,6 +783,11 @@ export const casinoReducers = {
   startCasinoCrawl: casinoStartCasinoCrawl,
   advanceCasinoCrawl: casinoAdvanceCasinoCrawl,
   stopCasinoCrawl: casinoStopCasinoCrawl,
+
+  // v2.2 Retention
+  setChallengeProgress: casinoSetChallengeProgress,
+  setDailyBonus: casinoSetDailyBonus,
+  clearDailyBonus: casinoClearDailyBonus,
 
   // Game Night (v2.1 — D-014)
   gnInitGameNight,
