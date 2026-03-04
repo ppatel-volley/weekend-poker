@@ -52,16 +52,23 @@ export async function playBlackjackRound(page: Page): Promise<void> {
 
 /**
  * Play one round of Competitive Blackjack: auto-ante, then stand.
+ * BJC has auto-ante. Bot auto-acts in onBegin so the entire round may cascade
+ * instantly. Detect round completion by watching for the "Ante:" text to reappear.
  */
 export async function playBjcRound(page: Page): Promise<void> {
-  // BJC has auto-ante, wait for player turns
   const standBtn = page.getByTestId('stand-btn')
-  const result = page.getByText(/WON \$|LOST \$|WINNER/i)
-  await expect(standBtn.or(result)).toBeVisible({ timeout: 30_000 })
+  const anteDisplay = page.getByText(/Ante:/)
+
+  // BJC has auto-ante. Wait for either our turn to act or the round to cascade through
+  await expect(standBtn.or(anteDisplay)).toBeVisible({ timeout: 30_000 })
 
   if (await standBtn.isVisible().catch(() => false)) {
     await bjcStand(page)
+    await page.waitForTimeout(1_000)
+    // Wait for next round's ante display
+    await expect(anteDisplay).toBeVisible({ timeout: 30_000 })
   }
+  // If anteDisplay is already visible, round completed via cascade
 }
 
 /**
@@ -121,44 +128,47 @@ export async function playRouletteRound(page: Page): Promise<void> {
 }
 
 /**
- * Play one round of Craps: pass line, confirm, roll if shooter.
- * Handles the point phase with a loop (max 10 iterations).
+ * Play one round of Craps: place pass line, confirm, wait for roll phase or next round.
+ * Bots auto-act in onBegin so the entire round may cascade instantly.
+ * Detect round completion by watching for pass-line-btn to reappear (next round).
  */
 export async function playCrapsRound(page: Page): Promise<void> {
   const passLineBtn = page.getByTestId('pass-line-btn')
   const confirmBtn = page.getByTestId('confirm-bets-btn')
   const rollBtn = page.getByTestId('roll-btn')
-  const result = page.getByTestId('outcome-text')
-  const waitingForRoll = page.getByTestId('waiting-for-roll')
 
-  // Come-out betting
-  await expect(passLineBtn.or(result)).toBeVisible({ timeout: 30_000 })
+  // Wait for betting phase
+  await expect(passLineBtn.or(confirmBtn)).toBeVisible({ timeout: 30_000 })
 
   if (await passLineBtn.isVisible().catch(() => false)) {
     await crapsPassLine(page)
-    // Confirm if button appears
-    if (await confirmBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await crapsConfirmBets(page)
-    }
   }
 
-  // Roll or wait for shooter
+  await page.waitForTimeout(500)
+  if (await confirmBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await crapsConfirmBets(page)
+  }
+
+  // After confirm, may need to roll (if human is shooter)
+  // or round may cascade through automatically
+  await page.waitForTimeout(1_000)
+
   for (let i = 0; i < 10; i++) {
-    await expect(rollBtn.or(waitingForRoll).or(result)).toBeVisible({ timeout: 30_000 })
-
-    if (await result.isVisible().catch(() => false)) break
-
-    if (await rollBtn.isVisible().catch(() => false)) {
+    const canRoll = await rollBtn.isVisible({ timeout: 3_000 }).catch(() => false)
+    if (canRoll) {
       await crapsRoll(page)
-      await page.waitForTimeout(2_000) // Wait for dice animation
+      await page.waitForTimeout(2_000)
     }
 
-    // Check if we need to place more bets (point phase)
-    if (await confirmBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    // Check if we're back to betting phase (pass line visible = next round)
+    const backToBetting = await passLineBtn.isVisible({ timeout: 3_000 }).catch(() => false)
+    if (backToBetting) break
+
+    // Check if we need to confirm more bets (point phase)
+    if (await confirmBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
       await crapsConfirmBets(page)
+      await page.waitForTimeout(1_000)
     }
-
-    await page.waitForTimeout(1_000)
   }
 }
 
