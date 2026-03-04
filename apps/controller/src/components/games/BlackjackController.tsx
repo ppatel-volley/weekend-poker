@@ -18,10 +18,10 @@ const BET_AMOUNTS = [10, 25, 50, 100, 250, 500]
 /** Card display component. */
 function CardDisplay({ card }: { card: Card }) {
   const suitSymbols: Record<string, string> = {
-    spades: 'S', hearts: 'H', diamonds: 'D', clubs: 'C',
+    spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663',
   }
   const suitColours: Record<string, string> = {
-    spades: '#333', hearts: '#c0392b', diamonds: '#c0392b', clubs: '#333',
+    spades: '#ecf0f1', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#ecf0f1',
   }
   return (
     <div style={{

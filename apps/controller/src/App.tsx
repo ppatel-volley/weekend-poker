@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import {
   VGFProvider,
   createSocketIOClientTransport,
@@ -63,7 +63,7 @@ export function App() {
       },
       socketOptions: {
         transports: ['polling', 'websocket'],
-        query: { deviceToken: userId },
+        query: { sessionId, userId, clientType: ClientType.Controller, deviceToken: userId },
       },
     }),
     [sessionId, userId],
@@ -84,6 +84,17 @@ function ConnectedController() {
   const phase = usePhase()
   const [activeTab, setActiveTab] = useState<ControllerTab>('game')
 
+  // Reset to game tab when returning to lobby (tab bar is hidden in lobby,
+  // so player would be stuck on profile/challenges/cosmetics with no way back)
+  const isGameplay = phase !== null && phase !== 'LOBBY' && phase !== 'GAME_SELECT'
+  const prevIsGameplay = useRef(isGameplay)
+  useEffect(() => {
+    if (prevIsGameplay.current && !isGameplay && activeTab !== 'game') {
+      setActiveTab('game')
+    }
+    prevIsGameplay.current = isGameplay
+  }, [isGameplay, activeTab])
+
   if (!phase) {
     return (
       <div
@@ -102,8 +113,6 @@ function ConnectedController() {
       </div>
     )
   }
-
-  const isGameplay = phase !== 'LOBBY' && phase !== 'GAME_SELECT'
 
   const renderTabContent = () => {
     switch (activeTab) {

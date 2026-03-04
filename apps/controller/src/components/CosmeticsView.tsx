@@ -25,7 +25,9 @@ export function CosmeticsView() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${SERVER_URL}/api/cosmetics/${encodeURIComponent(deviceToken)}`)
+      const res = await fetch(`${SERVER_URL}/api/cosmetics/${encodeURIComponent(deviceToken)}`, {
+        headers: { 'x-device-token': deviceToken },
+      })
       if (!res.ok) throw new Error(`Failed to load cosmetics (${res.status})`)
       const data = (await res.json()) as OwnedCosmetics
       setCosmetics(data)
@@ -45,7 +47,7 @@ export function CosmeticsView() {
     try {
       const res = await fetch(`${SERVER_URL}/api/cosmetics/${encodeURIComponent(deviceToken)}/equip`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-device-token': deviceToken },
         body: JSON.stringify({ cosmeticId, category }),
       })
       if (res.ok) {
@@ -151,7 +153,7 @@ export function CosmeticsView() {
 
               {!owned && (
                 <p style={{ margin: '4px 0 0', fontSize: 10, color: '#888' }}>
-                  {item.unlockedBy.replace(/_/g, ' ')}
+                  {item.unlockedBy.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                 </p>
               )}
             </div>

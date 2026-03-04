@@ -22,7 +22,9 @@ export function useProfile(): {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${SERVER_URL}/api/profile/${encodeURIComponent(deviceToken)}`)
+      const res = await fetch(`${SERVER_URL}/api/profile/${encodeURIComponent(deviceToken)}`, {
+        headers: { 'x-device-token': deviceToken },
+      })
       if (!res.ok) {
         throw new Error(`Failed to load profile (${res.status})`)
       }

@@ -66,6 +66,7 @@ vi.mock('@weekend-casino/shared', () => ({
   },
   V1_GAMES: ['holdem', 'five_card_draw', 'blackjack_classic', 'blackjack_competitive'],
   V2_0_GAMES: ['roulette', 'three_card_poker'],
+  V2_1_GAMES: ['craps'],
   GN_MIN_GAMES: 3,
   GN_MAX_GAMES: 5,
   GN_DEFAULT_ROUNDS_PER_GAME: 5,
@@ -415,7 +416,7 @@ describe('LobbyController - Game Night button', () => {
 
     expect(mockDispatch).toHaveBeenCalledWith(
       'gnInitGameNight',
-      ['holdem', 'five_card_draw', 'blackjack_classic'],
+      [],
       5,
       'classic',
     )

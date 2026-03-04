@@ -200,6 +200,7 @@ function ComeOutBettingView({
           style={betButton('linear-gradient(135deg, #2d8a42 0%, #1f6030 100%)')}
         >
           PASS LINE
+          <span style={{ display: 'block', fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: '2px', fontWeight: 'normal', fontFamily: 'system-ui, sans-serif' }}>Win on 7 or 11</span>
         </button>
         <button
           onClick={() => placeBet('dont_pass')}
@@ -207,6 +208,7 @@ function ComeOutBettingView({
           style={betButton('linear-gradient(135deg, #8a2d2d 0%, #6a2020 100%)')}
         >
           DON'T PASS
+          <span style={{ display: 'block', fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: '2px', fontWeight: 'normal', fontFamily: 'system-ui, sans-serif' }}>Win on 2 or 3</span>
         </button>
       </div>
 
@@ -218,6 +220,7 @@ function ComeOutBettingView({
           style={betButton('linear-gradient(135deg, #8a7a2d 0%, #6a5a1d 100%)', { width: '100%' })}
         >
           FIELD
+          <span style={{ display: 'block', fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: '2px', fontWeight: 'normal', fontFamily: 'system-ui, sans-serif' }}>2,3,4,9,10,11,12 win</span>
         </button>
       </div>
 
@@ -534,6 +537,7 @@ function PointBettingView({
           style={betButton('linear-gradient(135deg, #2d8a42 0%, #1f6030 100%)')}
         >
           COME
+          <span style={{ display: 'block', fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: '2px', fontWeight: 'normal', fontFamily: 'system-ui, sans-serif' }}>Like Pass, mid-round</span>
         </button>
         <button
           onClick={() => placeBet('dont_come')}
@@ -541,6 +545,7 @@ function PointBettingView({
           style={betButton('linear-gradient(135deg, #8a2d2d 0%, #6a2020 100%)')}
         >
           DON'T COME
+          <span style={{ display: 'block', fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginTop: '2px', fontWeight: 'normal', fontFamily: 'system-ui, sans-serif' }}>Like Don't Pass, mid-round</span>
         </button>
       </div>
 

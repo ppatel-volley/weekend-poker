@@ -8,6 +8,7 @@ import {
   toChallengeSummaries,
   getWeekIdentifier,
 } from '../persistence/challenge-store.js'
+import { parseVoiceIntent } from '../voice/parseVoiceIntent.js'
 import type { ChallengeEvent } from '../persistence/challenge-store.js'
 import { createEmptyPersistentStats } from '@weekend-casino/shared'
 
@@ -232,5 +233,73 @@ describe('toChallengeSummaries', () => {
 
   it('returns empty array for empty input', () => {
     expect(toChallengeSummaries([])).toEqual([])
+  })
+})
+
+describe('multi-game challenge regression', () => {
+  it('silver_play_3_games requires unique games, not total hands', async () => {
+    await assignChallenges('player-mg-1', emptyStats)
+    const challenges = await getActiveChallenges('player-mg-1')
+    const multiGame = challenges.find(c => c.definition.id === 'silver_play_3_games')
+    if (!multiGame) return // may not be assigned this run (random selection)
+
+    // Playing 10 hands of the SAME game should NOT complete the challenge
+    for (let i = 0; i < 10; i++) {
+      await checkAndUpdateProgress('player-mg-1', {
+        type: 'hand_complete',
+        game: 'holdem',
+        gamesPlayedThisSession: ['holdem'],
+      })
+    }
+
+    const after = await getActiveChallenges('player-mg-1')
+    const updated = after.find(c => c.definition.id === 'silver_play_3_games')!
+    // Should be 1 unique game, not 10
+    expect(updated.currentValue).toBe(1)
+    expect(updated.completed).toBe(false)
+  })
+
+  it('silver_play_3_games increments on unique game count increase', async () => {
+    await assignChallenges('player-mg-2', emptyStats)
+    const challenges = await getActiveChallenges('player-mg-2')
+    const multiGame = challenges.find(c => c.definition.id === 'silver_play_3_games')
+    if (!multiGame) return
+
+    // Play holdem (1 unique game)
+    await checkAndUpdateProgress('player-mg-2', {
+      type: 'hand_complete',
+      game: 'holdem',
+      gamesPlayedThisSession: ['holdem'],
+    })
+
+    // Play blackjack (2 unique games)
+    await checkAndUpdateProgress('player-mg-2', {
+      type: 'hand_complete',
+      game: 'blackjack_classic',
+      gamesPlayedThisSession: ['holdem', 'blackjack_classic'],
+    })
+
+    // Play roulette (3 unique games)
+    await checkAndUpdateProgress('player-mg-2', {
+      type: 'hand_complete',
+      game: 'roulette',
+      gamesPlayedThisSession: ['holdem', 'blackjack_classic', 'roulette'],
+    })
+
+    const after = await getActiveChallenges('player-mg-2')
+    const updated = after.find(c => c.definition.id === 'silver_play_3_games')!
+    expect(updated.currentValue).toBe(3)
+    expect(updated.completed).toBe(true)
+  })
+})
+
+describe('roulette dozen voice entity regression', () => {
+  it('dozen entities store index not wager amount', () => {
+    // "first dozen" should store amount=1 (dozen index), not a wager
+    const result = parseVoiceIntent('first dozen')
+    expect(result.intent).toBe('roulette_dozen')
+    // amount is the dozen INDEX (1, 2, or 3) — routing must use defaultBet for wager
+    expect(result.entities.amount).toBe(1)
+    expect(result.entities.amount).toBeLessThanOrEqual(3)
   })
 })

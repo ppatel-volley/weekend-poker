@@ -102,6 +102,15 @@ const INTENT_PATTERNS: Array<{ intent: VoiceIntent; pattern: RegExp }> = [
   { intent: 'roulette_low', pattern: /\b(low|1\s*to\s*18)\b/ },
   { intent: 'roulette_dozen', pattern: /\b(first|second|third)\s*dozen\b/ },
   { intent: 'roulette_straight', pattern: /\b(number\s*\d+|straight\s*up\s*\d+)\b/ },
+  // Craps intents (must be before generic "pass", "come", etc.)
+  { intent: 'craps_dont_pass', pattern: /\b(don'?t\s*pass)\b/ },
+  { intent: 'craps_pass_line', pattern: /\b(pass\s*(line)?)\b/ },
+  { intent: 'craps_dont_come', pattern: /\b(don'?t\s*come)\b/ },
+  { intent: 'craps_come', pattern: /\b(come\s*(bet)?)\b/ },
+  { intent: 'craps_field', pattern: /\b(field(\s*bet)?)\b/ },
+  { intent: 'craps_place', pattern: /\b(place\s*(bet\s*)?\d+)\b/ },
+  { intent: 'craps_odds', pattern: /\b(odds|add\s*odds)\b/ },
+  { intent: 'craps_roll', pattern: /\b(roll(\s*(the\s*)?(dice|bones))?|shoot|let\s*(it|'?em)\s*ride)\b/ },
   // Generic poker intents
   { intent: 'all_in', pattern: /\b(all\s*in|shove|push)\b/ },
   { intent: 'fold', pattern: /\b(fold|muck)\b/ },
@@ -146,6 +155,12 @@ export function parseVoiceIntent(transcript: string): ParsedVoiceCommand {
         if (amount !== undefined) {
           entities.amount = amount
         }
+      }
+
+      // Extract place number for craps place bets (e.g. "place 6")
+      if (intent === 'craps_place') {
+        const numMatch = normalised.match(/\b(\d+)\b/)
+        if (numMatch) entities.amount = Number(numMatch[1])
       }
 
       // Extract number for roulette straight-up bets (e.g. "number 17")

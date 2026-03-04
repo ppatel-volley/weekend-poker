@@ -66,7 +66,7 @@ describe('CosmeticsView', () => {
 
     render(<CosmeticsView />)
     // Midnight Blue is not owned — shows unlock requirement
-    expect(await screen.findByText('first hand blackjack')).toBeDefined()
+    expect(await screen.findByText('First Hand Blackjack')).toBeDefined()
   })
 
   it('switches category tabs', async () => {

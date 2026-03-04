@@ -1,6 +1,6 @@
 import { useProfile } from '../hooks/useProfile.js'
 import type { PersistentPlayerStats } from '@weekend-casino/shared'
-import { PLAYER_LEVEL_XP_THRESHOLDS, DAILY_BONUS_SCHEDULE, DAILY_BONUS_STREAK_MULTIPLIER } from '@weekend-casino/shared'
+import { PLAYER_LEVEL_XP_THRESHOLDS, DAILY_BONUS_SCHEDULE, DAILY_BONUS_STREAK_MULTIPLIER, CASINO_GAME_LABELS } from '@weekend-casino/shared'
 
 export function ProfileView() {
   const { profile, loading, error, refetch } = useProfile()
@@ -121,7 +121,7 @@ function GameStatRow({ game, stats }: { game: string; stats: PersistentPlayerSta
     : '0'
   return (
     <div style={gameRowStyle}>
-      <span style={{ flex: 1, fontSize: 13 }}>{game.replace(/_/g, ' ')}</span>
+      <span style={{ flex: 1, fontSize: 13 }}>{CASINO_GAME_LABELS[game as keyof typeof CASINO_GAME_LABELS] ?? game.replace(/_/g, ' ')}</span>
       <span style={{ fontSize: 12, color: '#aaa', marginRight: 12 }}>{stats.gamesPlayed}G</span>
       <span style={{ fontSize: 12, color: '#aaa' }}>{wr}% WR</span>
     </div>

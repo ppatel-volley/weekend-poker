@@ -124,6 +124,13 @@ export async function assignChallenges(
     challenges.push(active)
   }
 
+  // NOTE: We intentionally do NOT backfill from lifetime stats.
+  // Weekly challenges must only count activity within the current week.
+  // Lifetime totalHandsPlayed/Won would instantly complete challenges for
+  // returning players, breaking the retention intent. See learning 011.
+  // TODO: Assign challenges proactively on session join (not lazily on
+  // first API call) to avoid losing progress from early hands.
+
   // Persist to Redis
   await redis.hset(key, {
     bronze: JSON.stringify(challenges[0]),
@@ -263,22 +270,11 @@ export interface ChallengeEvent {
 function evaluateChallengeProgress(def: ChallengeDefinition, event: ChallengeEvent, currentValue: number): number {
   const id = def.id
 
-  // Play-based challenges
-  if (id.includes('play_') && event.type === 'hand_complete') {
-    if (def.requiredGame === null || def.requiredGame === event.game) {
-      return 1
-    }
-  }
-
-  // Win-based challenges
-  if (id.includes('win_') && event.type === 'hand_won') {
-    if (def.requiredGame === null || def.requiredGame === event.game) {
-      return 1
-    }
-  }
+  // ── Specific challenges FIRST (before generic play_/win_ checks) ──
 
   // Multi-game challenges (play different games)
   // Only increment when the unique game count EXCEEDS current progress.
+  // Must come BEFORE generic play_ check because these IDs contain 'play_'.
   if (id === 'silver_play_3_games' && event.type === 'hand_complete') {
     const uniqueCount = event.gamesPlayedThisSession?.length ?? 0
     return uniqueCount > currentValue ? uniqueCount - currentValue : 0
@@ -292,7 +288,7 @@ function evaluateChallengeProgress(def: ChallengeDefinition, event: ChallengeEve
 
   // Win streak
   if (id === 'gold_win_streak_5' && event.type === 'win_streak') {
-    return event.value ?? 0 >= def.targetValue ? def.targetValue : 0
+    return (event.value ?? 0) >= def.targetValue ? def.targetValue : 0
   }
 
   // Game Night win
@@ -303,6 +299,22 @@ function evaluateChallengeProgress(def: ChallengeDefinition, event: ChallengeEve
   // Craps-specific
   if (id === 'silver_craps_streak' && event.type === 'hand_won' && event.game === 'craps') {
     return 1
+  }
+
+  // ── Generic challenges (after specific checks) ──
+
+  // Play-based challenges
+  if (id.includes('play_') && event.type === 'hand_complete') {
+    if (def.requiredGame === null || def.requiredGame === event.game) {
+      return 1
+    }
+  }
+
+  // Win-based challenges
+  if (id.includes('win_') && event.type === 'hand_won') {
+    if (def.requiredGame === null || def.requiredGame === event.game) {
+      return 1
+    }
   }
 
   return 0

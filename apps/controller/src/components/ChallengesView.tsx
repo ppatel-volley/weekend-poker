@@ -25,7 +25,9 @@ export function ChallengesView() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${SERVER_URL}/api/challenges/${encodeURIComponent(deviceToken)}`)
+      const res = await fetch(`${SERVER_URL}/api/challenges/${encodeURIComponent(deviceToken)}`, {
+        headers: { 'x-device-token': deviceToken },
+      })
       if (!res.ok) throw new Error(`Failed to load challenges (${res.status})`)
       const data = (await res.json()) as ActiveChallenge[]
       setChallenges(data)
@@ -45,7 +47,7 @@ export function ChallengesView() {
     try {
       const res = await fetch(`${SERVER_URL}/api/challenges/${encodeURIComponent(deviceToken)}/claim`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-device-token': deviceToken },
         body: JSON.stringify({ challengeId }),
       })
       if (res.ok) {

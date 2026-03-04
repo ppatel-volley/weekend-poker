@@ -129,7 +129,7 @@ import { wrapWithGameNightCheck, incrementGameNightRoundIfActive } from './game-
 import { gnSetupPhase, gnLeaderboardPhase, gnChampionPhase } from './gn-phases.js'
 import { validatePlayerIdOrBot, getAuthorizedPlayerId, isCallerHost, validateBetAmount } from './security.js'
 import { registerConnection, unregisterConnection, emitToClient } from './connection-registry.js'
-import { resolveIdentity, playerStore, dailyBonusStore } from '../persistence/index.js'
+import { resolveIdentity, playerStore, dailyBonusStore, challengeStore } from '../persistence/index.js'
 import { clearSessionTracker } from '../persistence/challenge-utils.js'
 
 // ── Bot Manager (module-level singleton per server process) ─────
@@ -549,10 +549,11 @@ const holdemThunks = {
         return
       }
 
-      // Dozen bets
+      // Dozen bets — entities.amount holds the dozen INDEX (1/2/3), not the wager
       if (intent === 'roulette_dozen' && result.entities?.amount) {
-        const dozenType = `dozen_${result.entities.amount}` as const
-        await ctx.dispatchThunk('roulettePlaceBet', playerId, dozenType, amount ?? defaultBet)
+        const dozenIndex = result.entities.amount
+        const dozenType = `dozen_${dozenIndex}` as const
+        await ctx.dispatchThunk('roulettePlaceBet', playerId, dozenType, defaultBet)
         return
       }
 
@@ -572,6 +573,31 @@ const holdemThunks = {
       if (intent === 'roulette_clear') { await ctx.dispatchThunk('rouletteClearBets', playerId); return }
       if (intent === 'roulette_confirm' || intent === 'tcp_confirm') { await ctx.dispatchThunk('rouletteConfirmBets', playerId); return }
       if (intent === 'roulette_no_bet') { await ctx.dispatchThunk('rouletteNoBet', playerId); return }
+    }
+
+    // ── Craps ────────────────────────────────────────────────────
+    if (game === 'craps') {
+      const crapsBettingPhases = [CasinoPhase.CrapsComeOutBetting, CasinoPhase.CrapsPointBetting] as string[]
+      const crapsRollPhases = [CasinoPhase.CrapsComeOutRoll, CasinoPhase.CrapsPointRoll] as string[]
+      const defaultBet = 25
+
+      if (crapsBettingPhases.includes(phase)) {
+        if (intent === 'craps_pass_line') { await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'pass_line', amount ?? defaultBet); return }
+        if (intent === 'craps_dont_pass') { await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'dont_pass', amount ?? defaultBet); return }
+        if (intent === 'craps_come') { await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'come', amount ?? defaultBet); return }
+        if (intent === 'craps_dont_come') { await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'dont_come', amount ?? defaultBet); return }
+        if (intent === 'craps_field') { await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'field', amount ?? defaultBet); return }
+        if (intent === 'craps_place' && result.entities?.amount !== undefined) {
+          await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'place', defaultBet, result.entities.amount)
+          return
+        }
+        if (intent === 'craps_odds') { await ctx.dispatchThunk('crapsValidateAndPlaceBet', playerId, 'pass_odds', amount ?? defaultBet); return }
+        if (intent === 'roulette_confirm' || intent === 'tcp_confirm') { await ctx.dispatchThunk('crapsConfirmBets', playerId); return }
+      }
+
+      if (crapsRollPhases.includes(phase)) {
+        if (intent === 'craps_roll') { ctx.dispatch('crapsSetRollComplete', true); return }
+      }
     }
   }),
 
@@ -1320,6 +1346,19 @@ const onConnect = async (ctx: ConnCtx) => {
     )
     persistentId = profile.identity.persistentId
     playerLevel = profile.level
+
+    // Proactively assign weekly challenges on session join so progress
+    // from early hands isn't lost. Previously challenges were only assigned
+    // lazily on first GET /api/challenges call. See learning 011.
+    // Called unconditionally — assignChallenges() internally checks the week
+    // identifier and returns existing challenges if already assigned this week,
+    // or rotates to new challenges if a new week has started.
+    try {
+      await challengeStore.assignChallenges(persistentId, profile.stats)
+    } catch (challengeErr) {
+      // Non-blocking: challenge assignment failure should NOT prevent joining
+      console.error('[persistence] Proactive challenge assignment failed:', challengeErr)
+    }
 
     // Check daily bonus eligibility
     const bonusResult = dailyBonusStore.calculateDailyBonus(profile.dailyBonus)

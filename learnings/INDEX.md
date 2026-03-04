@@ -28,7 +28,11 @@
 | API contract testing | 010 |
 | Session-scoped state | 010 |
 | Atomic state transitions | 010 |
-| Challenge/achievement system | 010 |
+| Challenge/achievement system | 010, 011 |
+| Weekly challenge backfill | 011 |
+| Voice intent routing | 012 |
+| Playwright multi-page testing | 013 |
+| JS operator precedence | 014 |
 
 ## Summaries
 
@@ -71,6 +75,26 @@ Vitest strips TypeScript types at transform time and does NOT enforce type corre
 **Severity:** Critical
 **Category:** Security, Multi-Agent, Code Review
 "Additive-only" security fixes — creating a new secure path (thunk with validation) without removing or gating the old insecure path (raw reducer still in phase config, old dispatches still in controllers). Three examples: host-only game selection left old `selectGame` reducer exposed; hole card privacy left `setHoleCards` broadcasting to public state; voice pipeline bypassed `processPlayerAction` validation. For every security fix, map ALL paths to the vulnerability, close every one, and write negative tests proving the old paths are blocked.
+
+### 011 — Weekly challenge backfill must NOT use lifetime stats
+**Severity:** High
+**Category:** Retention, Challenges, Game Economy
+Using lifetime cumulative stats (totalHandsPlayed, totalHandsWon) to initialise weekly challenge progress causes instant completion for returning players. Weekly challenges must only count activity within the challenge period — start at zero if you can't distinguish weekly from lifetime.
+
+### 012 — Voice intents must have both parsing AND routing
+**Severity:** Critical
+**Category:** Voice Pipeline, Client-Server
+Adding intent patterns to `parseVoiceIntent.ts` without adding routing in `processVoiceCommand` creates a silent failure — intents parse correctly but are never dispatched to game actions. Always check both sides (parser + router) when adding new intents.
+
+### 013 — Playwright `.or()` only works with same-page locators
+**Severity:** Critical
+**Category:** E2E Testing, Playwright
+`.or()` combinator silently fails or produces incorrect results when combining locators from different Playwright Page objects. For multi-player tests, always assert on each page separately.
+
+### 014 — JS `??` has lower precedence than comparison operators
+**Severity:** Medium
+**Category:** JavaScript, Operator Precedence
+`a ?? b >= c` evaluates as `a ?? (b >= c)`, not `(a ?? b) >= c`. Always wrap `??` in parentheses when combining with comparison or arithmetic operators.
 
 ### 010 — Retention system integration review (13 findings across 3 review passes)
 **Severity:** Critical
@@ -142,3 +166,13 @@ Side-channel persistence systems (profiles, achievements, challenges, cosmetics)
 | Phase cascade is recursive | 009 |
 | VGF throws on bad reducer name | 009 |
 | vi.mock sync with imports | 007 |
+| Weekly backfill from lifetime stats | 011 |
+| Time-bounded vs cumulative counters | 011 |
+| Challenge instant completion | 011 |
+| Voice parse without routing | 012 |
+| processVoiceCommand routing gap | 012 |
+| Silent voice intent drop | 012 |
+| Playwright .or() cross-page | 013 |
+| Multi-page E2E assertions | 013 |
+| Nullish coalescing precedence | 014 |
+| ?? vs >= operator binding | 014 |
