@@ -346,6 +346,12 @@ const holdemReducers = {
           sittingOutHandCount: 0,
         } satisfies CasinoPlayer,
       ],
+      // Initialize bot wallet — without this, wallet[botId] is undefined (0)
+      // and bots can't place bets in TCP, BJ, Roulette, Craps, etc.
+      wallet: {
+        ...state.wallet,
+        [botId]: STARTING_WALLET_BALANCE,
+      },
     }
   }),
 
