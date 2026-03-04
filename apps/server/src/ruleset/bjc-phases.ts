@@ -229,7 +229,10 @@ export const bjcPlayerTurnsPhase = {
   },
   endIf: (ctx: any) => {
     const state: CasinoGameState = ctx.session.state
-    return state.blackjackCompetitive?.playerTurnsComplete === true
+    const bjc = state.blackjackCompetitive
+    if (!bjc) return false
+    return bjc.playerTurnsComplete === true ||
+      bjc.playerStates.every((ps: any) => ps.hand.stood || ps.hand.busted)
   },
   next: CasinoPhase.BjcShowdown,
 }

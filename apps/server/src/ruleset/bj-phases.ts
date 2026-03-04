@@ -266,7 +266,15 @@ export const bjPlayerTurnsPhase = {
   },
   endIf: (ctx: any) => {
     const state: CasinoGameState = ctx.session.state
-    return state.blackjack?.playerTurnsComplete === true
+    const bj = state.blackjack
+    if (!bj) return false
+    // Check actual hand state instead of relying on playerTurnsComplete flag.
+    // The flag depends on bjCheckAdvance thunk chain which may not propagate
+    // to VGF's endIf evaluation cycle. Checking hands directly is robust.
+    return bj.playerTurnsComplete === true ||
+      bj.playerStates.every((ps: any) =>
+        ps.surrendered || ps.hands.every((h: any) => h.stood || h.busted)
+      )
   },
   next: CasinoPhase.BjDealerTurn,
 }
