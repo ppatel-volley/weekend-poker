@@ -22,6 +22,12 @@ A comprehensive guide for developers and AI agents building TV games on the Voll
 9. **Amplitude flag management also requires the AWS session.** The `flag add`, `flag remove`, and `flag status` sub-commands use the same SSO credentials. Same rule: verify the session first, hand off login to the human if it's expired.
 10. **Always pass `--platform` exactly.** Valid values are `SAMSUNG_TV`, `LG_TV`, `FIRE_TV`, `IOS_MOBILE`, `ANDROID_MOBILE`, or `WEB`. Case and underscores matter — `firetv` or `fire-tv` will fail silently.
 11. **Controller apps MUST use `@volley/platform-sdk`.** Do not generate random UUIDs for device identity — use `useDeviceInfo()` from the Platform SDK. All Volley production apps wrap in `PlatformProvider`. See Section 16 for the full controller setup guide.
+12. **Use `WGFServer`, not `VGFServer`.** The older `VGFServer` class creates Socket.IO internally and lacks production features. `WGFServer` accepts an explicit Socket.IO instance and supports `RedisRuntimeSchedulerStore`. See Section 17.
+13. **Use `@volley/logger`, not raw pino.** All Volley services use `@volley/logger` with `createLoggerHttpMiddleware` for request tracing via UUID. Raw pino lacks request IDs and structured HTTP logging. See Section 17.3.
+14. **Redis must be resilient.** Never use `ioredis-mock` in production. Use exponential backoff with jitter (`retryStrategy`), `maxRetriesPerRequest: null`, and `enableOfflineQueue: true`. See Section 17.4.
+15. **Health endpoints: two, not one.** Every server needs `/health` (liveness) AND `/health/ready` (readiness with dependency checks). Kubernetes/ECS/GameLift route traffic based on readiness. See Section 17.5.
+16. **Platform URLs must be stage-aware.** Never hardcode `platform-dev.volley-services.net`. Use a lookup table: local/dev -> dev, staging -> staging, production -> production. See Section 18.2.
+17. **Display Electron IPC must be dynamic.** Do not use a static preload object. Use `ipcMain.handle()` + `ipcRenderer.invoke()` for session ID, backend URL, and stage. See Section 18.3.
 
 ---
 
@@ -44,6 +50,9 @@ A comprehensive guide for developers and AI agents building TV games on the Voll
 14. [Common Pitfalls](#14-common-pitfalls)
 15. [Complete Code Examples](#15-complete-code-examples)
 16. [Controller App Development (Phone)](#16-controller-app-development-phone)
+17. [Server Production Readiness](#17-server-production-readiness)
+18. [Display Production Readiness](#18-display-production-readiness)
+19. [Monorepo Infrastructure](#19-monorepo-infrastructure)
 
 ---
 
@@ -3138,3 +3147,829 @@ The Weekend Casino controller is missing several packages and patterns that are 
 1. Add `react-router-dom` if URL-based routing is needed for non-game screens
 2. Consider a shared `web-common` package for VGF hooks used by both display and controller
 3. Add Storybook for component development (if the team wants it)
+
+---
+
+## 17. Server Production Readiness
+
+This section covers what a VGF game server needs to run on Volley's production infrastructure. Based on a comparison of the Weekend Casino server with Wheel of Fortune's server.
+
+> **Context:** Wheel of Fortune's `vgf-service` is the production reference. Weekend Casino's server is functional but missing several infrastructure patterns required for deployment.
+
+### 17.1 WGFServer vs VGFServer
+
+VGF v4.8.0 provides two server classes. **Use `WGFServer`, not `VGFServer`.**
+
+`WGFServer` is the newer API that accepts an explicit Socket.IO server instance, giving you control over CORS, middleware, and connection validation.
+
+```typescript
+// CORRECT — Wheel of Fortune pattern (WGFServer)
+import { WGFServer, MemoryStorage, RedisRuntimeSchedulerStore } from "@volley/vgf/server"
+import { Server as SocketIOServer } from "socket.io"
+
+const io = new SocketIOServer(httpServer, {
+    cors: { origin: parseCorsOrigin(), methods: ["GET", "POST"] },
+})
+
+const storage = new MemoryStorage({ persistence: redisPersistence })
+const schedulerStore = new RedisRuntimeSchedulerStore({ redisClient: redis })
+
+const server = new WGFServer<YourGameState>({
+    logger,
+    port,
+    httpServer,
+    expressApp: app,
+    socketIOServer: io,       // Explicit Socket.IO injection
+    storage,
+    gameRuleset: game,
+    schedulerStore,           // Persistent scheduler (not noop)
+})
+
+server.start()
+```
+
+```typescript
+// WRONG — Weekend Casino's current approach (VGFServer)
+import { VGFServer, MemoryStorage, SocketIOTransport } from "@volley/vgf/server"
+
+const transport = new SocketIOTransport({ httpServer, storage })
+const server = new VGFServer<CasinoGameState>({
+    game: ruleset,
+    httpServer, port, logger, storage, transport, app,
+    schedulerProvider,  // Noop scheduler — actions are lost on restart
+})
+```
+
+**Key differences:**
+- `WGFServer` takes a `socketIOServer` instance (you control CORS, middleware)
+- `WGFServer` takes a `schedulerStore` (persistent via Redis, survives restarts)
+- `VGFServer` creates its own Socket.IO internally (less control)
+- `VGFServer` uses a `SocketIOTransport` abstraction that WGF drops
+
+### 17.2 Required Server Packages
+
+| Package | Version | Purpose | WoF | Casino |
+|---------|---------|---------|-----|--------|
+| `@volley/vgf` | `^4.8.0` | Game framework | Yes | Yes |
+| `@volley/logger` | `^1.4.1` | Structured logging with request IDs | Yes | **MISSING** (uses pino) |
+| `socket.io` | `^4.8.1` | Explicit Socket.IO server (for WGFServer) | Yes | **MISSING** (VGF creates internally) |
+| `uuid` | `^11.1.0` | Request ID generation for logging | Yes | **MISSING** |
+| `ioredis` | `^5.4.0` | Redis client | Yes | Yes |
+| `express` | `^4.18.0` | HTTP server | Yes | Yes |
+| `cors` | `^2.8.5` | CORS middleware | Yes | Yes |
+
+### 17.3 @volley/logger
+
+All Volley production services use `@volley/logger` instead of raw pino. It provides structured logging with request tracing.
+
+```typescript
+// services/logger.ts
+import { createLogger } from "@volley/logger"
+
+export const logger = createLogger({
+    type: "node",
+    formatters: {
+        level(label: string) { return { level: label } },
+    },
+})
+```
+
+**HTTP request logging middleware** (generates UUID per request for tracing):
+
+```typescript
+// express.ts
+import { createLoggerHttpMiddleware } from "@volley/logger"
+import { v4 } from "uuid"
+
+app.use(createLoggerHttpMiddleware({
+    logger,
+    genReqId: () => v4(),
+}))
+```
+
+This adds `req.logger` and `res.logger` to every request, pre-populated with the request ID. All downstream log calls include the trace ID automatically.
+
+### 17.4 Redis Client (Production Pattern)
+
+The dev-friendly "optional Redis" pattern is fine for local development, but production requires a resilient client that never gives up on reconnection.
+
+```typescript
+// services/redis.ts
+import Redis from "ioredis"
+
+export function createRedisClient(url: string): Redis {
+    const client = new Redis(url, {
+        maxRetriesPerRequest: null,    // Unlimited retries per command
+        enableOfflineQueue: true,       // Queue commands while disconnected
+        retryStrategy(times: number) {
+            // Exponential backoff: 50ms, 100ms, 200ms, ..., capped at 5s
+            // Jitter: 0-500ms random to prevent thundering herd
+            return Math.min(Math.pow(2, times) * 25, 5000) + Math.random() * 500
+        },
+    })
+
+    client.on("connect", () => logger.info("Redis connected"))
+    client.on("ready", () => logger.info("Redis ready"))
+    client.on("error", (err) => logger.error({ err }, "Redis error"))
+    client.on("close", () => logger.warn("Redis connection closed"))
+
+    return client
+}
+```
+
+**Why this matters:**
+- `maxRetriesPerRequest: null` prevents ioredis from throwing after 20 retries (default)
+- `enableOfflineQueue: true` queues commands and replays when connection is restored
+- Exponential backoff with jitter prevents all pods reconnecting simultaneously after a Redis restart
+
+### 17.5 Health Check Endpoints
+
+Production deployments (Kubernetes, ECS, GameLift) require two health endpoints:
+
+```typescript
+// health/index.ts
+router.get("/health", (_req, res) => {
+    res.json({
+        version: process.env.npm_package_version ?? "unknown",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+    })
+})
+
+router.get("/health/ready", async (req, res) => {
+    const redisCheck = await checkRedis(redis)
+
+    const checks = { basic: { status: "healthy" }, redis: redisCheck }
+    const allHealthy = Object.values(checks).every(c => c.status === "healthy")
+
+    res.status(allHealthy ? 200 : 503).json({
+        status: allHealthy ? "healthy" : "unhealthy",
+        version: process.env.npm_package_version ?? "unknown",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        checks,
+    })
+})
+
+async function checkRedis(redis: Redis): Promise<{ name: string; status: string; message: string }> {
+    try {
+        const pong = await Promise.race([
+            redis.ping(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
+        ])
+        return { name: "redis", status: pong === "PONG" ? "healthy" : "unhealthy", message: "" }
+    } catch (err) {
+        return { name: "redis", status: "unhealthy", message: String(err) }
+    }
+}
+```
+
+**Endpoint usage:**
+- `/health` — Basic liveness probe (always returns 200 if the process is running)
+- `/health/ready` — Readiness probe (returns 503 if Redis is down, preventing traffic routing)
+
+### 17.6 Graceful Shutdown
+
+```typescript
+// index.ts (after server.start())
+const SHUTDOWN_TIMEOUT = parseInt(process.env.SHUTDOWN_TIMEOUT ?? "25000", 10)
+
+async function shutdown(signal: string) {
+    logger.info({ signal }, "Shutdown signal received")
+    const timer = setTimeout(() => {
+        logger.error("Graceful shutdown timed out, forcing exit")
+        process.exit(1)
+    }, SHUTDOWN_TIMEOUT)
+
+    try {
+        server.stop()
+        await redis.quit()
+        httpServer.close()
+        clearTimeout(timer)
+        logger.info("Graceful shutdown complete")
+        process.exit(0)
+    } catch (err) {
+        logger.error({ err }, "Error during shutdown")
+        process.exit(1)
+    }
+}
+
+process.on("SIGTERM", () => void shutdown("SIGTERM"))
+process.on("SIGINT", () => void shutdown("SIGINT"))
+```
+
+### 17.7 Error Handling Middleware
+
+Register these **after** `server.start()` (which registers VGF's own routes):
+
+```typescript
+// middleware/errorHandlers.ts
+
+// 404 handler (must be after all routes)
+app.use((_req, res) => {
+    res.status(404).json({ error: "Not Found" })
+})
+
+// Error handler (4-arg signature tells Express this handles errors)
+app.use((err: Error & { statusCode?: number }, req, res, _next) => {
+    req.logger?.error({
+        error: { name: err.name, message: err.message, stack: err.stack },
+        request: { method: req.method, url: req.url },
+        source: "express-error-handler",
+    })
+
+    const statusCode = err.statusCode ?? 500
+    const message = statusCode >= 500 ? "Internal Server Error" : err.message
+    res.status(statusCode).json({ error: message })
+})
+```
+
+### 17.8 Session Validation Middleware
+
+WoF validates session creation requests before VGF processes them:
+
+```typescript
+// session/session.middleware.ts
+app.post("/api/session", (req, res, next) => {
+    logger.info({
+        ip: req.ip,
+        userAgent: req.headers["user-agent"],
+    }, "Session creation request")
+
+    // Add custom validation here (auth tokens, rate limiting, etc.)
+    next()  // Pass to VGF's session handler
+})
+```
+
+Register this **before** `server.start()`.
+
+### 17.9 Docker Configuration
+
+**Dockerfile (multi-stage build):**
+
+```dockerfile
+# Base stage
+FROM node:22-alpine AS base
+RUN corepack enable && corepack prepare pnpm@latest --activate
+WORKDIR /app
+
+# Dependencies stage
+FROM base AS dependencies
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY apps/server/package.json ./apps/server/
+RUN --mount=type=secret,id=npm_token \
+    NPM_TOKEN=$(cat /run/secrets/npm_token) pnpm install --frozen-lockfile
+
+# Build stage
+FROM dependencies AS build
+COPY . .
+RUN pnpm -r build
+
+# Production stage
+FROM base AS production
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build /app/packages/shared/package.json ./packages/shared/
+COPY --from=build /app/apps/server/dist ./apps/server/dist
+COPY --from=build /app/apps/server/package.json ./apps/server/
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+
+ENTRYPOINT ["node", "apps/server/dist/index.js"]
+```
+
+**docker-compose.yml:**
+
+```yaml
+services:
+  vgf-server:
+    build:
+      context: .
+      target: ${NODE_ENV:-development}
+      secrets:
+        - npm_token
+    ports:
+      - "${VGF_PORT:-8001}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - REDIS_URL=redis://redis:6379
+      - PORT=3000
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - game-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - game-network
+
+networks:
+  game-network:
+    driver: bridge
+
+secrets:
+  npm_token:
+    environment: NPM_TOKEN
+```
+
+### 17.10 Server Environment Variables
+
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `NODE_ENV` | No | `development` | Node environment |
+| `PORT` | No | `3000` | HTTP server port |
+| `REDIS_URL` | Yes (prod) | — | Redis connection string (`redis://host:6379`) |
+| `LOG_LEVEL` | No | `info` | Logging level (`debug`, `info`, `warn`, `error`) |
+| `CORS_ORIGIN` | No | `*` | Allowed origins (comma-separated, or `*`) |
+| `SHUTDOWN_TIMEOUT` | No | `25000` | Graceful shutdown timeout in ms |
+| `STAGE` | No | `local` | Deployment stage (`local`, `dev`, `staging`, `production`) |
+
+### 17.11 Cross-Project Server Comparison
+
+| Aspect | Weekend Casino | Wheel of Fortune |
+|--------|----------------|------------------|
+| **VGF class** | `VGFServer` (old) | `WGFServer` (new) |
+| **Logger** | pino (direct) | `@volley/logger` + request IDs |
+| **Redis** | Optional (mock fallback) | Required + exponential backoff + jitter |
+| **Scheduler** | Noop (in-memory) | `RedisRuntimeSchedulerStore` (persistent) |
+| **Health endpoints** | `/health` (basic) | `/health` + `/health/ready` (with Redis check) |
+| **Session middleware** | None | Pre-creation validation + audit logging |
+| **Error handlers** | None (VGF implicit) | Explicit 404 + error handlers with context |
+| **Graceful shutdown** | None | SIGTERM/SIGINT with 25s timeout |
+| **Docker** | None | Multi-stage Dockerfile + docker-compose |
+| **Socket.IO** | Created internally by VGF | Explicit server injection |
+| **Build system** | tsc | esbuild (faster) |
+| **CORS** | Regex localhost/LAN detection | Env var driven (`CORS_ORIGIN`) |
+
+---
+
+## 18. Display Production Readiness
+
+This section covers what the display app (TV screen) needs for production deployment. Based on a comparison of Weekend Casino's display with Wheel of Fortune's game-client.
+
+### 18.1 Platform SDK as Hard Dependency
+
+The display app **must** have `@volley/platform-sdk` as a required dependency (not an optional peer). On real TV hardware, the SDK provides authentication, session management, and analytics that the game cannot function without.
+
+```json
+// apps/display/package.json
+{
+    "dependencies": {
+        "@volley/platform-sdk": "7.42.0",
+        "@volley/vgf": "^4.8.0"
+    }
+}
+```
+
+The `MaybePlatformProvider` pattern (skip SDK on web/dev) is still correct for the display, since it may run in a browser during development without the TV shell. But the package itself must be installed.
+
+### 18.2 Stage-Aware Platform URL Resolution
+
+Platform API URLs must resolve per stage. Do not hardcode dev URLs.
+
+```typescript
+// utils/getPlatformApiUrl.ts
+const PLATFORM_API_URLS: Record<string, string> = {
+    local: "platform-dev.volley-services.net",
+    test: "platform-dev.volley-services.net",
+    dev: "platform-dev.volley-services.net",
+    staging: "platform-staging.volley-services.net",
+    production: "platform.volley-services.net",
+}
+
+export function getPlatformApiUrl(stage?: string): string {
+    if (!stage) return PLATFORM_API_URLS["production"]!
+    return PLATFORM_API_URLS[stage] ?? PLATFORM_API_URLS["production"]!
+}
+```
+
+### 18.3 Electron IPC Configuration
+
+On GameLift Streams or a real TV, the Electron main process receives configuration from the platform and must pass it to the renderer via IPC.
+
+**Main process (electron/main.cjs):**
+
+```javascript
+const { app, BrowserWindow, ipcMain } = require("electron")
+
+// Config from CLI args, env vars, or platform launcher
+const config = {
+    sessionId: process.env.SESSION_ID ?? "",
+    backendUrl: process.env.BACKEND_URL ?? "http://localhost:3000",
+    stage: process.env.STAGE ?? "local",
+}
+
+// Register IPC handlers BEFORE creating the window
+ipcMain.handle("get-session-id", () => config.sessionId)
+ipcMain.handle("get-backend-url", () => config.backendUrl)
+ipcMain.handle("get-stage", () => config.stage)
+
+function createWindow() {
+    const win = new BrowserWindow({
+        width: 1920,
+        height: 1080,
+        fullscreen: true,
+        frame: false,
+        webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            preload: path.join(__dirname, "preload.cjs"),
+        },
+    })
+
+    // Open DevTools unless production
+    if (config.stage !== "production") {
+        win.webContents.openDevTools()
+    }
+}
+```
+
+**Preload (electron/preload.cjs):**
+
+```javascript
+const { contextBridge, ipcRenderer } = require("electron")
+
+contextBridge.exposeInMainWorld("electronAPI", {
+    getSessionId: () => ipcRenderer.invoke("get-session-id"),
+    getBackendUrl: () => ipcRenderer.invoke("get-backend-url"),
+    getStage: () => ipcRenderer.invoke("get-stage"),
+    platform: "ELECTRON",
+    isElectron: true,
+})
+```
+
+**Renderer (config loader):**
+
+```typescript
+// utils/configLoader.ts
+export async function loadConfig() {
+    if (window.electronAPI?.isElectron) {
+        return {
+            sessionId: await window.electronAPI.getSessionId(),
+            backendUrl: await window.electronAPI.getBackendUrl(),
+            stage: await window.electronAPI.getStage(),
+        }
+    }
+    // Fallback: Vite env vars for browser dev
+    return {
+        sessionId: new URLSearchParams(window.location.search).get("sessionId"),
+        backendUrl: import.meta.env.VITE_SERVER_URL ?? "http://localhost:3000",
+        stage: import.meta.env.VITE_PLATFORM_SDK_STAGE ?? "local",
+    }
+}
+```
+
+### 18.4 Mock Transport for Headless Debug
+
+WoF provides a `createMockTransport()` that allows the display to run without a VGF server. This is useful for UI development, Storybook, and automated testing.
+
+```typescript
+// lib/createMockTransport.ts
+import { SocketIOClientTransport } from "@volley/vgf/client"
+
+export function createMockTransport(): SocketIOClientTransport {
+    // Return a transport that never connects but doesn't throw.
+    // Components fall back to loading/error states gracefully.
+    return new SocketIOClientTransport({
+        url: "http://localhost:0",
+        query: { sessionId: "mock", userId: "mock", clientType: "Display" },
+    })
+}
+```
+
+Use in the app:
+
+```typescript
+const useMock = !sessionId && stage === "local"
+const transport = useMock ? createMockTransport() : createDisplayTransport(config)
+
+<VGFProvider transport={transport} clientOptions={{ autoConnect: !useMock }}>
+```
+
+### 18.5 Cross-Project Display Comparison
+
+| Aspect | Weekend Casino | Wheel of Fortune |
+|--------|----------------|------------------|
+| **Platform SDK** | Optional peer dep | **Pinned hard dep** (`7.42.0`) |
+| **PlatformProvider** | MaybePlatformProvider (detection only) | Full PlatformProvider with stage-aware URLs |
+| **Electron IPC** | Static preload (`platform`, `isElectron`) | **Dynamic IPC handlers** (session, backend, stage) |
+| **Config source** | Vite env vars only | Electron IPC + CLI args + env vars |
+| **Mock transport** | None | `createMockTransport()` for headless debug |
+| **Build plugin** | `@vitejs/plugin-react` + `plugin-legacy` | `@vitejs/plugin-react-swc` |
+| **Code splitting** | Library-based (three, r3f, drei) | Function-based (shared-core, three-vendor, react, vendor) |
+| **Sourcemaps** | None | Inline (dev), true (prod) |
+| **Console stripping** | None | Production builds drop `console.*` and `debugger` |
+| **R3F libraries** | drei, postprocessing | Minimal R3F (no drei, no postprocessing) |
+| **Spatial nav** | norigin-spatial-navigation | Custom `useKeyPress` hooks |
+| **QR codes** | `qrcode.react` | `qrcode` (native, no React wrapper) |
+| **Storybook** | None | Full setup (`@storybook/react-vite`) |
+
+### 18.6 Display Vite Configuration (Production Pattern)
+
+```typescript
+// apps/display/vite.config.ts
+import { defineConfig } from "vite"
+import react from "@vitejs/plugin-react-swc"
+import path from "path"
+import pkg from "./package.json" with { type: "json" }
+
+export default defineConfig(({ mode }) => ({
+    plugins: [react()],
+    base: "./",
+    define: {
+        __APP_VERSION__: JSON.stringify(pkg.version),
+    },
+    resolve: {
+        alias: { "@": path.resolve(__dirname, "./src") },
+        dedupe: ["react", "react-dom"],   // Prevent multiple React instances
+    },
+    optimizeDeps: {
+        force: true,
+        include: ["react", "react/jsx-runtime", "react-dom"],
+    },
+    build: {
+        target: "es2019",
+        sourcemap: mode === "development" ? "inline" : true,
+        chunkSizeWarningLimit: 300,
+        minify: "esbuild",
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    if (id.includes("@volley/") || id.includes("@your-game/"))
+                        return "shared-core-deps"
+                    if (id.includes("three") || id.includes("@react-three"))
+                        return "three-vendor"
+                    if (id.includes("react-dom")) return "react-dom"
+                    if (id.includes("/react/")) return "react"
+                    if (id.includes("node_modules")) return "vendor"
+                },
+            },
+        },
+    },
+}))
+```
+
+---
+
+## 19. Monorepo Infrastructure
+
+This section covers root-level monorepo configuration required for Volley production projects. Based on a comparison of Weekend Casino with Wheel of Fortune.
+
+### 19.1 .npmrc
+
+Create `.npmrc` at the monorepo root:
+
+```
+inject-workspace-packages=true
+```
+
+This ensures workspace package symlinks are injected into `node_modules` correctly. WoF has this; Casino does not.
+
+### 19.2 Turborepo
+
+WoF uses Turborepo for task orchestration, caching, and delta-based CI. Add `turbo.json` at the root:
+
+```json
+{
+    "$schema": "https://turbo.build/schema.json",
+    "globalEnv": ["NODE_ENV"],
+    "tasks": {
+        "build": {
+            "dependsOn": ["^build"],
+            "inputs": ["$TURBO_DEFAULT$", "!**/*.md", "!**/*.test.*", "!**/*.spec.*"],
+            "outputs": ["dist/**", ".electron-builder/**"],
+            "env": ["VITE_*"]
+        },
+        "dev": {
+            "persistent": true
+        },
+        "lint": {
+            "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
+        },
+        "typecheck": {
+            "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
+        },
+        "test": {
+            "dependsOn": ["^build"],
+            "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
+            "outputs": ["coverage/**"]
+        }
+    }
+}
+```
+
+Install as a root dev dependency:
+
+```bash
+pnpm add -Dw turbo
+```
+
+Then update root `package.json` scripts:
+
+```json
+{
+    "scripts": {
+        "build": "turbo build",
+        "test": "turbo test",
+        "typecheck": "turbo typecheck",
+        "lint": "turbo lint",
+        "dev": "turbo dev"
+    }
+}
+```
+
+### 19.3 Prettier + lint-staged
+
+WoF enforces consistent formatting on every commit.
+
+**`.prettierrc`:**
+```json
+{
+    "trailingComma": "es5",
+    "tabWidth": 2,
+    "semi": false,
+    "singleQuote": true
+}
+```
+
+**Root `package.json` additions:**
+```json
+{
+    "devDependencies": {
+        "prettier": "^3.2.0",
+        "lint-staged": "^16.0.0"
+    },
+    "lint-staged": {
+        "*.{ts,tsx,js,jsx,json}": "prettier --write"
+    },
+    "scripts": {
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "prepare": "git config core.hooksPath .hooks"
+    }
+}
+```
+
+**`.hooks/pre-commit`:**
+```bash
+#!/bin/sh
+npx lint-staged
+```
+
+### 19.4 Shared Configuration Packages
+
+WoF extracts ESLint and TypeScript configuration into shared workspace packages:
+
+```
+packages/
+  eslint-config/
+    package.json    # @your-game/eslint-config
+    base.js         # Shared ESLint rules
+  tsconfig/
+    package.json    # @your-game/tsconfig
+    base.json       # Shared compiler options
+    react.json      # React-specific (extends base)
+    node.json       # Node-specific (extends base)
+```
+
+Apps reference these:
+```json
+// apps/server/tsconfig.json
+{ "extends": "../../packages/tsconfig/node.json" }
+
+// apps/display/tsconfig.json
+{ "extends": "../../packages/tsconfig/react.json" }
+```
+
+### 19.5 CI/CD Pipeline (GitHub Actions)
+
+WoF's CI runs jobs in parallel with Turbo caching and delta-based filtering:
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo typecheck --filter='...[origin/main]'
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo test --filter='...[origin/main]'
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo build --filter='...[origin/main]'
+```
+
+**Key features:**
+- `--filter='...[origin/main]'` only runs tasks for packages changed since main (delta CI)
+- `concurrency.cancel-in-progress` cancels outdated CI runs on force-push
+- `needs: [typecheck, test]` means build only runs after checks pass
+- Parallel jobs (typecheck + test run simultaneously)
+
+### 19.6 Setup and Dev Scripts
+
+WoF provides shell scripts for first-time setup and multi-service development:
+
+**`scripts/setup.sh`** — First-time project setup:
+```bash
+#!/bin/bash
+# Check prerequisites (node, pnpm, docker)
+# Copy .env.example to .env if not exists
+# Validate NPM_TOKEN for @volley packages
+# Run pnpm install
+# Build shared packages
+```
+
+**`scripts/dev-all.sh`** — Start all services:
+```bash
+#!/bin/bash
+# Start Docker services (Redis, VGF server)
+# Wait for health checks to pass
+# Start display and controller dev servers via Turbo
+```
+
+### 19.7 Cross-Project Monorepo Comparison
+
+| Aspect | Weekend Casino | Wheel of Fortune |
+|--------|----------------|------------------|
+| **Package manager** | pnpm 9.15.4 | pnpm 10.6.5 |
+| **Task orchestration** | Direct pnpm scripts | Turborepo |
+| **CI caching** | None | Turbo remote cache |
+| **Delta CI** | None (runs everything) | `--filter='...[origin/main]'` |
+| **CI parallelisation** | Sequential single job | Parallel jobs (typecheck, test, build) |
+| **Formatting** | None | Prettier + lint-staged + git hooks |
+| **Shared config** | 1 package (`shared`) | 5 packages (shared-types, eslint-config, tsconfig, web-common, art-assets) |
+| **Docker** | None | Multi-stage Dockerfile + docker-compose |
+| **.npmrc** | None | `inject-workspace-packages=true` |
+| **Setup automation** | None | `setup.sh`, `dev-all.sh` |
+| **E2E testing** | Playwright (7 project profiles) | Per-app (less comprehensive) |
+| **PR templates** | None | GitHub PR template + CODEOWNERS |
+| **Dependency updates** | Manual | Dependabot |
+
+### 19.8 Priority Order for Weekend Casino
+
+**Phase 1 — Server production readiness** (blocks deployment):
+1. Switch `VGFServer` to `WGFServer`
+2. Resilient Redis client (backoff + jitter)
+3. `RedisRuntimeSchedulerStore` (persistent scheduler)
+4. `@volley/logger` with request IDs
+5. `/health/ready` endpoint with Redis check
+6. Graceful shutdown handler
+7. Error handlers (404 + error middleware)
+8. Session validation middleware
+9. Dockerfile + docker-compose
+
+**Phase 2 — Display production readiness**:
+1. `@volley/platform-sdk` as hard dependency
+2. Stage-aware platform URL resolution
+3. Electron IPC config handlers
+4. Mock transport for headless debug
+
+**Phase 3 — Monorepo infrastructure**:
+1. `.npmrc`
+2. Turborepo
+3. Prettier + lint-staged
+4. Shared config packages
+5. CI pipeline parallelisation

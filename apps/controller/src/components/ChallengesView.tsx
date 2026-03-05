@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { ActiveChallenge, ChallengeTier } from '@weekend-casino/shared'
-import { useDeviceToken } from '../hooks/useDeviceToken.js'
+import { usePlatformDeviceId } from '../hooks/usePlatformDeviceId.js'
 
 const SERVER_URL =
   (import.meta.env['VITE_SERVER_URL'] as string | undefined) ??
@@ -15,7 +15,7 @@ const TIER_COLOURS: Record<ChallengeTier, string> = {
 const TIER_ORDER: ChallengeTier[] = ['bronze', 'silver', 'gold']
 
 export function ChallengesView() {
-  const { deviceToken } = useDeviceToken()
+  const deviceId = usePlatformDeviceId()
   const [challenges, setChallenges] = useState<ActiveChallenge[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -25,8 +25,8 @@ export function ChallengesView() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${SERVER_URL}/api/challenges/${encodeURIComponent(deviceToken)}`, {
-        headers: { 'x-device-token': deviceToken },
+      const res = await fetch(`${SERVER_URL}/api/challenges/${encodeURIComponent(deviceId)}`, {
+        headers: { 'x-device-token': deviceId },
       })
       if (!res.ok) throw new Error(`Failed to load challenges (${res.status})`)
       const data = (await res.json()) as ActiveChallenge[]
@@ -36,7 +36,7 @@ export function ChallengesView() {
     } finally {
       setLoading(false)
     }
-  }, [deviceToken])
+  }, [deviceId])
 
   useEffect(() => {
     void fetchChallenges()
@@ -45,9 +45,9 @@ export function ChallengesView() {
   const handleClaim = async (challengeId: string) => {
     setClaimError(null)
     try {
-      const res = await fetch(`${SERVER_URL}/api/challenges/${encodeURIComponent(deviceToken)}/claim`, {
+      const res = await fetch(`${SERVER_URL}/api/challenges/${encodeURIComponent(deviceId)}/claim`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-device-token': deviceToken },
+        headers: { 'Content-Type': 'application/json', 'x-device-token': deviceId },
         body: JSON.stringify({ challengeId }),
       })
       if (res.ok) {

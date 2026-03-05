@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
-vi.mock('../hooks/useDeviceToken.js', () => ({
-  useDeviceToken: () => ({ deviceToken: 'test-token' }),
-}))
-
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 

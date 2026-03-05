@@ -9,10 +9,6 @@ vi.mock('../hooks/useProfile.js', () => ({
   useProfile: () => mockProfile(),
 }))
 
-vi.mock('../hooks/useDeviceToken.js', () => ({
-  useDeviceToken: () => ({ deviceToken: 'test-token' }),
-}))
-
 vi.mock('@weekend-casino/shared', () => ({
   PLAYER_LEVEL_XP_THRESHOLDS: [0, 500, 1500, 3000, 5000, 8000, 12000, 17000, 23000, 30000],
   DAILY_BONUS_SCHEDULE: [500, 750, 1000, 1500, 2000, 3000, 5000],

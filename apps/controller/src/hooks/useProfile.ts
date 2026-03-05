@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { PlayerProfile } from '@weekend-casino/shared'
-import { useDeviceToken } from './useDeviceToken.js'
+import { usePlatformDeviceId } from './usePlatformDeviceId.js'
 
 const SERVER_URL =
   (import.meta.env['VITE_SERVER_URL'] as string | undefined) ??
@@ -13,7 +13,7 @@ export function useProfile(): {
   error: string | null
   refetch: () => void
 } {
-  const { deviceToken } = useDeviceToken()
+  const deviceId = usePlatformDeviceId()
   const [profile, setProfile] = useState<PlayerProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -22,8 +22,8 @@ export function useProfile(): {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${SERVER_URL}/api/profile/${encodeURIComponent(deviceToken)}`, {
-        headers: { 'x-device-token': deviceToken },
+      const res = await fetch(`${SERVER_URL}/api/profile/${encodeURIComponent(deviceId)}`, {
+        headers: { 'x-device-token': deviceId },
       })
       if (!res.ok) {
         throw new Error(`Failed to load profile (${res.status})`)
@@ -35,7 +35,7 @@ export function useProfile(): {
     } finally {
       setLoading(false)
     }
-  }, [deviceToken])
+  }, [deviceId])
 
   useEffect(() => {
     void fetchProfile()

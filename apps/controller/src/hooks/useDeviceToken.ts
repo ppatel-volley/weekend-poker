@@ -43,7 +43,10 @@ function getOrCreateDeviceToken(): string {
   return token
 }
 
-/** Returns a persistent device token from localStorage. */
+/**
+ * Returns a persistent device token from localStorage.
+ * @deprecated Use usePlatformDeviceId instead — this is kept as a fallback.
+ */
 export function useDeviceToken(): { deviceToken: string } {
   const [deviceToken] = useState(getOrCreateDeviceToken)
   return { deviceToken }

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { App } from '../App.js'
 import { ControllerPhaseRouter } from '../components/ControllerPhaseRouter.js'
 import { ControllerLobby } from '../components/ControllerLobby.js'
 import { ControllerGameplay } from '../components/ControllerGameplay.js'
@@ -13,6 +14,11 @@ import { VoiceButton } from '../components/shared/VoiceButton.js'
 import { PlayerInfo } from '../components/shared/PlayerInfo.js'
 
 describe('Controller components', () => {
+  it('exports App component', () => {
+    expect(App).toBeDefined()
+    expect(typeof App).toBe('function')
+  })
+
   it('exports ControllerPhaseRouter', () => {
     expect(ControllerPhaseRouter).toBeDefined()
     expect(typeof ControllerPhaseRouter).toBe('function')
