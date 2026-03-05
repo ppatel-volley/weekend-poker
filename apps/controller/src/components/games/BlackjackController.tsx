@@ -11,6 +11,9 @@
 
 import { useState } from 'react'
 import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
+import { useLastResult } from '../../hooks/useLastResult.js'
+import { ResultToast } from '../shared/ResultToast.js'
+import { Hand3D } from '../3d/Hand3D.js'
 import type { BlackjackGameState, Card } from '@weekend-casino/shared'
 
 const BET_AMOUNTS = [10, 25, 50, 100, 250, 500]
@@ -226,11 +229,7 @@ function PlayerActionsView({
             Hand {myState.activeHandIndex + 1} of {myState.hands.length}
           </div>
         )}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginBottom: '8px' }}>
-          {activeHand.cards.map((card, i) => (
-            <CardDisplay key={i} card={card} />
-          ))}
-        </div>
+        <Hand3D cards={activeHand.cards} height={120} />
         <HandValueBadge
           value={activeHand.value}
           isSoft={activeHand.isSoft}
@@ -329,11 +328,7 @@ function ResultsView({
       {bj.dealerHand.holeCardRevealed && (
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>DEALER</div>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
-            {bj.dealerHand.cards.map((card, i) => (
-              <CardDisplay key={i} card={card as Card} />
-            ))}
-          </div>
+          <Hand3D cards={bj.dealerHand.cards as Card[]} height={100} />
           <div style={{ marginTop: '4px' }}>
             <HandValueBadge
               value={bj.dealerHand.value}
@@ -353,11 +348,7 @@ function ResultsView({
             {myState.hands.length > 1 && (
               <div style={{ fontSize: '12px', color: '#aaa' }}>Hand {i + 1}</div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
-              {hand.cards.map((card, j) => (
-                <CardDisplay key={j} card={card} />
-              ))}
-            </div>
+            <Hand3D cards={hand.cards} height={100} />
             <HandValueBadge
               value={hand.value}
               isSoft={hand.isSoft}
@@ -419,6 +410,10 @@ export function BlackjackController() {
 
   const phaseStr = phase ?? ''
 
+  // Snapshot result when phase cascades from settlement → betting
+  const myState = bj?.playerStates.find(ps => ps.playerId === playerId)
+  const lastResult = useLastResult(phaseStr, myState?.roundResult, myState?.surrendered)
+
   return (
     <div
       style={{
@@ -428,9 +423,13 @@ export function BlackjackController() {
         background: '#1a1a2e',
         color: 'white',
         fontFamily: 'system-ui, sans-serif',
+        position: 'relative',
       }}
     >
       <h2 data-testid="game-heading" style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>Blackjack</h2>
+
+      {/* Result toast overlay — persists over bet placement */}
+      <ResultToast lastResult={lastResult} />
 
       {!bj ? (
         <div style={{ textAlign: 'center', padding: '32px', color: '#aaa', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
