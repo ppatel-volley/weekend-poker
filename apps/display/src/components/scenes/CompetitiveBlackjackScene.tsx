@@ -4,34 +4,62 @@
  * All player hands visible, turn indicator, comparison at showdown.
  * No dealer hand (per PRD 19.2).
  * Sequential turns with clear visual indicator (per D-007).
+ *
+ * Animations:
+ *   - Deal-in: Cards slide from centre to player seats
  */
 
-import { useMemo } from 'react'
+import { useMemo, useRef, useEffect } from 'react'
+import { useFrame } from '@react-three/fiber'
 import { useStateSyncSelector } from '../../hooks/useVGFHooks.js'
 import { CardDeckProvider, useCardDeck } from '../CardDeck.js'
 import type { BlackjackCompetitiveGameState, BjcPlayerState } from '@weekend-casino/shared'
 import type { Card } from '@weekend-casino/shared'
+import * as THREE from 'three'
 
-/** 3D card model from the GLB deck. */
-function CardModel({
+const DEAL_SPEED = 8
+
+/** 3D card model with deal-in animation. */
+function AnimatedCard({
   card,
-  position,
+  targetPosition,
+  dealDelay = 0,
 }: {
   card: Card
-  position: [number, number, number]
+  targetPosition: [number, number, number]
+  dealDelay?: number
 }) {
   const { getCardClone, ready } = useCardDeck()
   const clone = useMemo(() => ready ? getCardClone(card) : null, [ready, card.rank, card.suit, getCardClone])
+  const groupRef = useRef<THREE.Group>(null!)
+  const delayRef = useRef(dealDelay)
+
+  useEffect(() => {
+    delayRef.current = dealDelay
+    if (groupRef.current) {
+      // Start from centre of table
+      groupRef.current.position.set(0, 0.5, 0.5)
+    }
+  }, [card.rank, card.suit, dealDelay])
+
+  useFrame((_, delta) => {
+    if (!groupRef.current) return
+    if (delayRef.current > 0) {
+      delayRef.current -= delta
+      return
+    }
+    const pos = groupRef.current.position
+    pos.x = THREE.MathUtils.lerp(pos.x, targetPosition[0], delta * DEAL_SPEED)
+    pos.y = THREE.MathUtils.lerp(pos.y, targetPosition[1], delta * DEAL_SPEED)
+    pos.z = THREE.MathUtils.lerp(pos.z, targetPosition[2], delta * DEAL_SPEED)
+  })
 
   if (!clone) return null
 
   return (
-    <primitive
-      object={clone}
-      position={position}
-      rotation={[-Math.PI / 2, 0, 0]}
-      scale={[1, 1, 1]}
-    />
+    <group ref={groupRef} position={[0, 0.5, 0.5]} rotation={[-Math.PI / 2, 0, 0]}>
+      <primitive object={clone} />
+    </group>
   )
 }
 
@@ -106,12 +134,13 @@ function ArenaPlayerPosition({
       {/* Active turn indicator */}
       {isActive && <TurnIndicator position={[0, 0, 0]} />}
 
-      {/* Player's cards */}
+      {/* Player's cards — deal-in animation from centre */}
       {hand.cards.map((card, i) => (
-        <CardModel
+        <AnimatedCard
           key={`${card.rank}-${card.suit}`}
           card={card}
-          position={[(i - (hand.cards.length - 1) / 2) * 0.38, 0, 0]}
+          targetPosition={[(i - (hand.cards.length - 1) / 2) * 0.38, 0, 0]}
+          dealDelay={i * 0.15}
         />
       ))}
 

@@ -5,37 +5,82 @@
  * Dealer hand: first card face up, second face down until reveal.
  * Player hands: both cards face up.
  * Hand value display, bust/blackjack/push indicators.
+ *
+ * Animations:
+ *   - Deal-in: Cards slide from dealer position to player/dealer seat
+ *   - Hole card flip: Z-rotation lerps from PI to 0 on reveal
  */
 
-import { useMemo } from 'react'
+import { useMemo, useRef, useEffect } from 'react'
+import { useFrame } from '@react-three/fiber'
 import { useStateSyncSelector } from '../../hooks/useVGFHooks.js'
 import { CardDeckProvider, useCardDeck } from '../CardDeck.js'
 import type { BlackjackGameState, BlackjackPlayerState } from '@weekend-casino/shared'
 import type { Card } from '@weekend-casino/shared'
+import * as THREE from 'three'
 
-/** 3D card model from the GLB deck. */
-function CardModel({
+const DEALER_POS: [number, number, number] = [0, 0.86, -1.4]
+const DEAL_SPEED = 8 // lerp speed (higher = faster)
+
+/** 3D card model with deal-in animation. */
+function AnimatedCard({
   card,
   faceUp = false,
-  position,
+  targetPosition,
+  dealDelay = 0,
 }: {
   card: Card
   faceUp?: boolean
-  position: [number, number, number]
+  targetPosition: [number, number, number]
+  dealDelay?: number
 }) {
   const { getCardClone, ready } = useCardDeck()
-  // Re-clone when deck becomes ready or card changes (rank/suit are primitives)
   const clone = useMemo(() => ready ? getCardClone(card) : null, [ready, card.rank, card.suit, getCardClone])
+  const groupRef = useRef<THREE.Group>(null!)
+  const progressRef = useRef(0)
+  const delayRef = useRef(dealDelay)
+
+  // Target rotation: face-up = no Z flip, face-down = PI on Z
+  const targetZRot = faceUp ? 0 : Math.PI
+  const rotRef = useRef(Math.PI) // Start face-down
+
+  useEffect(() => {
+    // Reset animation on new card
+    progressRef.current = 0
+    delayRef.current = dealDelay
+    rotRef.current = Math.PI
+    if (groupRef.current) {
+      // Start from dealer position (centre top of table)
+      groupRef.current.position.set(0, 0.5, -1.4)
+    }
+  }, [card.rank, card.suit, dealDelay])
+
+  useFrame((_, delta) => {
+    if (!groupRef.current) return
+
+    // Handle deal delay
+    if (delayRef.current > 0) {
+      delayRef.current -= delta
+      return
+    }
+
+    // Lerp position towards target
+    const pos = groupRef.current.position
+    pos.x = THREE.MathUtils.lerp(pos.x, targetPosition[0], delta * DEAL_SPEED)
+    pos.y = THREE.MathUtils.lerp(pos.y, targetPosition[1], delta * DEAL_SPEED)
+    pos.z = THREE.MathUtils.lerp(pos.z, targetPosition[2], delta * DEAL_SPEED)
+
+    // Lerp rotation for flip
+    rotRef.current = THREE.MathUtils.lerp(rotRef.current, targetZRot, delta * DEAL_SPEED)
+    groupRef.current.rotation.set(-Math.PI / 2, 0, rotRef.current)
+  })
 
   if (!clone) return null
 
   return (
-    <primitive
-      object={clone}
-      position={position}
-      rotation={faceUp ? [-Math.PI / 2, 0, 0] : [-Math.PI / 2, 0, Math.PI]}
-      scale={[1, 1, 1]}
-    />
+    <group ref={groupRef} position={[0, 0.5, -1.4]} rotation={[-Math.PI / 2, 0, Math.PI]}>
+      <primitive object={clone} />
+    </group>
   )
 }
 
@@ -93,13 +138,14 @@ function PlayerPosition({
 
   return (
     <group position={seatPosition}>
-      {/* Player's cards */}
+      {/* Player's cards — deal-in animation from dealer position */}
       {hand.cards.map((card, i) => (
-        <CardModel
+        <AnimatedCard
           key={`${card.rank}-${card.suit}`}
           card={card}
-          position={[(i - (hand.cards.length - 1) / 2) * 0.38, 0, 0]}
+          targetPosition={[(i - (hand.cards.length - 1) / 2) * 0.38, 0, 0]}
           faceUp
+          dealDelay={i * 0.15}
         />
       ))}
 
@@ -137,7 +183,7 @@ function PlayerPosition({
   )
 }
 
-/** Dealer area with face-up and hole card. */
+/** Dealer area with face-up and hole card flip animation. */
 function DealerArea({
   bj,
 }: {
@@ -147,14 +193,15 @@ function DealerArea({
   const hasCards = dealer.cards.length > 0
 
   return (
-    <group position={[0, 0.86, -1.4]}>
-      {/* Dealer cards */}
+    <group position={DEALER_POS}>
+      {/* Dealer cards — hole card flips when revealed */}
       {hasCards && dealer.cards.map((card, i) => (
-        <CardModel
+        <AnimatedCard
           key={`${card.rank}-${card.suit}`}
           card={card}
-          position={[(i - (dealer.cards.length - 1) / 2) * 0.38, 0, 0]}
+          targetPosition={[(i - (dealer.cards.length - 1) / 2) * 0.38, 0, 0]}
           faceUp={i === 0 || dealer.holeCardRevealed}
+          dealDelay={i * 0.15}
         />
       ))}
 
