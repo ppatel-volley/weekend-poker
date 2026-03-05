@@ -2,7 +2,7 @@
 
 ## Branch: fix/e2e-gameplay-bugs
 
-## Final Result: ALL 14 GAMEPLAY TESTS PASSING
+## Final Result: ALL 65 E2E TESTS PASSING (2 skipped)
 - Hold'em (2), Craps (2), Roulette (2), TCP (2), BJ Classic (2), BJC (2), 5-Card Draw (2)
 - Unit tests: 1941 passing (109 files)
 

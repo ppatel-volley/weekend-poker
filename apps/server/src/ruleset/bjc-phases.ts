@@ -53,13 +53,24 @@ export const bjcPlaceBetsPhase = {
     const bjc = afterInit.blackjackCompetitive
     if (bjc) {
       const ante = bjc.anteAmount
+      const underfundedIds: string[] = []
       for (const ps of bjc.playerStates) {
         const walletBalance = afterInit.wallet[ps.playerId] ?? 0
-        if (walletBalance < ante) continue
+        if (walletBalance < ante) {
+          underfundedIds.push(ps.playerId)
+          continue
+        }
         ctx.reducerDispatcher('bjcPlaceAnte', ps.playerId, ante)
         ctx.reducerDispatcher('updateWallet', ps.playerId, -ante)
         ctx.reducerDispatcher('bjcAddToPot', ante)
       }
+
+      // Sit out underfunded players and remove them from the BJC round
+      for (const pid of underfundedIds) {
+        ctx.reducerDispatcher('markPlayerBusted', pid)
+        ctx.reducerDispatcher('bjcRemovePlayer', pid)
+      }
+
       ctx.reducerDispatcher('bjcSetAllAntesPlaced', true)
     }
 

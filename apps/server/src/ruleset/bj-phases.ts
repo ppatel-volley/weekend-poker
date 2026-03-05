@@ -48,12 +48,14 @@ export const bjPlaceBetsPhase = {
     ctx.reducerDispatcher('setDealerMessage', 'Place your bets!')
 
     // Auto-place minimum bet for bots — use reducers directly (dispatchThunk unreliable in onBegin, learning 009)
+    // NOTE: Do NOT deduct wallet here. DEAL_INITIAL deducts all bets uniformly.
     const afterInit: CasinoGameState = ctx.getState()
     const minBet = afterInit.blackjack?.config.minBet ?? 10
     const botPlayers = afterInit.players.filter((p: any) => p.isBot && p.status !== 'busted' && p.status !== 'sitting_out')
     for (const bot of botPlayers) {
+      const walletBalance = afterInit.wallet[bot.id] ?? 0
+      if (walletBalance < minBet) continue
       ctx.reducerDispatcher('bjPlaceBet', bot.id, minBet)
-      ctx.reducerDispatcher('updateWallet', bot.id, -minBet)
     }
 
     // Check if all bets placed after bot auto-bets

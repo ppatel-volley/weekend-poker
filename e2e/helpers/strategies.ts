@@ -79,6 +79,7 @@ export async function playBlackjackRound(page: Page): Promise<void> {
 export async function playBjcRound(page: Page): Promise<void> {
   const standBtn = page.getByTestId('stand-btn')
   const anteDisplay = page.getByText(/Ante:/)
+  let playerStood = false
 
   // BJC has auto-ante. Poll for actionable state or round completion.
   for (let i = 0; i < 30; i++) {
@@ -87,12 +88,17 @@ export async function playBjcRound(page: Page): Promise<void> {
     // Stand if it's our turn
     if (await standBtn.isVisible().catch(() => false)) {
       await bjcStand(page)
+      playerStood = true
       break
     }
 
-    // If ante display visible with no stand button, round may have cascaded
+    // If ante display visible but we haven't stood yet, we might be in the
+    // ante-posting phase of a new round before cards are dealt — keep waiting
+    // for our turn. Only treat as "round cascaded" if we already stood.
     if (await anteDisplay.isVisible().catch(() => false)) {
-      return // Next round started
+      if (playerStood) return // Next round started after we acted
+      // Otherwise keep polling — we haven't acted yet
+      continue
     }
 
     // Result text visible — round finishing

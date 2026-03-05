@@ -61,8 +61,13 @@ test.describe('Game Night Mode', () => {
         if (await gameHeading.isVisible().catch(() => false)) {
           try {
             await playCurrentGameRound(controllerPage)
-          } catch {
-            break
+          } catch (err) {
+            // Game Night may transition mid-round, causing heading lookup to fail.
+            // Only swallow that specific error; re-throw everything else.
+            if (err instanceof Error && /heading|not found|not visible/i.test(err.message)) {
+              break
+            }
+            throw err
           }
           await controllerPage.waitForTimeout(2_000)
         } else {

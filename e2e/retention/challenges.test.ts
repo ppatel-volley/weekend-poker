@@ -11,12 +11,11 @@ test.describe('Challenges', () => {
     await expect(challengesTab).toBeVisible({ timeout: 5_000 })
     await challengesTab.click()
 
-    // Verify challenge content renders — look for the loading or actual challenge UI
+    // Verify actual challenge content renders (not just loading state).
+    // The ChallengesView shows lowercase tier names: "bronze slot", "silver slot", "gold slot"
+    // or challenge descriptions if active challenges exist.
     await expect(
-      controllerPage.getByText('Loading challenges...')
-        .or(controllerPage.getByText('Bronze', { exact: true }))
-        .or(controllerPage.getByText('Silver', { exact: true }))
-        .or(controllerPage.getByText('Gold', { exact: true }))
-    ).toBeVisible({ timeout: 10_000 })
+      controllerPage.getByText(/bronze|silver|gold/i).first()
+    ).toBeVisible({ timeout: 15_000 })
   })
 })

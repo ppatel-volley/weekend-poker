@@ -60,9 +60,13 @@ test.describe("Two-Player Hold'em", () => {
     // Verify the hand progressed — at least 4 actions taken (2 per pre-flop, rest check-check)
     expect(totalActions).toBeGreaterThanOrEqual(4)
 
-    // After enough actions, the hand should have completed and a new hand started.
-    // Verify by checking that stacks changed (blinds posted for new hand) or
-    // that both players can still see the game UI.
+    // Verify settlement happened — at least one player's stack must have changed
+    await controllerPage.waitForTimeout(2_000)
+    const p1End = await getStack(controllerPage)
+    const p2End = await getStack(controllerPage2)
+    expect(p1End !== p1Start || p2End !== p2Start).toBeTruthy()
+
+    // Verify the game is still running
     await expect(controllerPage.getByTestId('game-heading')).toBeVisible({ timeout: 10_000 })
     await expect(controllerPage2.getByTestId('game-heading')).toBeVisible({ timeout: 10_000 })
   })

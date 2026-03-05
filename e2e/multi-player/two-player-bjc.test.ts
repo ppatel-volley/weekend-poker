@@ -52,7 +52,7 @@ test.describe('Two-Player Competitive Blackjack', () => {
     }
 
     // Both players should have stood
-    expect(p1Acted || p2Acted).toBeTruthy()
+    expect(p1Acted && p2Acted).toBeTruthy()
 
     // After standing, the round completes via cascade. Verify the game is still
     // running (game heading visible) — proves the round completed and game continued.
