@@ -252,8 +252,8 @@ mkdir -p apps/display/src
   },
   "dependencies": {
     "@your-game/shared": "workspace:*",
-    "@volley/platform-sdk": "7.40.0",
-    "@volley/vgf": "4.3.1",
+    "@volley/platform-sdk": "^7.42.0",
+    "@volley/vgf": "^4.8.0",
     "focus-trap-react": "^12.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
@@ -312,7 +312,7 @@ mkdir -p apps/server/src
   "dependencies": {
     "@your-game/shared": "workspace:*",
     "@volley/logger": "^1.4.1",
-    "@volley/vgf": "4.3.1",
+    "@volley/vgf": "^4.8.0",
     "@volley/waterfall": "2.5.3",
     "express": "^5.2.1"
   },
@@ -1726,10 +1726,10 @@ import express from "express"
 import { createServer } from "node:http"
 import { WebSocketServer, WebSocket as ServerWebSocket } from "ws"
 import {
-    VGFServer,
-    SocketIOTransport,
+    WGFServer,
     MemoryStorage,
 } from "@volley/vgf/server"
+import { Server as SocketIOServer } from "socket.io"
 import { createGameRuleset } from "./ruleset"
 import type { GameServices } from "./services"
 
@@ -1797,13 +1797,8 @@ if (DEEPGRAM_API_KEY) {
 
 // --- VGF Server ---
 const storage = new MemoryStorage()
-const transport = new SocketIOTransport({
-    httpServer,
-    storage,
-    logger: console,
-    socketOptions: {
-        cors: { origin: true, methods: ["GET", "POST"], credentials: true },
-    },
+const io = new SocketIOServer(httpServer, {
+    cors: { origin: true, methods: ["GET", "POST"], credentials: true },
 })
 
 const services: GameServices = {
@@ -1820,14 +1815,14 @@ const services: GameServices = {
 const game = createGameRuleset(services)
 const PORT = 8080
 
-const server = new VGFServer({
+const server = new WGFServer({
     port: PORT,
-    app,
+    expressApp: app,
     httpServer,
-    transport,
+    socketIOServer: io,
     storage,
     logger: console,
-    game,
+    gameRuleset: game,
 })
 
 server.start()
@@ -2675,8 +2670,8 @@ For a new TV game project:
 - [ ] Run `npm login` and verify access to `@volley` packages
 - [ ] Set up monorepo (Section 1): `pnpm-workspace.yaml`, root `package.json`, `tsconfig.base.json`
 - [ ] Create `packages/shared` with game state type and `createInitialGameState()`
-- [ ] Create `apps/display` with `@volley/vgf@4.3.1`, `@volley/platform-sdk@7.40.0`, `focus-trap-react`
-- [ ] Create `apps/server` with `@volley/vgf@4.3.1`, `@volley/waterfall`, `@volley/logger`
+- [ ] Create `apps/display` with `@volley/vgf@^4.8.0`, `@volley/platform-sdk@^7.42.0`, `focus-trap-react`
+- [ ] Create `apps/server` with `@volley/vgf@^4.8.0`, `@volley/waterfall`, `@volley/logger`
 - [ ] Run `pnpm install`
 - [ ] Create `detectPlatform.ts` utility
 - [ ] Create `MaybePlatformProvider` (conditional Platform SDK)
@@ -2707,7 +2702,7 @@ This section covers building the **phone controller app** — the mobile web app
 > **Context:** This section was written by comparing three production Volley projects:
 > - **Wheel of Fortune** (`wheel-of-fortune`) — VGF game, closest reference for controller patterns
 > - **CoComelon Mobile** (`cocomelon-mobile`) — Platform SDK app (non-VGF, raw WebSocket)
-> - **Weekend Casino** (`weekend-poker`) — VGF game, identified gaps documented below
+> - **Weekend Casino** (`weekend-poker`) — VGF game (see [`WEEKEND_CASINO_GAPS.md`](./WEEKEND_CASINO_GAPS.md) for gap analysis)
 
 ### 16.1 Required Packages
 
@@ -2739,27 +2734,7 @@ Every controller app on the Volley platform **must** include these packages:
 | `sass-embedded` | SCSS modules (if using SCSS instead of CSS-in-JS) |
 | `@storybook/react-vite` | Component development (optional) |
 
-### 16.2 Cross-Project Package Comparison
-
-This table shows what each Volley project actually uses in production. **Gaps in the Weekend Casino column are things that need fixing.**
-
-| Package / Feature | Weekend Casino | Wheel of Fortune | CoComelon Mobile |
-|---|---|---|---|
-| **@volley/platform-sdk** | **MISSING** | `7.42.0` | `^7.41.2` |
-| **@volley/tracking** | **MISSING** | via platform-sdk Segment | `^7.40.0` |
-| **@volley/vgf** | `^4.8.0` | `^4.8.0` | N/A (non-VGF) |
-| **@datadog/browser-rum** | **MISSING** | N/A (not at controller) | `^6.10.1` |
-| **react-router-dom** | **MISSING** | `^7.8.1` | `^7.4.0` |
-| **Vite React plugin** | `plugin-react` | `plugin-react-swc` (faster) | `plugin-react` |
-| **Styling** | Inline CSS-in-JS | SCSS modules | CSS modules |
-| **Storybook** | No | Yes | No |
-| **Code splitting** | None | React/vendor/shared chunks | Default |
-| **StrictMode** | Disabled (VGF compat) | Disabled (VGF compat) | N/A |
-| **Device identity** | Custom localStorage UUID | Platform SDK `useDeviceInfo()` | Platform SDK `useAccount()` |
-| **PlatformProvider** | **MISSING** | Yes (wraps entire app) | Yes (wraps entire app) |
-| **Voice/STT** | Deepgram SDK direct | N/A | Platform SDK mic + custom DSP |
-
-### 16.3 PlatformProvider for Controllers
+### 16.2 PlatformProvider for Controllers
 
 Both Cocomelon and Wheel of Fortune wrap their entire app in `PlatformProvider`. The controller version is simpler than the display version — no `MaybePlatformProvider` conditional needed because the controller always runs in a mobile browser (not on a TV shell), so `volley_hub_session_id` is not required.
 
@@ -2789,14 +2764,14 @@ export function App() {
 }
 ```
 
-> **Note for Weekend Casino:** Unlike the display app, the controller does NOT need the `MaybePlatformProvider` pattern because it never runs inside the TV shell. The `PlatformProvider` can be rendered unconditionally.
+> **Note:** Unlike the display app, the controller does NOT need the `MaybePlatformProvider` pattern because it never runs inside the TV shell. The `PlatformProvider` can be rendered unconditionally.
 
-### 16.4 Device Identity
+### 16.3 Device Identity
 
 **Do NOT generate random UUIDs in localStorage.** Use Platform SDK's `useDeviceInfo()` hook for device identification. This ties into Volley's user identity system and ensures consistent tracking across sessions.
 
 ```typescript
-// WRONG — Weekend Casino's current approach
+// WRONG — custom localStorage UUID approach
 function useDeviceToken() {
     const [token] = useState(() => {
         return localStorage.getItem("device-token") ?? crypto.randomUUID()
@@ -2804,7 +2779,7 @@ function useDeviceToken() {
     return { deviceToken: token }
 }
 
-// CORRECT — Wheel of Fortune's approach
+// CORRECT — use Platform SDK for device identity
 import { useDeviceInfo } from "@volley/platform-sdk/react"
 
 function useControllerSession() {
@@ -2827,7 +2802,7 @@ function useControllerSession() {
 }
 ```
 
-### 16.5 VGF Transport Configuration (Controller)
+### 16.4 VGF Transport Configuration (Controller)
 
 The controller transport setup is similar to the display but uses `ClientType.Controller`:
 
@@ -2856,7 +2831,7 @@ export function createControllerTransport(sessionId: string, userId: string) {
 
 **Critical:** Do NOT put `query` inside a nested `socketOptions` object. This clobbers VGF's internal session/user/clientType params (see Section 4).
 
-### 16.6 Provider Stacking Order
+### 16.5 Provider Stacking Order
 
 Wheel of Fortune's provider order (recommended pattern):
 
@@ -2901,7 +2876,7 @@ export function RoomLayout() {
 4. `SessionProvider` — Session context (needs VGF connection)
 5. `LoggerProvider` — Logging context (optional, can go anywhere)
 
-### 16.7 Phase-Based Routing
+### 16.6 Phase-Based Routing
 
 Both VGF game controllers route UI based on the current game phase. Wheel of Fortune uses a `PhaseRouter` component:
 
@@ -2929,7 +2904,7 @@ export function PhaseRouter() {
 
 This is functionally identical to Weekend Casino's `GameRouter` pattern. Both are valid — the key is that the server's VGF phase drives the controller's UI.
 
-### 16.8 Typed VGF Hooks
+### 16.7 Typed VGF Hooks
 
 Create a shared hooks file that types the VGF hooks to your game state:
 
@@ -2954,7 +2929,7 @@ export const usePhase = vgfHooks.usePhase
 
 > **Tip:** Wheel of Fortune puts these hooks in a shared `web-common` package so both display and controller use the same typed hooks. This prevents type drift between the two apps.
 
-### 16.9 Vite Configuration for Controllers
+### 16.8 Vite Configuration for Controllers
 
 ```typescript
 // apps/controller/vite.config.ts
@@ -3001,7 +2976,7 @@ export default defineConfig(({ mode }) => ({
 - `host: true` so you can test from a real phone on the same network
 - Deployment base path is for the controller, not the display
 
-### 16.10 Environment Variables
+### 16.9 Environment Variables
 
 Controller apps should support these environment variables (via Vite's `VITE_` prefix):
 
@@ -3023,7 +2998,7 @@ Use `.env` files per environment:
 .env.production   # Production config
 ```
 
-### 16.11 React StrictMode and VGF
+### 16.10 React StrictMode and VGF
 
 **Both Wheel of Fortune and Weekend Casino disable React StrictMode.** VGF's `SocketIOClientTransport` tears down message handlers on unmount. StrictMode's double-mount cycle causes the transport to disconnect and fail to reconnect, breaking state sync permanently.
 
@@ -3038,7 +3013,7 @@ if (!root) throw new Error("Root element not found")
 createRoot(root).render(<App />)  // No <StrictMode> wrapper
 ```
 
-### 16.12 Mobile-First HTML Template
+### 16.11 Mobile-First HTML Template
 
 ```html
 <!-- apps/controller/index.html -->
@@ -3072,7 +3047,7 @@ createRoot(root).render(<App />)  // No <StrictMode> wrapper
 - `touch-action: manipulation` — prevents double-tap zoom delay
 - `-webkit-user-select: none` — prevents accidental text selection during gameplay
 
-### 16.13 Shared web-common Package Pattern
+### 16.12 Shared web-common Package Pattern
 
 Wheel of Fortune uses a `web-common` package shared between display and controller. This prevents type drift and duplicated VGF hook setup:
 
@@ -3100,11 +3075,11 @@ packages/
 
 This is optional but recommended for projects with both a display and controller app. It ensures both apps use identical VGF hook types and session management.
 
-### 16.14 Cocomelon vs VGF Controller Architecture
+### 16.13 Cocomelon vs VGF Controller Architecture
 
 Cocomelon Mobile is **not a VGF game** — it uses raw WebSocket with a custom state machine. However, its Platform SDK integration is a good reference:
 
-| Aspect | VGF Controller (WoF, Casino) | Non-VGF Controller (Cocomelon) |
+| Aspect | VGF Controller (e.g., WoF) | Non-VGF Controller (Cocomelon) |
 |--------|------------------------------|-------------------------------|
 | **Transport** | VGF `SocketIOClientTransport` | Custom `WebSocketManager` + `WebSocketDriver` |
 | **State sync** | VGF hooks (`useStateSync`, `usePhase`) | React Context + `useState` |
@@ -3117,44 +3092,15 @@ Cocomelon Mobile is **not a VGF game** — it uses raw WebSocket with a custom s
 
 **Key takeaway:** Regardless of whether a game uses VGF, all Volley controller apps use `@volley/platform-sdk` with `PlatformProvider` for auth, analytics, and device identity. This is non-negotiable for production deployment.
 
-### 16.15 Weekend Casino Gap Analysis and Migration Plan
-
-The Weekend Casino controller is missing several packages and patterns that are standard across Volley production apps. Here is the prioritised migration plan:
-
-#### Phase 1 — Platform SDK Integration (Critical)
-
-1. Install `@volley/platform-sdk@^7.42.0`
-2. Wrap `App.tsx` in `PlatformProvider` with `gameId`, `stage`, and tracking config
-3. Replace custom `useDeviceToken` (localStorage UUID) with Platform SDK's `useDeviceInfo()`
-4. Wire up `useAppLifecycleState()` for pause/resume handling
-5. Wire up `useCloseEvent()` for graceful app shutdown
-6. Add env variables: `VITE_GAME_ID`, `VITE_PLATFORM_SDK_STAGE`, `VITE_SEGMENT_WRITE_KEY`
-
-#### Phase 2 — Analytics and Monitoring
-
-1. Confirm whether `@volley/tracking` is bundled in platform-sdk or needs separate install
-2. Add key event tracking: game start, game end, bet placed, voice command used
-3. Consider adding `@datadog/browser-rum` for crash monitoring
-
-#### Phase 3 — Build Improvements
-
-1. Switch from `@vitejs/plugin-react` to `@vitejs/plugin-react-swc` (faster dev rebuilds)
-2. Add Vite `manualChunks` for code splitting (React, vendor, shared-core)
-3. Add proper `base` path for production deployment
-
-#### Phase 4 — Optional Improvements
-
-1. Add `react-router-dom` if URL-based routing is needed for non-game screens
-2. Consider a shared `web-common` package for VGF hooks used by both display and controller
-3. Add Storybook for component development (if the team wants it)
+> **Project-specific gap analysis:** See [`WEEKEND_CASINO_GAPS.md`](./WEEKEND_CASINO_GAPS.md) for controller, server, display, and monorepo comparisons between Weekend Casino and production Volley apps.
 
 ---
 
 ## 17. Server Production Readiness
 
-This section covers what a VGF game server needs to run on Volley's production infrastructure. Based on a comparison of the Weekend Casino server with Wheel of Fortune's server.
+This section covers what a VGF game server needs to run on Volley's production infrastructure.
 
-> **Context:** Wheel of Fortune's `vgf-service` is the production reference. Weekend Casino's server is functional but missing several infrastructure patterns required for deployment.
+> **Reference:** Wheel of Fortune's `vgf-service` is the production reference implementation.
 
 ### 17.1 WGFServer vs VGFServer
 
@@ -3163,7 +3109,7 @@ VGF v4.8.0 provides two server classes. **Use `WGFServer`, not `VGFServer`.**
 `WGFServer` is the newer API that accepts an explicit Socket.IO server instance, giving you control over CORS, middleware, and connection validation.
 
 ```typescript
-// CORRECT — Wheel of Fortune pattern (WGFServer)
+// CORRECT — WGFServer pattern
 import { WGFServer, MemoryStorage, RedisRuntimeSchedulerStore } from "@volley/vgf/server"
 import { Server as SocketIOServer } from "socket.io"
 
@@ -3189,11 +3135,11 @@ server.start()
 ```
 
 ```typescript
-// WRONG — Weekend Casino's current approach (VGFServer)
+// WRONG — old VGFServer pattern (deprecated)
 import { VGFServer, MemoryStorage, SocketIOTransport } from "@volley/vgf/server"
 
 const transport = new SocketIOTransport({ httpServer, storage })
-const server = new VGFServer<CasinoGameState>({
+const server = new VGFServer<YourGameState>({
     game: ruleset,
     httpServer, port, logger, storage, transport, app,
     schedulerProvider,  // Noop scheduler — actions are lost on restart
@@ -3497,28 +3443,11 @@ secrets:
 | `SHUTDOWN_TIMEOUT` | No | `25000` | Graceful shutdown timeout in ms |
 | `STAGE` | No | `local` | Deployment stage (`local`, `dev`, `staging`, `production`) |
 
-### 17.11 Cross-Project Server Comparison
-
-| Aspect | Weekend Casino | Wheel of Fortune |
-|--------|----------------|------------------|
-| **VGF class** | `VGFServer` (old) | `WGFServer` (new) |
-| **Logger** | pino (direct) | `@volley/logger` + request IDs |
-| **Redis** | Optional (mock fallback) | Required + exponential backoff + jitter |
-| **Scheduler** | Noop (in-memory) | `RedisRuntimeSchedulerStore` (persistent) |
-| **Health endpoints** | `/health` (basic) | `/health` + `/health/ready` (with Redis check) |
-| **Session middleware** | None | Pre-creation validation + audit logging |
-| **Error handlers** | None (VGF implicit) | Explicit 404 + error handlers with context |
-| **Graceful shutdown** | None | SIGTERM/SIGINT with 25s timeout |
-| **Docker** | None | Multi-stage Dockerfile + docker-compose |
-| **Socket.IO** | Created internally by VGF | Explicit server injection |
-| **Build system** | tsc | esbuild (faster) |
-| **CORS** | Regex localhost/LAN detection | Env var driven (`CORS_ORIGIN`) |
-
 ---
 
 ## 18. Display Production Readiness
 
-This section covers what the display app (TV screen) needs for production deployment. Based on a comparison of Weekend Casino's display with Wheel of Fortune's game-client.
+This section covers what the display app (TV screen) needs for production deployment.
 
 ### 18.1 Platform SDK as Hard Dependency
 
@@ -3659,25 +3588,7 @@ const transport = useMock ? createMockTransport() : createDisplayTransport(confi
 <VGFProvider transport={transport} clientOptions={{ autoConnect: !useMock }}>
 ```
 
-### 18.5 Cross-Project Display Comparison
-
-| Aspect | Weekend Casino | Wheel of Fortune |
-|--------|----------------|------------------|
-| **Platform SDK** | Optional peer dep | **Pinned hard dep** (`7.42.0`) |
-| **PlatformProvider** | MaybePlatformProvider (detection only) | Full PlatformProvider with stage-aware URLs |
-| **Electron IPC** | Static preload (`platform`, `isElectron`) | **Dynamic IPC handlers** (session, backend, stage) |
-| **Config source** | Vite env vars only | Electron IPC + CLI args + env vars |
-| **Mock transport** | None | `createMockTransport()` for headless debug |
-| **Build plugin** | `@vitejs/plugin-react` + `plugin-legacy` | `@vitejs/plugin-react-swc` |
-| **Code splitting** | Library-based (three, r3f, drei) | Function-based (shared-core, three-vendor, react, vendor) |
-| **Sourcemaps** | None | Inline (dev), true (prod) |
-| **Console stripping** | None | Production builds drop `console.*` and `debugger` |
-| **R3F libraries** | drei, postprocessing | Minimal R3F (no drei, no postprocessing) |
-| **Spatial nav** | norigin-spatial-navigation | Custom `useKeyPress` hooks |
-| **QR codes** | `qrcode.react` | `qrcode` (native, no React wrapper) |
-| **Storybook** | None | Full setup (`@storybook/react-vite`) |
-
-### 18.6 Display Vite Configuration (Production Pattern)
+### 18.5 Display Vite Configuration (Production Pattern)
 
 ```typescript
 // apps/display/vite.config.ts
@@ -3930,46 +3841,3 @@ WoF provides shell scripts for first-time setup and multi-service development:
 # Start display and controller dev servers via Turbo
 ```
 
-### 19.7 Cross-Project Monorepo Comparison
-
-| Aspect | Weekend Casino | Wheel of Fortune |
-|--------|----------------|------------------|
-| **Package manager** | pnpm 9.15.4 | pnpm 10.6.5 |
-| **Task orchestration** | Direct pnpm scripts | Turborepo |
-| **CI caching** | None | Turbo remote cache |
-| **Delta CI** | None (runs everything) | `--filter='...[origin/main]'` |
-| **CI parallelisation** | Sequential single job | Parallel jobs (typecheck, test, build) |
-| **Formatting** | None | Prettier + lint-staged + git hooks |
-| **Shared config** | 1 package (`shared`) | 5 packages (shared-types, eslint-config, tsconfig, web-common, art-assets) |
-| **Docker** | None | Multi-stage Dockerfile + docker-compose |
-| **.npmrc** | None | `inject-workspace-packages=true` |
-| **Setup automation** | None | `setup.sh`, `dev-all.sh` |
-| **E2E testing** | Playwright (7 project profiles) | Per-app (less comprehensive) |
-| **PR templates** | None | GitHub PR template + CODEOWNERS |
-| **Dependency updates** | Manual | Dependabot |
-
-### 19.8 Priority Order for Weekend Casino
-
-**Phase 1 — Server production readiness** (blocks deployment):
-1. Switch `VGFServer` to `WGFServer`
-2. Resilient Redis client (backoff + jitter)
-3. `RedisRuntimeSchedulerStore` (persistent scheduler)
-4. `@volley/logger` with request IDs
-5. `/health/ready` endpoint with Redis check
-6. Graceful shutdown handler
-7. Error handlers (404 + error middleware)
-8. Session validation middleware
-9. Dockerfile + docker-compose
-
-**Phase 2 — Display production readiness**:
-1. `@volley/platform-sdk` as hard dependency
-2. Stage-aware platform URL resolution
-3. Electron IPC config handlers
-4. Mock transport for headless debug
-
-**Phase 3 — Monorepo infrastructure**:
-1. `.npmrc`
-2. Turborepo
-3. Prettier + lint-staged
-4. Shared config packages
-5. CI pipeline parallelisation
