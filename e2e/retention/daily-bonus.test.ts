@@ -1,31 +1,19 @@
 import { test, expect } from '../fixtures/casino-fixture'
+import { startGame } from '../helpers/lobby-flow'
 
 test.describe('Daily Bonus', () => {
-  test('shows bonus indication on connection', async ({ controllerPage, displayPage }) => {
-    // The daily bonus popup might appear on display or controller
-    // Check for bonus-related UI elements
-    const bonusPopup = displayPage.getByText(/Daily Bonus/i)
-      .or(displayPage.getByText(/Welcome Back/i))
-      .or(displayPage.getByText(/Bonus/i))
-    const controllerBonus = controllerPage.getByText(/Bonus/i)
-      .or(controllerPage.getByText(/Daily/i))
+  test('shows bonus on first connection', async ({ controllerPage, displayPage }) => {
+    // Start a game — the daily bonus shows on the profile view
+    await startGame(controllerPage, displayPage, 'roulette', 'BonusPlayer')
 
-    // Wait briefly — bonus popup may appear on first load
-    const hasBonusDisplay = await bonusPopup.isVisible({ timeout: 10_000 }).catch(() => false)
-    const hasBonusController = await controllerBonus.isVisible({ timeout: 5_000 }).catch(() => false)
+    // Navigate to Profile tab
+    const profileTab = controllerPage.getByRole('button', { name: 'Profile' })
+    await expect(profileTab).toBeVisible({ timeout: 5_000 })
+    await profileTab.click()
 
-    if (!hasBonusDisplay && !hasBonusController) {
-      // Daily bonus may only appear under certain conditions (first visit of day)
-      // This is expected — skip gracefully
-      test.skip()
-    }
-
-    // If bonus is visible, verify it can be dismissed or interacted with
-    if (hasBonusDisplay) {
-      await expect(bonusPopup).toBeVisible()
-    }
-    if (hasBonusController) {
-      await expect(controllerBonus).toBeVisible()
-    }
+    // Profile view should show "Daily Bonus" heading
+    await expect(
+      controllerPage.getByRole('heading', { name: 'Daily Bonus' })
+    ).toBeVisible({ timeout: 10_000 })
   })
 })

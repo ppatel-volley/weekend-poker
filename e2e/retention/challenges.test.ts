@@ -1,25 +1,22 @@
 import { test, expect } from '../fixtures/casino-fixture'
+import { startGame } from '../helpers/lobby-flow'
 
 test.describe('Challenges', () => {
-  test('displays challenge slots', async ({ controllerPage }) => {
-    // Navigate to challenges view if there's a tab/button
-    const challengesTab = controllerPage.getByRole('button', { name: /Challenge/i })
-      .or(controllerPage.getByText(/Challenge/i))
+  test('displays challenge slots', async ({ controllerPage, displayPage }) => {
+    // Start a game so the tab bar appears (only visible during gameplay)
+    await startGame(controllerPage, displayPage, 'roulette', 'ChallengePlayer')
 
-    if (await challengesTab.isVisible({ timeout: 10_000 }).catch(() => false)) {
-      await challengesTab.click()
+    // Click Challenges tab
+    const challengesTab = controllerPage.getByRole('button', { name: 'Challenges' })
+    await expect(challengesTab).toBeVisible({ timeout: 5_000 })
+    await challengesTab.click()
 
-      // Verify challenge tiers render (bronze, silver, gold)
-      await expect(
-        controllerPage.getByText(/bronze/i)
-          .or(controllerPage.getByText(/silver/i))
-          .or(controllerPage.getByText(/gold/i))
-          .or(controllerPage.getByText(/Challenge/i))
-      ).toBeVisible({ timeout: 10_000 })
-    } else {
-      // If no challenges tab visible, check if challenges are shown inline
-      // This is a soft assertion — challenges may require specific state
-      test.skip()
-    }
+    // Verify challenge content renders — look for the loading or actual challenge UI
+    await expect(
+      controllerPage.getByText('Loading challenges...')
+        .or(controllerPage.getByText('Bronze', { exact: true }))
+        .or(controllerPage.getByText('Silver', { exact: true }))
+        .or(controllerPage.getByText('Gold', { exact: true }))
+    ).toBeVisible({ timeout: 10_000 })
   })
 })
