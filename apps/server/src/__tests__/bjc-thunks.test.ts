@@ -317,12 +317,13 @@ describe('bjcThunks', () => {
       expect(result.wallet.p1).toBe(10020)
     })
 
-    it('splits pot on tie', async () => {
+    it('awards to first in turn order on exact tie (same value + card count)', async () => {
       let state = createTestState()
       state = bjcReducers.bjcInitRound(state, ['p1', 'p2'], 1, 10)
       state = bjcReducers.bjcPlaceAnte(state, 'p1', 10)
       state = bjcReducers.bjcPlaceAnte(state, 'p2', 10)
       state = bjcReducers.bjcAddToPot(state, 20)
+      // Both have value 20 with 2 cards — exact tie, turn order breaks it
       state = bjcReducers.bjcSetPlayerCards(state, 'p1', [card('K'), card('J')], 20, false, false)
       state = bjcReducers.bjcSetPlayerCards(state, 'p2', [card('Q'), card('K')], 20, false, false)
       state = bjcReducers.bjcStandHand(state, 'p1')
@@ -332,10 +333,10 @@ describe('bjcThunks', () => {
       await bjcThunks.bjcSettleBets(ctx)
 
       const result = getState()
-      expect(result.blackjackCompetitive!.winnerIds).toContain('p1')
-      expect(result.blackjackCompetitive!.winnerIds).toContain('p2')
-      expect(result.wallet.p1).toBe(10010) // half of 20
-      expect(result.wallet.p2).toBe(10010)
+      // Tie-break: same value (20), same cards (2) → first in turn order wins
+      expect(result.blackjackCompetitive!.winnerIds).toEqual(['p1'])
+      expect(result.wallet.p1).toBe(10020) // full pot
+      expect(result.wallet.p2).toBe(10000) // no payout
     })
 
     it('awards to single survivor when others bust', async () => {

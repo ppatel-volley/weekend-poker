@@ -16,7 +16,7 @@ function createTestState(overrides: Partial<CasinoGameState> = {}): CasinoGameSt
     gameChangeVotes: {},
     wallet: { p1: 10000, p2: 10000, p3: 10000 },
     players: [
-      { id: 'p1', name: 'Player 1', seatIndex: 0, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0 },
+      { id: 'p1', name: 'Player 1', seatIndex: 0, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0, avatarId: '', isHost: false, isReady: true, currentGameStatus: 'active' },
       { id: 'p2', name: 'Player 2', seatIndex: 1, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0 },
     ],
     dealerCharacterId: 'ace_malone',
@@ -274,9 +274,9 @@ describe('bjcReducers', () => {
       let state = createTestState({
         wallet: { p1: 10000, p2: 0, p3: 10000 },
         players: [
-          { id: 'p1', name: 'Player 1', seatIndex: 0, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0 },
-          { id: 'p2', name: 'Player 2', seatIndex: 1, stack: 0, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0 },
-          { id: 'p3', name: 'Player 3', seatIndex: 2, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0 },
+          { id: 'p1', name: 'Player 1', seatIndex: 0, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0, avatarId: '', isHost: false, isReady: true, currentGameStatus: 'active' },
+          { id: 'p2', name: 'Player 2', seatIndex: 1, stack: 0, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0, avatarId: '', isHost: false, isReady: true, currentGameStatus: 'active' },
+          { id: 'p3', name: 'Player 3', seatIndex: 2, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0, avatarId: '', isHost: false, isReady: true, currentGameStatus: 'active' },
         ],
       })
 

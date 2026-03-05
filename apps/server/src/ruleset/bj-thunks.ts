@@ -339,13 +339,14 @@ export const bjThunks = {
       return
     }
 
-    // Deduct additional bet
-    ctx.dispatch('updateWallet', playerId, -activeHand.bet)
-
+    // Check shoe BEFORE deducting wallet — avoid losing chips without receiving a card
     const sessionId = ctx.getSessionId()
     const serverState = getServerGameState(sessionId)
     const shoe = serverState.blackjack?.shoe
     if (!shoe || shoe.length === 0) return
+
+    // Deduct additional bet (shoe confirmed available)
+    ctx.dispatch('updateWallet', playerId, -activeHand.bet)
 
     const card = shoe.shift()!
     setServerGameState(sessionId, serverState)
@@ -392,13 +393,14 @@ export const bjThunks = {
       return
     }
 
-    // Deduct additional bet
-    ctx.dispatch('updateWallet', playerId, -activeHand.bet)
-
+    // Check shoe BEFORE deducting wallet — need 2 cards for split
     const sessionId = ctx.getSessionId()
     const serverState = getServerGameState(sessionId)
     const shoe = serverState.blackjack?.shoe
     if (!shoe || shoe.length < 2) return
+
+    // Deduct additional bet (shoe confirmed available)
+    ctx.dispatch('updateWallet', playerId, -activeHand.bet)
 
     const newCard1 = shoe.shift()!
     const newCard2 = shoe.shift()!

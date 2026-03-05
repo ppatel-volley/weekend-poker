@@ -62,9 +62,9 @@ test.describe('Game Night Mode', () => {
           try {
             await playCurrentGameRound(controllerPage)
           } catch (err) {
-            // Game Night may transition mid-round, causing heading lookup to fail.
-            // Only swallow that specific error; re-throw everything else.
-            if (err instanceof Error && /heading|not found|not visible/i.test(err.message)) {
+            // Game Night may transition mid-round, causing the game-heading
+            // lookup in playCurrentGameRound to fail. Only swallow that.
+            if (err instanceof Error && /Unknown game heading|game-heading/i.test(err.message)) {
               break
             }
             throw err

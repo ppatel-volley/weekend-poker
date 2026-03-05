@@ -120,19 +120,31 @@ export function determineWinners(
     })
 
     const bestValue = sorted[0]!.hand.value
-    const winners = sorted.filter(ps => ps.hand.value === bestValue)
+    const bestCardCount = sorted[0]!.hand.cards.length
+    const sameValuePlayers = sorted.filter(ps => ps.hand.value === bestValue)
 
-    if (winners.length === 1) {
+    // If only one player at best value, they win outright
+    if (sameValuePlayers.length === 1) {
       return {
-        winnerIds: [winners[0]!.playerId],
-        message: `${winners[0]!.playerId} wins with ${bestValue}!`,
+        winnerIds: [sameValuePlayers[0]!.playerId],
+        message: `${sameValuePlayers[0]!.playerId} wins with ${bestValue}!`,
       }
     }
 
-    // Multiple players tied on value — split pot
+    // Multiple tied on value — apply tie-break: fewest cards wins
+    const fewestCards = sameValuePlayers.filter(ps => ps.hand.cards.length === bestCardCount)
+    if (fewestCards.length === 1) {
+      return {
+        winnerIds: [fewestCards[0]!.playerId],
+        message: `${fewestCards[0]!.playerId} wins with ${bestValue} (fewer cards)!`,
+      }
+    }
+
+    // Still tied on value AND card count — earliest in turn order wins (sorted already handles this)
+    // The first player in the sorted array is the winner by turn order
     return {
-      winnerIds: winners.map(w => w.playerId),
-      message: `Tie at ${bestValue}! Pot split ${winners.length} ways.`,
+      winnerIds: [sorted[0]!.playerId],
+      message: `${sorted[0]!.playerId} wins with ${bestValue} (turn order)!`,
     }
   }
 
@@ -314,14 +326,15 @@ export const bjcThunks = {
       return
     }
 
-    // Deduct additional bet and add to pot
-    ctx.dispatch('updateWallet', playerId, -ps.hand.bet)
-    ctx.dispatch('bjcAddToPot', ps.hand.bet)
-
+    // Check shoe BEFORE deducting wallet — avoid losing chips without receiving a card
     const sessionId = ctx.getSessionId()
     const serverState = getServerGameState(sessionId)
     const shoe = serverState.blackjackCompetitive?.shoe
     if (!shoe || shoe.length === 0) return
+
+    // Deduct additional bet and add to pot (shoe confirmed available)
+    ctx.dispatch('updateWallet', playerId, -ps.hand.bet)
+    ctx.dispatch('bjcAddToPot', ps.hand.bet)
 
     const card = shoe.shift()!
     setServerGameState(sessionId, serverState)
