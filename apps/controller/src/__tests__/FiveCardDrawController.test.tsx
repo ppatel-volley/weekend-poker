@@ -218,13 +218,12 @@ describe('FiveCardDrawController', () => {
     expect(screen.getByText(/Hand complete/)).toBeDefined()
   })
 
-  it('renders card displays in betting view', () => {
+  it('renders 3D card canvas in betting view', () => {
     mockPhase.mockReturnValue('DRAW_BETTING_1')
     mockState.mockReturnValue({ fiveCardDraw: makeDrawState(), players: makePlayers() })
 
     render(<FiveCardDrawController />)
-    expect(screen.getByText('A')).toBeDefined()
-    expect(screen.getByText('K')).toBeDefined()
+    expect(screen.getByTestId('card-canvas')).toBeDefined()
   })
 
   it('shows pot info in betting view', () => {

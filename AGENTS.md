@@ -1,5 +1,17 @@
 # AI Agent Guidelines
 
+> **This codebase will outlive you.** Every shortcut you take becomes
+> someone else's burden. Every hack compounds into technical debt
+> that slows the whole team down.
+>
+> You are not just writing code. You are shaping the future of this
+> project. The patterns you establish will be copied. The corners
+> you cut will be cut again.
+>
+> **Fight entropy. Leave the codebase better than you found it.**
+>
+> *Precedence: this aspiration guides your mindset. §8.3 (Surgical Changes) governs your actions. Only improve code that's directly in your task's path.*
+
 > **Template**: Reusable framework for configuring AI coding agents.
 > Customize [`AGENTS-PROJECT.md`](./AGENTS-PROJECT.md) for your project and swap [`AGENTS-REACT-TS.md`](./AGENTS-REACT-TS.md) for your tech stack.
 >
@@ -12,6 +24,8 @@
 3. Section 8 has behavioral guidelines to reduce common LLM coding mistakes
 4. Check [`learnings/INDEX.md`](./learnings/INDEX.md) before starting work (if it exists)
 5. See [`AGENTS-RLM.md`](./AGENTS-RLM.md) only when context exceeds ~100K tokens
+
+> **Context budget note:** This document is ~680 lines. For **Quick-mode** tasks, sections 1–3 plus the execution mode table are sufficient (~130 lines). Sections 4–10 add value primarily for Standard/Critical tasks. Skim or skip appendices unless referenced.
 
 ### Execution Modes
 
@@ -29,7 +43,7 @@ Scale process to risk. Not every task needs the full workflow.
 - Are there multiple valid approaches with different trade-offs? → **Standard** minimum
 - Could a mistake cause data loss or a production outage? → **Critical**
 
-When in doubt, default to **Standard**. Upgrade to **Critical** if you discover hidden complexity mid-task.
+When in doubt, default to **Standard**. Upgrade to **Critical** if you discover hidden complexity mid-task. **Downgrade** if mid-task you discover the change is simpler than expected (fewer files, no shared interfaces) — drop unnecessary process and note the downgrade.
 
 **Declare your mode at task start:** `Mode: Quick/Standard/Critical (reason: …)`
 
@@ -143,8 +157,8 @@ Don't ask when:
 
 **Tests are the source of truth. Code must conform to tests, not vice versa.**
 
-- **CRITICAL:** If a test fails, the code is wrong — fix the code, not the test
-- **CRITICAL:** If a test expectation is genuinely incorrect, fix the test AND document why
+- **Default:** If a test fails, the code is wrong — fix the code, not the test
+- **Exception:** If you can demonstrate the test expectation is mathematically or logically incorrect, fix the test — but you MUST document the proof of why the old expectation was wrong
 - When in doubt, verify the math — especially for physics, geometry, calculations
 
 ### Test Realism
@@ -163,6 +177,10 @@ Don't just test that your function returns the right value — test that it corr
 ---
 
 ## 4. Pre-Completion Checklist
+
+**Definition of Done:** The user's request is fulfilled, all checklist items below pass, and the Verification Block is included.
+
+> Commands shown are defaults. See [`AGENTS-PROJECT.md`](./AGENTS-PROJECT.md) for project-specific overrides.
 
 **Before saying "done", verify ALL items:**
 
@@ -218,7 +236,7 @@ When complexity triggers apply:
 2. **SOLVE** — Address each sub-problem with explicit confidence (0.0–1.0)
 3. **VERIFY** — Cross-check with alternate method, boundary/edge-case analysis, consistency with constraints, run tests
 4. **SYNTHESIZE** — Combine results. Final confidence ≈ min(sub-confidences) if any is critical.
-5. **REFLECT** — If confidence below 0.8, identify weakness and retry (max 2 times)
+5. **REFLECT** — If confidence below 0.8, identify weakness and re-reason (max 2 re-reasoning attempts per sub-problem; for trying different *approaches*, see §5 Recovery Path which allows up to 4)
 
 ### Generation Strategy
 
@@ -255,6 +273,18 @@ For class-level or module-level code generation with large context available:
 - Call out assumptions, tradeoffs, and risks explicitly
 - For simple questions, use inline confidence: "Yes (0.9)"
 - Don't use filler phrases like "Great question!" or "Absolutely!"
+
+**When blocked or stuck, report structured:**
+```
+**Blocker:** [what failed]
+**Tried:** [what you attempted]
+**Need:** [what would unblock you — info, decision, or access]
+```
+
+**When presenting options to the user:**
+- Lead with your recommendation and why
+- List alternatives as numbered options with one-line trade-off summaries
+- Don't present more than 3 options unless the user asks for exhaustive analysis
 
 ---
 
@@ -509,7 +539,7 @@ git worktree add ../project-tests feature/tests
 - Point at logs, errors, failing tests — then resolve them
 - Zero context switching required from the user
 - Go fix failing CI tests without being told how
-- **Priority when autonomy and clarification conflict:** be autonomous by default; pause only when Clarification Gate conditions (§2) are met. If the fix is safe and reversible, act first and explain after.
+- **Autonomy vs. Clarification rule:** If the action is safe and reversible, act first and explain after. If it could break shared state, is irreversible, or meets the Clarification Gate conditions (§2), stop and ask. When in doubt, bias toward action for local changes and toward asking for shared/external changes.
 
 ### Demand Elegance
 - For non-trivial changes: pause and ask "is there a more elegant way?"
@@ -543,6 +573,13 @@ pnpm test -- --run  # Runtime behaviour — catches logic errors
 
 **Each agent's prompt MUST include all three verification commands**, not just `vitest run`. The lead agent must also re-run all three after merging.
 
+**Agent prompt requirements (learned from review failures):**
+- Every agent prompt MUST mandate running the full verification sequence (typecheck, build, test) before reporting completion
+- Test fixtures MUST use complete type-conformant objects — never skip required fields. Read the type definition first.
+- When an agent adds a reducer or modifies state logic, require a unit test that verifies **domain invariants** (e.g., balance conservation, state consistency) — not just that "it completes"
+- When an agent writes error-handling catch blocks, require the catch pattern to be as narrow as possible — match the specific error, never use broad patterns
+- Edge-case tests are mandatory: empty/zero inputs, single-element collections, boundary values. See `AGENTS-PROJECT.md` for project-specific edge cases.
+
 ### File Edit Conflicts (Exponential Backoff — Fallback)
 
 When worktrees aren't viable and agents share a directory, or when agents must co-edit shared files (config, lock files, shared types), use this pattern. When you get a "File has been modified since read" error, retry with exponential backoff:
@@ -571,6 +608,16 @@ For **Standard** mode (recommended) and **Critical** mode (required):
 5. **Document Results** — Add review section to `tasks/todo.md`
 
 > Standard-mode tasks may skip task docs if the change is straightforward and well-understood. Critical-mode tasks must always have task docs.
+
+### Progress Tracking (MANDATORY)
+
+After completing each task, append to `progress.txt`:
+- Task completed and reference (ticket, PRD item, or user request)
+- Key decisions made and reasoning
+- Files changed
+- Any blockers or notes for next iteration
+
+Keep entries concise. Sacrifice grammar for the sake of concision. This file helps future iterations skip exploration.
 
 ### Self-Improvement Loop (after corrections on Standard/Critical tasks)
 
@@ -616,7 +663,9 @@ The `learnings/` folder contains documented mistakes and how to avoid them. Chec
 
 # APPENDIX D: Project Documentation (FOR[name].md)
 
-When starting a new project, write a `FOR[yourname].md` covering: Technical Architecture, Codebase Structure, Technologies Used, Technical Decisions, and Lessons Learned. Write conversationally — explain the "why", use analogies, tell the story of the project.
+**Trigger:** When starting a new project or onboarding to an unfamiliar codebase, write a `FOR[yourname].md` as part of the first Standard/Critical task.
+
+Contents: Technical Architecture, Codebase Structure, Technologies Used, Technical Decisions, and Lessons Learned. Write conversationally — explain the "why", use analogies, tell the story of the project. Update it when architectural decisions change.
 
 ---
 

@@ -6,22 +6,32 @@
  * Sequential turns with clear visual indicator (per D-007).
  */
 
+import { useMemo } from 'react'
 import { useStateSyncSelector } from '../../hooks/useVGFHooks.js'
+import { CardDeckProvider, useCardDeck } from '../CardDeck.js'
 import type { BlackjackCompetitiveGameState, BjcPlayerState } from '@weekend-casino/shared'
+import type { Card } from '@weekend-casino/shared'
 
-/** Card placeholder — face-up 3D card. */
-function CardPlaceholder({
+/** 3D card model from the GLB deck. */
+function CardModel({
+  card,
   position,
-  colour = '#2a2a4e',
 }: {
+  card: Card
   position: [number, number, number]
-  colour?: string
 }) {
+  const { getCardClone, ready } = useCardDeck()
+  const clone = useMemo(() => ready ? getCardClone(card) : null, [ready, card.rank, card.suit, getCardClone])
+
+  if (!clone) return null
+
   return (
-    <mesh position={position}>
-      <boxGeometry args={[0.35, 0.01, 0.5]} />
-      <meshStandardMaterial color={colour} />
-    </mesh>
+    <primitive
+      object={clone}
+      position={position}
+      rotation={[-Math.PI / 2, 0, 0]}
+      scale={[1, 1, 1]}
+    />
   )
 }
 
@@ -97,11 +107,11 @@ function ArenaPlayerPosition({
       {isActive && <TurnIndicator position={[0, 0, 0]} />}
 
       {/* Player's cards */}
-      {hand.cards.map((_card, i) => (
-        <CardPlaceholder
-          key={i}
+      {hand.cards.map((card, i) => (
+        <CardModel
+          key={`${card.rank}-${card.suit}`}
+          card={card}
           position={[(i - (hand.cards.length - 1) / 2) * 0.38, 0, 0]}
-          colour={isBusted ? '#555555' : isWinner ? '#f1c40f' : '#2a2a4e'}
         />
       ))}
 
@@ -176,19 +186,21 @@ export function CompetitiveBlackjackScene() {
         </mesh>
       ))}
 
-      {/* Central pot */}
-      {bjc && <PotDisplay amount={bjc.pot} />}
+      <CardDeckProvider>
+        {/* Central pot */}
+        {bjc && <PotDisplay amount={bjc.pot} />}
 
-      {/* Player positions */}
-      {bjc?.playerStates.map((ps, i) => (
-        <ArenaPlayerPosition
-          key={ps.playerId}
-          playerState={ps}
-          seatPosition={ARENA_SEAT_POSITIONS[i] ?? ARENA_SEAT_POSITIONS[0]!}
-          isActive={ps.playerId === currentTurnPlayerId && !bjc.playerTurnsComplete}
-          isWinner={bjc.winnerIds.includes(ps.playerId)}
-        />
-      ))}
+        {/* Player positions */}
+        {bjc?.playerStates.map((ps, i) => (
+          <ArenaPlayerPosition
+            key={ps.playerId}
+            playerState={ps}
+            seatPosition={ARENA_SEAT_POSITIONS[i] ?? ARENA_SEAT_POSITIONS[0]!}
+            isActive={ps.playerId === currentTurnPlayerId && !bjc.playerTurnsComplete}
+            isWinner={bjc.winnerIds.includes(ps.playerId)}
+          />
+        ))}
+      </CardDeckProvider>
 
       {/* Arena lighting — more dramatic, purple/gold tones */}
       <ambientLight intensity={0.25} color="#e6d5ff" />

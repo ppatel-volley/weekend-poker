@@ -16,7 +16,7 @@ function createTestState(overrides: Partial<CasinoGameState> = {}): CasinoGameSt
     gameChangeVotes: {},
     wallet: { p1: 10000, p2: 10000, p3: 10000 },
     players: [
-      { id: 'p1', name: 'Player 1', seatIndex: 0, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0 },
+      { id: 'p1', name: 'Player 1', seatIndex: 0, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0, avatarId: '', isHost: false, isReady: true, currentGameStatus: 'active' },
       { id: 'p2', name: 'Player 2', seatIndex: 1, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0 },
     ],
     dealerCharacterId: 'ace_malone',
@@ -248,6 +248,65 @@ describe('bjcReducers', () => {
       const result = bjcReducers.bjcInitRound(state, ['p1', 'p2'], 1, 10)
       expect(state.blackjackCompetitive).toBeUndefined()
       expect(result.blackjackCompetitive).toBeDefined()
+    })
+  })
+
+  describe('bjcRemovePlayer', () => {
+    it('removes player from playerStates and turnOrder', () => {
+      let state = createTestState()
+      state = bjcReducers.bjcInitRound(state, ['p1', 'p2', 'p3'], 1, 10)
+      state = bjcReducers.bjcRemovePlayer(state, 'p2')
+
+      const bjc = state.blackjackCompetitive!
+      expect(bjc.playerStates).toHaveLength(2)
+      expect(bjc.playerStates.map(ps => ps.playerId)).toEqual(['p1', 'p3'])
+      expect(bjc.turnOrder).toEqual(['p1', 'p3'])
+    })
+  })
+
+  describe('underfunded player exclusion (freeroll prevention)', () => {
+    it('underfunded player is excluded from BJC round via phase logic', () => {
+      // Simulate what bjcPlaceBetsPhase.onBegin does:
+      // 1. Init round with all players
+      // 2. Post antes only for funded players
+      // 3. Remove underfunded players
+      const anteAmount = 10
+      let state = createTestState({
+        wallet: { p1: 10000, p2: 0, p3: 10000 },
+        players: [
+          { id: 'p1', name: 'Player 1', seatIndex: 0, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0, avatarId: '', isHost: false, isReady: true, currentGameStatus: 'active' },
+          { id: 'p2', name: 'Player 2', seatIndex: 1, stack: 0, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0, avatarId: '', isHost: false, isReady: true, currentGameStatus: 'active' },
+          { id: 'p3', name: 'Player 3', seatIndex: 2, stack: 10000, bet: 0, status: 'active', lastAction: null, isBot: false, isConnected: true, sittingOutHandCount: 0, avatarId: '', isHost: false, isReady: true, currentGameStatus: 'active' },
+        ],
+      })
+
+      // Step 1: Init round with all active players
+      state = bjcReducers.bjcInitRound(state, ['p1', 'p2', 'p3'], 1, anteAmount)
+      expect(state.blackjackCompetitive!.playerStates).toHaveLength(3)
+
+      // Step 2: Post antes — skip underfunded
+      const bjc = state.blackjackCompetitive!
+      for (const ps of bjc.playerStates) {
+        const walletBalance = state.wallet[ps.playerId] ?? 0
+        if (walletBalance < anteAmount) continue
+        state = bjcReducers.bjcPlaceAnte(state, ps.playerId, anteAmount)
+        state = bjcReducers.bjcAddToPot(state, anteAmount)
+      }
+
+      // Step 3: Remove underfunded player (p2 with wallet=0)
+      state = bjcReducers.bjcRemovePlayer(state, 'p2')
+
+      // Verify: p2 is NOT in playerStates
+      const finalBjc = state.blackjackCompetitive!
+      expect(finalBjc.playerStates.map(ps => ps.playerId)).toEqual(['p1', 'p3'])
+      expect(finalBjc.turnOrder).toEqual(['p1', 'p3'])
+
+      // Verify: pot only has antes from funded players
+      expect(finalBjc.pot).toBe(20) // 10 from p1 + 10 from p3
+
+      // Verify: p2 cannot win (not in playerStates at all)
+      const p2InRound = finalBjc.playerStates.find(ps => ps.playerId === 'p2')
+      expect(p2InRound).toBeUndefined()
     })
   })
 

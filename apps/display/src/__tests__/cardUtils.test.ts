@@ -11,10 +11,19 @@ import {
 
 // ── Helpers ──────────────────────────────────────────────────
 
-/** Create a minimal THREE.Group with a name, simulating GLB structure. */
-function makeCardGroup(name: string): THREE.Group {
-  const group = new THREE.Group()
-  group.name = name
+/**
+ * Create a minimal Object3D simulating GLB card group structure.
+ * Three.js GLTFLoader converts spaces to underscores, so "Ace of Spades"
+ * becomes "Ace_of_Spades". Card groups have 3 child meshes.
+ */
+function makeCardGroup(name: string): THREE.Object3D {
+  const group = new THREE.Object3D()
+  // GLTFLoader normalises spaces to underscores
+  group.name = name.replace(/ /g, '_')
+  // Card groups have 3 child meshes in the GLB
+  group.add(new THREE.Mesh())
+  group.add(new THREE.Mesh())
+  group.add(new THREE.Mesh())
   return group
 }
 
@@ -88,10 +97,10 @@ describe('buildCardMeshMap', () => {
     expect(map.has('Eigh of Hearts')).toBe(false)
   })
 
-  it('ignores non-Group children (plain meshes)', () => {
+  it('ignores leaf nodes with no children', () => {
     const scene = new THREE.Group()
     const mesh = new THREE.Mesh()
-    mesh.name = 'Ace of Spades'
+    mesh.name = 'Ace_of_Spades'
     scene.add(mesh)
 
     const map = buildCardMeshMap(scene)
@@ -108,7 +117,8 @@ describe('getCardMesh', () => {
     const result = getCardMesh(card, map)
 
     expect(result).toBeDefined()
-    expect(result?.name).toBe('Eight of Hearts')
+    // The node's actual name has underscores (GLTFLoader normalises), but the map key has spaces
+    expect(result?.name).toBe('Eight_of_Hearts')
   })
 
   it('returns undefined for a card not in the map', () => {

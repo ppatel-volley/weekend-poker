@@ -10,6 +10,7 @@
 
 import { useState, useCallback } from 'react'
 import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
+import { Hand3D } from '../3d/Hand3D.js'
 import type { FiveCardDrawGameState, Card } from '@weekend-casino/shared'
 
 /** Card display component. */
@@ -18,7 +19,7 @@ function CardDisplay({ card }: { card: Card }) {
     spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663',
   }
   const suitColours: Record<string, string> = {
-    spades: '#ecf0f1', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#ecf0f1',
+    spades: '#1a1a2e', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#1a1a2e',
   }
   return (
     <div style={{
@@ -62,14 +63,11 @@ function BettingView({
   return (
     <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {/* Hand display */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginBottom: '8px' }}>
-        {hand.map((card, i) => (
-          <CardDisplay key={i} card={card} />
-        ))}
-        {hand.length === 0 && (
-          <div style={{ color: '#aaa', padding: '16px' }}>Waiting for cards...</div>
-        )}
-      </div>
+      {hand.length > 0 ? (
+        <Hand3D cards={hand} height={120} />
+      ) : (
+        <div style={{ textAlign: 'center', color: '#aaa', padding: '16px' }}>Waiting for cards...</div>
+      )}
 
       {/* Pot and bet info */}
       <div style={{ textAlign: 'center', fontSize: '13px', color: '#aaa' }}>
@@ -248,11 +246,7 @@ function ResultsView({ draw, playerId }: { draw: FiveCardDrawGameState; playerId
     <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>YOUR HAND</div>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
-          {hand.map((card, i) => (
-            <CardDisplay key={i} card={card} />
-          ))}
-        </div>
+        <Hand3D cards={hand} height={120} />
       </div>
 
       <div style={{ textAlign: 'center', padding: '16px', color: '#aaa', fontSize: '14px' }}>

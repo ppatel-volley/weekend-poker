@@ -12,6 +12,9 @@
  */
 
 import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
+import { useLastResult } from '../../hooks/useLastResult.js'
+import { ResultToast } from '../shared/ResultToast.js'
+import { Hand3D } from '../3d/Hand3D.js'
 import type { CasinoGameState, BlackjackCompetitiveGameState, BjcPlayerState, Card } from '@weekend-casino/shared'
 
 /** Card display component. */
@@ -20,7 +23,7 @@ function CardDisplay({ card }: { card: Card }) {
     spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663',
   }
   const suitColours: Record<string, string> = {
-    spades: '#ecf0f1', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#ecf0f1',
+    spades: '#1a1a2e', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#1a1a2e',
   }
   return (
     <div style={{
@@ -161,11 +164,7 @@ function PlayerActionsView({
 
       {/* My hand */}
       <div style={{ textAlign: 'center' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginBottom: '8px' }}>
-          {hand.cards.map((card, i) => (
-            <CardDisplay key={i} card={card} />
-          ))}
-        </div>
+        <Hand3D cards={hand.cards} height={120} />
         <HandValueBadge
           value={hand.value}
           isSoft={hand.isSoft}
@@ -283,11 +282,7 @@ function ResultsView({
                 isBlackjack={ps.hand.isBlackjack}
               />
             </div>
-            <div style={{ display: 'flex', gap: '4px' }}>
-              {ps.hand.cards.map((card, i) => (
-                <CardDisplay key={i} card={card} />
-              ))}
-            </div>
+            <Hand3D cards={ps.hand.cards} height={80} />
             {isThisWinner && (
               <div style={{ marginTop: '4px', color: '#2ecc71', fontWeight: 'bold' }}>
                 WINNER
@@ -347,6 +342,14 @@ export function CompetitiveBlackjackController() {
 
   const phaseStr = phase ?? ''
 
+  // BJC result: winners get potShare, losers lose their bet
+  const myState = bjc?.playerStates.find(ps => ps.playerId === playerId)
+  const isWinner = bjc?.winnerIds.includes(playerId) ?? false
+  const winnerCount = bjc?.winnerIds.length ?? 0
+  const potShare = winnerCount > 0 && bjc ? Math.floor(bjc.pot / winnerCount) : 0
+  const bjcRoundResult = myState ? (isWinner ? potShare : -(myState.hand.bet)) : undefined
+  const lastResult = useLastResult(phaseStr, bjcRoundResult)
+
   return (
     <div
       style={{
@@ -356,11 +359,15 @@ export function CompetitiveBlackjackController() {
         background: '#1a0a2a',
         color: 'white',
         fontFamily: 'system-ui, sans-serif',
+        position: 'relative',
       }}
     >
       <h2 data-testid="game-heading" style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>
         Blackjack Arena
       </h2>
+
+      {/* Result toast overlay — persists over ante display */}
+      <ResultToast lastResult={lastResult} />
 
       {!bjc ? (
         <div style={{ textAlign: 'center', padding: '32px', color: '#aaa', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

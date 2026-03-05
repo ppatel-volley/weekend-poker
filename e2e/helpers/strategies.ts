@@ -1,5 +1,5 @@
 import { type Page, expect } from '@playwright/test'
-import { holdemCallOrCheck, bjPlaceBet, bjStand, bjcStand, tcpPlaceAnte, tcpPlay, rouletteBetRed, rouletteConfirmBets, crapsPassLine, crapsConfirmBets, crapsRoll, drawCallOrCheck, drawKeepAll } from './game-actions'
+import { holdemCallOrCheck, bjPlaceBet, bjStand, bjDeclineInsurance, bjcStand, tcpPlaceAnte, tcpPlay, rouletteBetRed, rouletteConfirmBets, crapsPassLine, crapsConfirmBets, crapsRoll, drawCallOrCheck, drawKeepAll } from './game-actions'
 
 /**
  * Play one round of Hold'em: always call/check through all betting rounds.
@@ -26,151 +26,232 @@ export async function playHoldemRound(page: Page): Promise<void> {
 }
 
 /**
- * Play one round of Blackjack Classic: place min bet, then stand immediately.
+ * Play one round of Blackjack Classic: place min bet, handle insurance, then stand.
+ * Phases: BJ_PLACE_BETS → BJ_DEAL_INITIAL → BJ_INSURANCE → BJ_PLAYER_TURNS
+ *       → BJ_DEALER_TURN → BJ_SETTLEMENT → BJ_HAND_COMPLETE → loop
+ *
+ * With bot auto-play in onBegin, the entire round may cascade instantly
+ * (e.g. natural blackjack or all players auto-acted). Handle both cases:
+ * instant cascade and interactive play.
  */
 export async function playBlackjackRound(page: Page): Promise<void> {
-  // Place bet phase
   const placeBetBtn = page.getByTestId('place-bet-btn')
-  const alreadyInGame = page.getByTestId('hit-btn').or(page.getByTestId('stand-btn'))
-
-  await expect(placeBetBtn.or(alreadyInGame)).toBeVisible({ timeout: 30_000 })
-
-  if (await placeBetBtn.isVisible().catch(() => false)) {
-    await bjPlaceBet(page)
-  }
-
-  // Wait for player turns
   const standBtn = page.getByTestId('stand-btn')
-  const result = page.getByText(/WON \$|LOST \$|PUSH|BUST|BLACKJACK/i)
-  await expect(standBtn.or(result)).toBeVisible({ timeout: 30_000 })
+  const insuranceNo = page.getByRole('button', { name: 'NO' })
 
-  // If we can act, just stand
-  if (await standBtn.isVisible().catch(() => false)) {
-    await bjStand(page)
+  // Wait for betting phase
+  await expect(placeBetBtn).toBeVisible({ timeout: 30_000 })
+  await bjPlaceBet(page)
+
+  // After bet, phases cascade. Poll for actionable state or round completion.
+  for (let i = 0; i < 60; i++) {
+    await page.waitForTimeout(250)
+
+    // Round already completed (instant cascade — natural BJ, all auto-acted)
+    if (await placeBetBtn.isVisible().catch(() => false)) return
+
+    // Insurance prompt — decline it
+    if (await insuranceNo.isVisible().catch(() => false)) {
+      await bjDeclineInsurance(page)
+      continue
+    }
+
+    // Player turns — stand
+    if (await standBtn.isVisible().catch(() => false)) {
+      await bjStand(page)
+      break
+    }
+
+    // Result/settlement text (WON/LOST/PUSH) — round finishing, wait for next
+    const bodyText = await page.evaluate(() => document.body.innerText).catch(() => '')
+    if (/WON \$|LOST \$|PUSH/i.test(bodyText)) break
   }
+
+  // Wait for next round
+  await expect(placeBetBtn).toBeVisible({ timeout: 30_000 })
 }
 
 /**
  * Play one round of Competitive Blackjack: auto-ante, then stand.
+ * BJC has auto-ante. Bot auto-acts in onBegin so the entire round may cascade
+ * instantly. Detect round completion by watching for the ante display to reappear.
  */
 export async function playBjcRound(page: Page): Promise<void> {
-  // BJC has auto-ante, wait for player turns
   const standBtn = page.getByTestId('stand-btn')
-  const result = page.getByText(/WON \$|LOST \$|WINNER/i)
-  await expect(standBtn.or(result)).toBeVisible({ timeout: 30_000 })
+  const anteDisplay = page.getByText(/Ante:/)
+  let playerStood = false
 
-  if (await standBtn.isVisible().catch(() => false)) {
-    await bjcStand(page)
+  // BJC has auto-ante. Poll for actionable state or round completion.
+  for (let i = 0; i < 60; i++) {
+    await page.waitForTimeout(250)
+
+    // Stand if it's our turn
+    if (await standBtn.isVisible().catch(() => false)) {
+      await bjcStand(page)
+      playerStood = true
+      break
+    }
+
+    // If ante display visible but we haven't stood yet, we might be in the
+    // ante-posting phase of a new round before cards are dealt — keep waiting
+    // for our turn. Only treat as "round cascaded" if we already stood.
+    if (await anteDisplay.isVisible().catch(() => false)) {
+      if (playerStood) return // Next round started after we acted
+      // Otherwise keep polling — we haven't acted yet
+      continue
+    }
+
+    // Result text visible — round finishing
+    const bodyText = await page.evaluate(() => document.body.innerText).catch(() => '')
+    if (/WON \$|LOST \$|WINNER/i.test(bodyText)) break
   }
+
+  // Wait for next round
+  await expect(anteDisplay.or(standBtn)).toBeVisible({ timeout: 30_000 })
 }
 
 /**
  * Play one round of Three Card Poker: place ante, then always play.
+ * After ante, phases may cascade instantly through deal -> decision -> reveal -> settlement
+ * when bots auto-act in onBegin. Detect round completion by watching for the next round's
+ * ante button to reappear rather than looking for brief result text.
  */
 export async function playTcpRound(page: Page): Promise<void> {
-  // Place ante
   const anteBtn = page.getByTestId('confirm-ante-btn')
   const playBtn = page.getByTestId('play-btn')
-  const result = page.getByText(/WON \$|LOST \$|PUSH|FOLDED/i)
 
-  await expect(anteBtn.or(playBtn).or(result)).toBeVisible({ timeout: 30_000 })
+  // Wait for any valid TCP state (ante, play/fold, or waiting text)
+  await expect(
+    anteBtn.or(playBtn).or(page.getByText('Waiting for other players'))
+  ).toBeVisible({ timeout: 30_000 })
 
+  // Place ante if we're in the ante phase
   if (await anteBtn.isVisible().catch(() => false)) {
     await tcpPlaceAnte(page)
+    await page.waitForTimeout(2_000)
   }
 
-  // Wait for decision phase
-  await expect(playBtn.or(result)).toBeVisible({ timeout: 30_000 })
-
-  if (await playBtn.isVisible().catch(() => false)) {
+  // Play if we're in the decision phase
+  if (await playBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
     await tcpPlay(page)
+    await page.waitForTimeout(2_000)
   }
+
+  // Wait for next round's ante button or Game Night leaderboard transition
+  const leaderboard = page.getByTestId('gn-rank-1')
+  await expect(anteBtn.or(leaderboard)).toBeVisible({ timeout: 30_000 })
 }
 
 /**
- * Play one round of Roulette: bet red, confirm.
+ * Play one round of Roulette: bet red, confirm, wait for round to complete.
+ * With spinComplete set immediately in onBegin, the entire phase cascade
+ * (spin → result → payout → round-complete → next betting) runs server-side
+ * in one tick. The controller briefly flashes intermediate states then lands
+ * back on the betting UI for the next round.
  */
 export async function playRouletteRound(page: Page): Promise<void> {
   const redBtn = page.getByTestId('red-btn')
-  const result = page.getByText(/WON \$|LOST \$|NO BET/i)
+  const confirmBtn = page.getByTestId('confirm-bets-btn')
 
-  await expect(redBtn.or(result)).toBeVisible({ timeout: 30_000 })
+  // Wait for betting phase
+  await expect(redBtn).toBeVisible({ timeout: 30_000 })
 
-  if (await redBtn.isVisible().catch(() => false)) {
-    await rouletteBetRed(page)
-    await rouletteConfirmBets(page)
-  }
+  // Place bet and confirm
+  await rouletteBetRed(page)
+  await expect(confirmBtn).toBeVisible({ timeout: 5_000 })
+  await rouletteConfirmBets(page)
+
+  // After confirm, the phase cascade runs instantly server-side.
+  // Wait for red button to reappear (next round) or game heading to change (Game Night transition).
+  await page.waitForTimeout(1_000)
+  const leaderboard = page.getByTestId('gn-rank-1')
+  await expect(redBtn.or(leaderboard)).toBeVisible({ timeout: 30_000 })
 }
 
 /**
- * Play one round of Craps: pass line, confirm, roll if shooter.
- * Handles the point phase with a loop (max 10 iterations).
+ * Play one round of Craps: place pass line, confirm, wait for roll phase or next round.
+ * Bots auto-act in onBegin so the entire round may cascade instantly.
+ * Detect round completion by watching for pass-line-btn to reappear (next round).
  */
 export async function playCrapsRound(page: Page): Promise<void> {
   const passLineBtn = page.getByTestId('pass-line-btn')
   const confirmBtn = page.getByTestId('confirm-bets-btn')
   const rollBtn = page.getByTestId('roll-btn')
-  const result = page.getByTestId('outcome-text')
-  const waitingForRoll = page.getByTestId('waiting-for-roll')
 
-  // Come-out betting
-  await expect(passLineBtn.or(result)).toBeVisible({ timeout: 30_000 })
+  // Wait for betting phase — pass-line-btn is the anchor element
+  await expect(passLineBtn).toBeVisible({ timeout: 30_000 })
+  await crapsPassLine(page)
 
-  if (await passLineBtn.isVisible().catch(() => false)) {
-    await crapsPassLine(page)
-    // Confirm if button appears
-    if (await confirmBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await crapsConfirmBets(page)
-    }
+  await page.waitForTimeout(500)
+  // Confirm bets
+  if (await confirmBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await crapsConfirmBets(page)
   }
 
-  // Roll or wait for shooter
+  // After confirm, may need to roll (if human is shooter)
+  // or round may cascade through automatically
+  await page.waitForTimeout(1_000)
+
   for (let i = 0; i < 10; i++) {
-    await expect(rollBtn.or(waitingForRoll).or(result)).toBeVisible({ timeout: 30_000 })
+    // Check if we left Craps (Game Night leaderboard transition)
+    const heading = page.getByTestId('game-heading')
+    const headingText = await heading.textContent().catch(() => null)
+    if (!headingText || !headingText.toLowerCase().includes('craps')) return
 
-    if (await result.isVisible().catch(() => false)) break
-
-    if (await rollBtn.isVisible().catch(() => false)) {
+    const canRoll = await rollBtn.isVisible({ timeout: 3_000 }).catch(() => false)
+    if (canRoll) {
       await crapsRoll(page)
-      await page.waitForTimeout(2_000) // Wait for dice animation
+      await page.waitForTimeout(2_000)
     }
 
-    // Check if we need to place more bets (point phase)
-    if (await confirmBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    // Check if we're back to betting phase (pass line visible = next round)
+    const backToBetting = await passLineBtn.isVisible({ timeout: 3_000 }).catch(() => false)
+    if (backToBetting) break
+
+    // Check if we need to confirm more bets (point phase)
+    if (await confirmBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
       await crapsConfirmBets(page)
+      await page.waitForTimeout(1_000)
     }
-
-    await page.waitForTimeout(1_000)
   }
 }
 
 /**
  * Play one round of 5-Card Draw: call/check, keep all, call/check.
+ * With bot auto-play, phases may cascade instantly. The controller shows
+ * action buttons directly (no "Your turn!" text like Hold'em).
  */
 export async function playDrawRound(page: Page): Promise<void> {
-  const result = page.getByText(/YOUR HAND|Hand complete/i)
-
-  // Betting round 1
-  const myTurn1 = page.getByText('Your turn!')
+  const checkBtn = page.getByTestId('check-btn')
+  const callBtn = page.getByTestId('call-btn')
   const keepAll = page.getByTestId('keep-all-btn')
-  await expect(myTurn1.or(keepAll).or(result)).toBeVisible({ timeout: 30_000 })
+  const result = page.getByText(/YOUR HAND|Hand complete/i)
+  const posting = page.getByText(/Posting blinds|Dealing cards/i)
 
-  if (await myTurn1.isVisible().catch(() => false)) {
+  // Betting round 1 — wait for check/call buttons, discard phase, or result
+  await expect(
+    checkBtn.or(callBtn).or(keepAll).or(result).or(posting)
+  ).toBeVisible({ timeout: 30_000 })
+
+  if (await checkBtn.isVisible().catch(() => false) || await callBtn.isVisible().catch(() => false)) {
     await drawCallOrCheck(page)
     await page.waitForTimeout(1_000)
   }
 
-  // Discard phase
-  await expect(keepAll.or(result)).toBeVisible({ timeout: 30_000 })
-  if (await keepAll.isVisible().catch(() => false)) {
-    await drawKeepAll(page)
-    await page.waitForTimeout(1_000)
+  // Discard phase — keep all cards
+  for (let i = 0; i < 30; i++) {
+    await page.waitForTimeout(250)
+    if (await keepAll.isVisible().catch(() => false)) {
+      await drawKeepAll(page)
+      break
+    }
+    if (await result.isVisible().catch(() => false)) break // Round ended early (fold)
+    if (await checkBtn.isVisible().catch(() => false) || await callBtn.isVisible().catch(() => false)) break // Skipped to betting 2
   }
 
   // Betting round 2
-  const myTurn2 = page.getByText('Your turn!')
-  await expect(myTurn2.or(result)).toBeVisible({ timeout: 30_000 })
-  if (await myTurn2.isVisible().catch(() => false)) {
+  await page.waitForTimeout(500)
+  if (await checkBtn.isVisible().catch(() => false) || await callBtn.isVisible().catch(() => false)) {
     await drawCallOrCheck(page)
   }
 }
@@ -181,21 +262,21 @@ export async function playDrawRound(page: Page): Promise<void> {
 export async function playCurrentGameRound(page: Page): Promise<void> {
   const heading = page.getByTestId('game-heading')
   await expect(heading).toBeVisible({ timeout: 30_000 })
-  const text = (await heading.textContent()) ?? ''
+  const text = ((await heading.textContent()) ?? '').toLowerCase()
 
-  if (text.includes("Hold'em")) {
+  if (text.includes("hold'em")) {
     await playHoldemRound(page)
-  } else if (text.includes('5-Card Draw')) {
+  } else if (text.includes('5-card draw')) {
     await playDrawRound(page)
-  } else if (text.includes('Blackjack Arena') || text.includes('Competitive')) {
+  } else if (text.includes('blackjack arena') || text.includes('competitive')) {
     await playBjcRound(page)
-  } else if (text.includes('Blackjack')) {
+  } else if (text.includes('blackjack')) {
     await playBlackjackRound(page)
-  } else if (text.includes('Three Card')) {
+  } else if (text.includes('three card')) {
     await playTcpRound(page)
-  } else if (text.includes('Roulette')) {
+  } else if (text.includes('roulette')) {
     await playRouletteRound(page)
-  } else if (text.includes('Craps')) {
+  } else if (text.includes('craps')) {
     await playCrapsRound(page)
   } else {
     throw new Error(`Unknown game heading: "${text}"`)

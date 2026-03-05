@@ -346,6 +346,12 @@ const holdemReducers = {
           sittingOutHandCount: 0,
         } satisfies CasinoPlayer,
       ],
+      // Initialize bot wallet — without this, wallet[botId] is undefined (0)
+      // and bots can't place bets in TCP, BJ, Roulette, Craps, etc.
+      wallet: {
+        ...state.wallet,
+        [botId]: STARTING_WALLET_BALANCE,
+      },
     }
   }),
 
@@ -851,6 +857,28 @@ function advanceToNextPlayer(ctx: ThunkCtx): void {
     const nextIdx = nextActivePlayer(state.players, state.activePlayerIndex)
     if (nextIdx !== -1) {
       ctx.dispatch('setActivePlayer', nextIdx)
+
+      // Auto-act for bots immediately using simple strategy (check > call > fold).
+      // This avoids waiting for the AI-based botDecision thunk (10s timeout)
+      // and ensures bots act in E2E tests and single-player games.
+      const nextPlayer = state.players[nextIdx]
+      if (nextPlayer?.isBot) {
+        const updatedState = ctx.getState()
+        const botLegalActions = getLegalActions(asPokerState(updatedState), nextPlayer.id)
+        let botAction: PlayerAction = 'fold'
+        if (botLegalActions.includes('check')) {
+          botAction = 'check'
+        } else if (botLegalActions.includes('call')) {
+          botAction = 'call'
+          ctx.dispatch('updatePlayerBet', nextPlayer.id, updatedState.currentBet)
+        }
+        ctx.dispatch('setPlayerLastAction', nextPlayer.id, botAction)
+        if (botAction === 'fold') {
+          ctx.dispatch('foldPlayer', nextPlayer.id)
+        }
+        // Recursively advance (next player might also be a bot)
+        advanceToNextPlayer(ctx)
+      }
     }
   }
 }
@@ -922,6 +950,48 @@ function autoFoldIfDisconnected(ctx: any): void {
   }
 }
 
+/**
+ * Auto-play bots at the start of a betting round.
+ * Called from betting phase onBegin after setActivePlayer.
+ * Uses simple strategy: check > call > fold. Recursively handles
+ * consecutive bot seats until a human player is reached.
+ */
+export function autoBotPlayFromPhaseStart(ctx: any, activePlayerReducer = 'setActivePlayer'): void {
+  const state: CasinoGameState = ctx.getState()
+  const pokerState = asPokerState(state)
+  if (isBettingRoundComplete(pokerState) || isOnlyOnePlayerRemaining(pokerState)) return
+
+  const activePlayer = state.players[state.activePlayerIndex]
+  if (!activePlayer?.isBot) return
+
+  const botLegalActions = getLegalActions(pokerState, activePlayer.id)
+  if (botLegalActions.length === 0) return
+
+  let botAction: PlayerAction = 'fold'
+  if (botLegalActions.includes('check')) {
+    botAction = 'check'
+  } else if (botLegalActions.includes('call')) {
+    botAction = 'call'
+    ctx.dispatch('updatePlayerBet', activePlayer.id, state.currentBet)
+  }
+  ctx.dispatch('setPlayerLastAction', activePlayer.id, botAction)
+  if (botAction === 'fold') {
+    ctx.dispatch('foldPlayer', activePlayer.id)
+  }
+
+  // Advance to next player
+  const updated = ctx.getState()
+  const updatedPoker = asPokerState(updated)
+  if (!isBettingRoundComplete(updatedPoker) && !isOnlyOnePlayerRemaining(updatedPoker)) {
+    const nextIdx = nextActivePlayer(updated.players, updated.activePlayerIndex)
+    if (nextIdx !== -1) {
+      ctx.dispatch(activePlayerReducer, nextIdx)
+      // Recursively handle next bot
+      autoBotPlayFromPhaseStart(ctx, activePlayerReducer)
+    }
+  }
+}
+
 function postFlopBettingOnBegin(ctx: any): void {
   const state: CasinoGameState = ctx.getState()
   const firstToAct = findFirstActivePlayerLeftOfButton(state.players, state.dealerIndex)
@@ -934,6 +1004,7 @@ function postFlopBettingOnBegin(ctx: any): void {
     }
   }
   autoFoldIfDisconnected(ctx)
+  autoBotPlayFromPhaseStart(ctx)
 }
 
 function dealCommunityOnBegin(ctx: any, cardCount: number): void {
@@ -1040,6 +1111,7 @@ const preFlopBettingPhase = makePhase({
     ctx.dispatch('setActivePlayer', firstToAct)
     ctx.dispatch('setCurrentBet', state.blindLevel.bigBlind)
     autoFoldIfDisconnected(ctx)
+    autoBotPlayFromPhaseStart(ctx)
     return ctx.getState()
   },
   onEnd: (ctx: any) => {

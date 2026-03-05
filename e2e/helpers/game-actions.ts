@@ -28,6 +28,11 @@ export async function bjStand(page: Page): Promise<void> {
   await page.getByTestId('stand-btn').click({ timeout: 5_000 })
 }
 
+export async function bjDeclineInsurance(page: Page): Promise<void> {
+  // Insurance prompt has YES ($X) and NO buttons — click NO
+  await page.getByRole('button', { name: 'NO' }).click({ timeout: 5_000 })
+}
+
 // ── Competitive Blackjack ──
 export async function bjcHit(page: Page): Promise<void> {
   await page.getByTestId('hit-btn').click({ timeout: 5_000 })

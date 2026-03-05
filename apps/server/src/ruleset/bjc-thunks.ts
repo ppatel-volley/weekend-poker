@@ -32,6 +32,45 @@ type ThunkCtx = {
   logger?: any
 }
 
+/**
+ * Inline check-advance logic using only ctx.dispatch (no sub-thunks).
+ * VGF's StateSyncSessionHandler may not properly evaluate endIf after
+ * sub-thunk dispatches, so we inline the logic as direct reducer calls.
+ */
+function bjcInlineCheckAdvance(ctx: ThunkCtx): void {
+  const state = ctx.getState()
+  const bjc = state.blackjackCompetitive
+  if (!bjc) return
+
+  // Advance turn (BJC has no splits, so no hand advancement needed)
+  ctx.dispatch('bjcAdvanceTurn')
+
+  // Auto-stand consecutive bots after the advance
+  let updated = ctx.getState()
+  while (updated.blackjackCompetitive) {
+    const bjcU = updated.blackjackCompetitive
+    if (bjcU.currentTurnIndex >= bjcU.turnOrder.length) break
+    const nextPlayerId = bjcU.turnOrder[bjcU.currentTurnIndex]
+    const nextPlayer = updated.players.find((p: any) => p.id === nextPlayerId)
+    if (!nextPlayer?.isBot) break
+    const nextPs = bjcU.playerStates.find((p: any) => p.playerId === nextPlayerId)
+    if (nextPs && !nextPs.hand.stood && !nextPs.hand.busted) {
+      ctx.dispatch('bjcStandHand', nextPlayerId)
+      ctx.dispatch('bjcAdvanceTurn')
+    } else {
+      break
+    }
+    updated = ctx.getState()
+  }
+
+  // Check if all turns complete
+  const finalState = ctx.getState()
+  const bjcFinal = finalState.blackjackCompetitive!
+  if (bjcFinal.currentTurnIndex >= bjcFinal.turnOrder.length) {
+    ctx.dispatch('bjcSetPlayerTurnsComplete', true)
+  }
+}
+
 /** Ensures a shoe exists in server state for competitive mode. */
 function ensureBjcShoe(sessionId: string, numberOfDecks: number = 6): Card[] {
   const serverState = getServerGameState(sessionId)
@@ -48,13 +87,15 @@ function ensureBjcShoe(sessionId: string, numberOfDecks: number = 6): Card[] {
 }
 
 /**
- * Determines winner(s) per PRD 19.3-19.5:
+ * Determines winner per PRD 19.3-19.5:
  * - Highest hand <= 21 wins
  * - If all bust, lowest hand value wins (closest to 21 from above)
- * - Ties: pot split equally
- * - Tie-break: fewer cards, then first to stand (turnOrder position)
+ * - Tie-break chain (always resolves to single winner):
+ *   1. Highest hand value
+ *   2. Fewer cards (achieved value with less hits)
+ *   3. Earlier in turn order (first to stand)
  */
-function determineWinners(
+export function determineWinners(
   playerStates: CasinoGameState['blackjackCompetitive'] extends infer T
     ? T extends { playerStates: infer P } ? P : never : never,
   turnOrder: string[],
@@ -81,19 +122,31 @@ function determineWinners(
     })
 
     const bestValue = sorted[0]!.hand.value
-    const winners = sorted.filter(ps => ps.hand.value === bestValue)
+    const bestCardCount = sorted[0]!.hand.cards.length
+    const sameValuePlayers = sorted.filter(ps => ps.hand.value === bestValue)
 
-    if (winners.length === 1) {
+    // If only one player at best value, they win outright
+    if (sameValuePlayers.length === 1) {
       return {
-        winnerIds: [winners[0]!.playerId],
-        message: `${winners[0]!.playerId} wins with ${bestValue}!`,
+        winnerIds: [sameValuePlayers[0]!.playerId],
+        message: `${sameValuePlayers[0]!.playerId} wins with ${bestValue}!`,
       }
     }
 
-    // Multiple players tied on value — split pot
+    // Multiple tied on value — apply tie-break: fewest cards wins
+    const fewestCards = sameValuePlayers.filter(ps => ps.hand.cards.length === bestCardCount)
+    if (fewestCards.length === 1) {
+      return {
+        winnerIds: [fewestCards[0]!.playerId],
+        message: `${fewestCards[0]!.playerId} wins with ${bestValue} (fewer cards)!`,
+      }
+    }
+
+    // Still tied on value AND card count — earliest in turn order wins (sorted already handles this)
+    // The first player in the sorted array is the winner by turn order
     return {
-      winnerIds: winners.map(w => w.playerId),
-      message: `Tie at ${bestValue}! Pot split ${winners.length} ways.`,
+      winnerIds: [sorted[0]!.playerId],
+      message: `${sorted[0]!.playerId} wins with ${bestValue} (turn order)!`,
     }
   }
 
@@ -104,19 +157,11 @@ function determineWinners(
     return turnOrder.indexOf(a.playerId) - turnOrder.indexOf(b.playerId)
   })
 
-  const lowestBust = allBusted[0]!.hand.value
-  const bustWinners = allBusted.filter(ps => ps.hand.value === lowestBust)
-
-  if (bustWinners.length === 1) {
-    return {
-      winnerIds: [bustWinners[0]!.playerId],
-      message: `Everyone busted! ${bustWinners[0]!.playerId} takes it with ${lowestBust} — closest to 21.`,
-    }
-  }
-
+  // Sort already applies full tie-break: lowest value → fewest cards → turn order
+  // First player in sorted array is the single winner
   return {
-    winnerIds: bustWinners.map(w => w.playerId),
-    message: `Everyone busted! Tied at ${lowestBust}. Pot split ${bustWinners.length} ways.`,
+    winnerIds: [allBusted[0]!.playerId],
+    message: `Everyone busted! ${allBusted[0]!.playerId} takes it with ${allBusted[0]!.hand.value} — closest to 21.`,
   }
 }
 
@@ -236,7 +281,7 @@ export const bjcThunks = {
 
     // If busted or 21, auto-advance
     if (handValue.isBusted || handValue.value === 21) {
-      await ctx.dispatchThunk('bjcCheckAdvance', playerId)
+      bjcInlineCheckAdvance(ctx)
     }
   },
 
@@ -249,7 +294,7 @@ export const bjcThunks = {
     if (!playerId) return
 
     ctx.dispatch('bjcStandHand', playerId)
-    await ctx.dispatchThunk('bjcCheckAdvance', playerId)
+    bjcInlineCheckAdvance(ctx)
   },
 
   /**
@@ -275,14 +320,15 @@ export const bjcThunks = {
       return
     }
 
-    // Deduct additional bet and add to pot
-    ctx.dispatch('updateWallet', playerId, -ps.hand.bet)
-    ctx.dispatch('bjcAddToPot', ps.hand.bet)
-
+    // Check shoe BEFORE deducting wallet — avoid losing chips without receiving a card
     const sessionId = ctx.getSessionId()
     const serverState = getServerGameState(sessionId)
     const shoe = serverState.blackjackCompetitive?.shoe
     if (!shoe || shoe.length === 0) return
+
+    // Deduct additional bet and add to pot (shoe confirmed available)
+    ctx.dispatch('updateWallet', playerId, -ps.hand.bet)
+    ctx.dispatch('bjcAddToPot', ps.hand.bet)
 
     const card = shoe.shift()!
     setServerGameState(sessionId, serverState)
@@ -299,7 +345,7 @@ export const bjcThunks = {
       handValue.isBusted,
     )
 
-    await ctx.dispatchThunk('bjcCheckAdvance', playerId)
+    bjcInlineCheckAdvance(ctx)
   },
 
   /**

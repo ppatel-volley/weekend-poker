@@ -42,7 +42,7 @@ export function CommunityCards() {
   const prevCardsRef = useRef<Card[]>([])
 
   // Track which clones we've placed so we can clean them up.
-  const clonesRef = useRef<THREE.Group[]>([])
+  const clonesRef = useRef<THREE.Object3D[]>([])
   const containerRef = useRef<THREE.Group>(null)
 
   const cards = communityCards ?? []

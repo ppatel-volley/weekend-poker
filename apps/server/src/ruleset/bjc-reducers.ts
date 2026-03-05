@@ -257,4 +257,14 @@ export const bjcReducers = {
     ...bjc,
     shoePenetration: penetration,
   })),
+
+  /** Remove underfunded players from BJC round (playerStates + turnOrder). */
+  bjcRemovePlayer: (
+    state: CasinoGameState,
+    playerId: string,
+  ): CasinoGameState => updateBjc(state, bjc => ({
+    ...bjc,
+    playerStates: bjc.playerStates.filter(ps => ps.playerId !== playerId),
+    turnOrder: bjc.turnOrder.filter(id => id !== playerId),
+  })),
 }

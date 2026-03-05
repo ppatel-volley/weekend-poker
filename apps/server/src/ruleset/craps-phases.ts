@@ -92,6 +92,23 @@ export const crapsComeOutBettingPhase = {
         adapted.dispatch('crapsSetPlayerConfirmed', player.playerId, false)
       }
     }
+
+    // Auto-confirm bots — use reducers directly (dispatchThunk unreliable in onBegin, learning 009)
+    const afterInit = adapted.getState()
+    const botPlayers = afterInit.players.filter((p: any) => p.isBot && p.status !== 'busted' && p.status !== 'sitting_out')
+    for (const bot of botPlayers) {
+      adapted.dispatch('crapsSetPlayerConfirmed', bot.id, true)
+    }
+
+    // Check if all players confirmed after bot auto-confirms
+    if (botPlayers.length > 0) {
+      const postState = adapted.getState()
+      const craps = postState.craps
+      if (craps && craps.players.every((p: any) => p.betsConfirmed)) {
+        adapted.dispatch('crapsSetAllBetsPlaced', true)
+      }
+    }
+
     return adapted.getState()
   },
   endIf: (ctx: any) => {
@@ -179,6 +196,23 @@ export const crapsPointBettingPhase = {
       // We need to explicitly set these false for the new betting round
       adapted.dispatch('crapsSetAllBetsPlaced', false)
     }
+
+    // Auto-confirm bots — use reducers directly (dispatchThunk unreliable in onBegin, learning 009)
+    const afterReset = adapted.getState()
+    const botPlayers = afterReset.players.filter((p: any) => p.isBot && p.status !== 'busted' && p.status !== 'sitting_out')
+    for (const bot of botPlayers) {
+      adapted.dispatch('crapsSetPlayerConfirmed', bot.id, true)
+    }
+
+    // Check if all players confirmed after bot auto-confirms
+    if (botPlayers.length > 0) {
+      const postState = adapted.getState()
+      const craps = postState.craps
+      if (craps && craps.players.every((p: any) => p.betsConfirmed)) {
+        adapted.dispatch('crapsSetAllBetsPlaced', true)
+      }
+    }
+
     return adapted.getState()
   },
   endIf: (ctx: any) => {

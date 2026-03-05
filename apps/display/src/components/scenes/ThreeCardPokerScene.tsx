@@ -4,25 +4,52 @@
  * Compact table with dealer area, 3-card player positions,
  * and dealer qualification indicator.
  */
-
+import { useRef, useEffect } from 'react'
+import * as THREE from 'three'
 import { useStateSyncSelector } from '../../hooks/useVGFHooks.js'
-import type { ThreeCardPokerGameState, TcpPlayerHand } from '@weekend-casino/shared'
+import { CardDeckProvider, useCardDeck } from '../CardDeck.js'
+import type { Card, ThreeCardPokerGameState, TcpPlayerHand } from '@weekend-casino/shared'
 
-/** Card placeholder — face-down or face-up 3D card representation. */
-function CardPlaceholder({
+/** Single 3D card from the GLB deck. */
+function CardModel({
+  card,
+  faceUp,
   position,
-  faceUp = false,
-  colour = '#2a2a4e',
 }: {
+  card: Card
+  faceUp: boolean
   position: [number, number, number]
-  faceUp?: boolean
-  colour?: string
 }) {
+  const { getCardClone, ready } = useCardDeck()
+  const groupRef = useRef<THREE.Group>(null)
+
+  useEffect(() => {
+    if (!ready) return
+    const parent = groupRef.current
+    if (!parent) return
+
+    while (parent.children.length > 0) {
+      parent.remove(parent.children[0]!)
+    }
+
+    const clone = getCardClone(card)
+    if (!clone) return
+
+    clone.visible = true
+    clone.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.visible = true
+      }
+    })
+
+    parent.add(clone)
+  }, [ready, card, faceUp, getCardClone])
+
+  // Lay card flat: rotate -90° on X. Face-down: rotate 180° on Y.
+  const yRot = faceUp ? 0 : Math.PI
+
   return (
-    <mesh position={position} rotation={faceUp ? [0, 0, 0] : [0, Math.PI, 0]}>
-      <boxGeometry args={[0.35, 0.01, 0.5]} />
-      <meshStandardMaterial color={faceUp ? '#ffffff' : colour} />
-    </mesh>
+    <group ref={groupRef} position={position} rotation={[-Math.PI / 2, yRot, 0]} scale={[1, 1, 1]} />
   )
 }
 
@@ -57,14 +84,34 @@ function PlayerPosition({
   showCards: boolean
 }) {
   const folded = hand.decision === 'fold'
-  const cardColour = folded ? '#555555' : '#2a2a4e'
+  const cards = hand.cards
+  const hasCards = cards.length === 3
 
   return (
     <group position={seatPosition}>
       {/* Three cards */}
-      <CardPlaceholder position={[-0.4, 0, 0]} faceUp={showCards} colour={cardColour} />
-      <CardPlaceholder position={[0, 0, 0]} faceUp={showCards} colour={cardColour} />
-      <CardPlaceholder position={[0.4, 0, 0]} faceUp={showCards} colour={cardColour} />
+      {hasCards ? (
+        <>
+          {cards.map((card, i) => {
+            const xOffsets = [-0.4, 0, 0.4]
+            return (
+              <group key={i} opacity={folded ? 0.5 : 1}>
+                <CardModel
+                  card={card}
+                  faceUp={showCards}
+                  position={[xOffsets[i]!, 0, 0]}
+                />
+              </group>
+            )
+          })}
+        </>
+      ) : (
+        <>
+          <CardBack position={[-0.4, 0, 0]} colour={folded ? '#555555' : '#2a2a4e'} />
+          <CardBack position={[0, 0, 0]} colour={folded ? '#555555' : '#2a2a4e'} />
+          <CardBack position={[0.4, 0, 0]} colour={folded ? '#555555' : '#2a2a4e'} />
+        </>
+      )}
 
       {/* Ante chip */}
       <ChipStack position={[0, 0, 0.4]} amount={hand.anteBet} colour="#f39c12" />
@@ -94,6 +141,22 @@ function PlayerPosition({
   )
 }
 
+/** Face-down card fallback. */
+function CardBack({
+  position,
+  colour = '#2a2a4e',
+}: {
+  position: [number, number, number]
+  colour?: string
+}) {
+  return (
+    <mesh position={position} rotation={[0, Math.PI, 0]}>
+      <boxGeometry args={[0.35, 0.01, 0.5]} />
+      <meshStandardMaterial color={colour} />
+    </mesh>
+  )
+}
+
 /** Dealer area with face-down/face-up cards. */
 function DealerArea({
   tcp,
@@ -101,18 +164,33 @@ function DealerArea({
   tcp: ThreeCardPokerGameState
 }) {
   const revealed = tcp.dealerHand.revealed
-  const hasCards = tcp.dealerHand.cards.length > 0
+  const cards = tcp.dealerHand.cards
+  const hasCards = cards.length > 0
 
   return (
     <group position={[0, 0.86, -1.2]}>
       {/* Dealer cards */}
-      {hasCards && (
+      {hasCards && cards.length === 3 ? (
         <>
-          <CardPlaceholder position={[-0.4, 0, 0]} faceUp={revealed} colour="#1a1a3e" />
-          <CardPlaceholder position={[0, 0, 0]} faceUp={revealed} colour="#1a1a3e" />
-          <CardPlaceholder position={[0.4, 0, 0]} faceUp={revealed} colour="#1a1a3e" />
+          {cards.map((card, i) => {
+            const xOffsets = [-0.4, 0, 0.4]
+            return (
+              <CardModel
+                key={i}
+                card={card}
+                faceUp={revealed}
+                position={[xOffsets[i]!, 0, 0]}
+              />
+            )
+          })}
         </>
-      )}
+      ) : hasCards ? (
+        <>
+          <CardBack position={[-0.4, 0, 0]} colour="#1a1a3e" />
+          <CardBack position={[0, 0, 0]} colour="#1a1a3e" />
+          <CardBack position={[0.4, 0, 0]} colour="#1a1a3e" />
+        </>
+      ) : null}
 
       {/* Qualification indicator */}
       {tcp.dealerQualifies !== null && (
@@ -132,7 +210,8 @@ const SEAT_POSITIONS: [number, number, number][] = [
   [1.2, 0.86, 0.8],
 ]
 
-export function ThreeCardPokerScene() {
+/** Inner scene content using CardDeckProvider context. */
+function ThreeCardPokerSceneContent() {
   const tcp = useStateSyncSelector(s => s.threeCardPoker) as ThreeCardPokerGameState | undefined
   const phase = useStateSyncSelector(s => s.phase) as string | undefined
   const showCards = phase === 'TCP_SETTLEMENT' || phase === 'TCP_ROUND_COMPLETE'
@@ -183,5 +262,13 @@ export function ThreeCardPokerScene() {
       <pointLight position={[-3, 5, 3]} intensity={0.3} color="#80c0c0" />
       <pointLight position={[3, 5, -3]} intensity={0.3} color="#c0c0c0" />
     </group>
+  )
+}
+
+export function ThreeCardPokerScene() {
+  return (
+    <CardDeckProvider>
+      <ThreeCardPokerSceneContent />
+    </CardDeckProvider>
   )
 }

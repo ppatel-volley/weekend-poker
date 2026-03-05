@@ -8,10 +8,24 @@
  * Per D-003: BJC_ prefix for all Blackjack Competitive phases.
  * Per D-007: Sequential turns, no splits in v1.
  * Per PRD 19: No dealer hand, no insurance, no surrender.
+ *
+ * IMPORTANT: All onBegin callbacks use ctx.reducerDispatcher() and direct
+ * server-state access instead of ctx.thunkDispatcher(). VGF 4.8.0
+ * thunkDispatcher fails silently in onBegin context (Learning 009).
  */
 
-import type { CasinoGameState } from '@weekend-casino/shared'
+import type { CasinoGameState, Card } from '@weekend-casino/shared'
 import { CasinoPhase } from '@weekend-casino/shared'
+import {
+  evaluateBlackjackHand,
+  isNaturalBlackjack,
+  createShoe,
+  shuffleShoe,
+  calculatePenetration,
+  needsReshuffle,
+} from '../blackjack-engine/index.js'
+import { getServerGameState, setServerGameState } from '../server-game-state.js'
+import { determineWinners } from './bjc-thunks.js'
 import { wrapWithGameNightCheck, incrementGameNightRoundIfActive } from './game-night-utils.js'
 
 /**
@@ -22,7 +36,7 @@ export const bjcPlaceBetsPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: async (ctx: any) => {
+  onBegin: (ctx: any) => {
     const state: CasinoGameState = ctx.getState()
     const activePlayers = state.players
       .filter((p: any) => p.status !== 'busted' && p.status !== 'sitting_out')
@@ -34,8 +48,32 @@ export const bjcPlaceBetsPhase = {
     ctx.reducerDispatcher('bjcInitRound', activePlayers, roundNumber, anteAmount)
     ctx.reducerDispatcher('setDealerMessage', 'Posting antes...')
 
-    // Auto-post antes
-    await ctx.thunkDispatcher('bjcPostAntes')
+    // Inlined from bjcPostAntes thunk — thunkDispatcher fails in onBegin (Learning 009)
+    const afterInit: CasinoGameState = ctx.getState()
+    const bjc = afterInit.blackjackCompetitive
+    if (bjc) {
+      const ante = bjc.anteAmount
+      const underfundedIds: string[] = []
+      for (const ps of bjc.playerStates) {
+        const walletBalance = afterInit.wallet[ps.playerId] ?? 0
+        if (walletBalance < ante) {
+          underfundedIds.push(ps.playerId)
+          continue
+        }
+        ctx.reducerDispatcher('bjcPlaceAnte', ps.playerId, ante)
+        ctx.reducerDispatcher('updateWallet', ps.playerId, -ante)
+        ctx.reducerDispatcher('bjcAddToPot', ante)
+      }
+
+      // Sit out underfunded players and remove them from the BJC round
+      for (const pid of underfundedIds) {
+        ctx.reducerDispatcher('markPlayerBusted', pid)
+        ctx.reducerDispatcher('bjcRemovePlayer', pid)
+      }
+
+      ctx.reducerDispatcher('bjcSetAllAntesPlaced', true)
+    }
+
     return ctx.getState()
   },
   endIf: (ctx: any) => {
@@ -52,8 +90,69 @@ export const bjcDealInitialPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: async (ctx: any) => {
-    await ctx.thunkDispatcher('bjcDealInitial')
+  onBegin: (ctx: any) => {
+    // Inlined from bjcDealInitial thunk — thunkDispatcher fails in onBegin (Learning 009)
+    const state: CasinoGameState = ctx.getState()
+    const bjc = state.blackjackCompetitive
+    if (!bjc) return ctx.getState()
+
+    const sessionId: string = ctx.session.sessionId
+    const serverState = getServerGameState(sessionId)
+
+    // Ensure shoe exists
+    if (!serverState.blackjackCompetitive?.shoe || serverState.blackjackCompetitive.shoe.length === 0) {
+      const shoe = shuffleShoe(createShoe(6))
+      serverState.blackjackCompetitive = {
+        ...(serverState.blackjackCompetitive ?? { playerHoleCards: new Map() }),
+        shoe,
+      }
+      setServerGameState(sessionId, serverState)
+    }
+    const shoe = serverState.blackjackCompetitive!.shoe
+
+    // Deal round-robin: one card to each player, repeat
+    const playerCards = new Map<string, Card[]>()
+    for (const ps of bjc.playerStates) {
+      playerCards.set(ps.playerId, [])
+    }
+
+    for (let round = 0; round < 2; round++) {
+      for (const ps of bjc.playerStates) {
+        const card = shoe.shift()!
+        playerCards.get(ps.playerId)!.push(card)
+      }
+    }
+
+    // Persist shoe state
+    serverState.blackjackCompetitive = {
+      shoe,
+      playerHoleCards: new Map(),
+    }
+    setServerGameState(sessionId, serverState)
+
+    // Dispatch player hands
+    for (const ps of bjc.playerStates) {
+      const cards = playerCards.get(ps.playerId)!
+      const handValue = evaluateBlackjackHand(cards)
+      const isBj = isNaturalBlackjack(cards)
+      ctx.reducerDispatcher(
+        'bjcSetPlayerCards',
+        ps.playerId,
+        cards,
+        handValue.value,
+        handValue.isSoft,
+        isBj,
+      )
+    }
+
+    // Update shoe penetration
+    const totalCards = 6 * 52
+    const penetration = calculatePenetration(shoe.length, totalCards) * 100
+    ctx.reducerDispatcher('bjcSetShoePenetration', penetration)
+
+    ctx.reducerDispatcher('bjcSetDealComplete', true)
+    ctx.reducerDispatcher('setDealerMessage', 'Cards dealt! Good luck!')
+
     return ctx.getState()
   },
   endIf: (ctx: any) => {
@@ -108,6 +207,32 @@ export const bjcPlayerTurnsPhase = {
         ctx.reducerDispatcher('bjcSetPlayerTurnsComplete', true)
       } else {
         ctx.reducerDispatcher('setDealerMessage', 'Your turn!')
+
+        // Auto-stand bots — use reducers directly (dispatchThunk unreliable in onBegin, learning 009)
+        // Loop: keep auto-standing while the current turn player is a bot
+        let loopState: CasinoGameState = ctx.getState()
+        while (loopState.blackjackCompetitive) {
+          const bjcLoop = loopState.blackjackCompetitive
+          if (bjcLoop.currentTurnIndex >= bjcLoop.turnOrder.length) break
+          const currentPlayerId = bjcLoop.turnOrder[bjcLoop.currentTurnIndex]
+          const currentPlayer = loopState.players.find((p: any) => p.id === currentPlayerId)
+          if (!currentPlayer?.isBot) break
+          const ps = bjcLoop.playerStates.find((p: any) => p.playerId === currentPlayerId)
+          if (ps && !ps.hand.stood && !ps.hand.busted) {
+            ctx.reducerDispatcher('bjcStandHand', currentPlayerId)
+            ctx.reducerDispatcher('bjcAdvanceTurn')
+          } else {
+            break
+          }
+          loopState = ctx.getState()
+        }
+
+        // Check if all turns complete after bot auto-stands
+        const afterBots: CasinoGameState = ctx.getState()
+        const bjcAfterBots = afterBots.blackjackCompetitive
+        if (bjcAfterBots && bjcAfterBots.currentTurnIndex >= bjcAfterBots.turnOrder.length) {
+          ctx.reducerDispatcher('bjcSetPlayerTurnsComplete', true)
+        }
       }
     }
 
@@ -115,7 +240,10 @@ export const bjcPlayerTurnsPhase = {
   },
   endIf: (ctx: any) => {
     const state: CasinoGameState = ctx.session.state
-    return state.blackjackCompetitive?.playerTurnsComplete === true
+    const bjc = state.blackjackCompetitive
+    if (!bjc) return false
+    return bjc.playerTurnsComplete === true ||
+      bjc.playerStates.every((ps: any) => ps.hand.stood || ps.hand.busted)
   },
   next: CasinoPhase.BjcShowdown,
 }
@@ -127,8 +255,10 @@ export const bjcShowdownPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: async (ctx: any) => {
-    await ctx.thunkDispatcher('bjcShowdown')
+  onBegin: (ctx: any) => {
+    // Inlined from bjcShowdown thunk — thunkDispatcher fails in onBegin (Learning 009)
+    ctx.reducerDispatcher('bjcSetShowdownComplete', true)
+    ctx.reducerDispatcher('setDealerMessage', 'Showdown!')
     return ctx.getState()
   },
   endIf: (ctx: any) => {
@@ -145,8 +275,30 @@ export const bjcSettlementPhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: async (ctx: any) => {
-    await ctx.thunkDispatcher('bjcSettleBets')
+  onBegin: (ctx: any) => {
+    // Inlined from bjcSettleBets thunk — thunkDispatcher fails in onBegin (Learning 009)
+    const state: CasinoGameState = ctx.getState()
+    const bjc = state.blackjackCompetitive
+    if (!bjc) return ctx.getState()
+
+    const { winnerIds, message } = determineWinners(
+      bjc.playerStates,
+      bjc.turnOrder,
+    )
+
+    if (winnerIds.length > 0) {
+      const share = Math.floor(bjc.pot / winnerIds.length)
+      const remainder = bjc.pot - share * winnerIds.length
+
+      for (let i = 0; i < winnerIds.length; i++) {
+        const payout = share + (i === 0 ? remainder : 0)
+        ctx.reducerDispatcher('updateWallet', winnerIds[i]!, payout)
+      }
+    }
+
+    ctx.reducerDispatcher('bjcSetSettlementResult', winnerIds, message)
+    ctx.reducerDispatcher('setDealerMessage', message)
+
     return ctx.getState()
   },
   endIf: (ctx: any) => {
@@ -163,9 +315,33 @@ export const bjcHandCompletePhase = {
   actions: {} as Record<string, never>,
   reducers: {},
   thunks: {},
-  onBegin: async (ctx: any) => {
+  onBegin: (ctx: any) => {
     incrementGameNightRoundIfActive(ctx)
-    await ctx.thunkDispatcher('bjcCompleteRound')
+
+    // Inlined from bjcCompleteRound thunk — thunkDispatcher fails in onBegin (Learning 009)
+    const state: CasinoGameState = ctx.getState()
+    const bjc = state.blackjackCompetitive
+    if (bjc) {
+      const sessionId: string = ctx.session.sessionId
+      const serverState = getServerGameState(sessionId)
+      const shoe = serverState.blackjackCompetitive?.shoe
+
+      if (shoe) {
+        const totalCards = 6 * 52
+        if (needsReshuffle(shoe.length, totalCards)) {
+          const newShoe = shuffleShoe(createShoe(6))
+          serverState.blackjackCompetitive = {
+            shoe: newShoe,
+            playerHoleCards: new Map(),
+          }
+          setServerGameState(sessionId, serverState)
+          ctx.reducerDispatcher('setDealerMessage', 'Shuffling the shoe...')
+        }
+      }
+    }
+
+    ctx.reducerDispatcher('bjcSetRoundCompleteReady', true)
+
     return ctx.getState()
   },
   endIf: (ctx: any) => {

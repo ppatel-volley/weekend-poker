@@ -3,6 +3,7 @@ import type { PlayerAction, PokerGameState } from '@weekend-casino/shared'
 import { CasinoPhase, BETTING_PHASES, getPhaseLabel } from '@weekend-casino/shared'
 import { useDispatchThunk, useSessionMember, useStateSync } from '../hooks/useVGFHooks.js'
 import { usePrivateHoleCards } from '../hooks/usePrivateHoleCards.js'
+import { Hand3D } from './3d/Hand3D.js'
 
 /**
  * Main gameplay controller screen.
@@ -109,40 +110,14 @@ export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
       )}
 
       {/* Hole cards */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '12px',
-          marginBottom: '24px',
-          flex: 1,
-          alignItems: 'center',
-        }}
-      >
+      <div style={{ marginBottom: '24px', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {myCards ? (
-          <>
-            <div style={holeCardStyle}>
-              <span style={{ fontSize: '28px', color: suitColour(myCards[0].suit) }}>
-                {myCards[0].rank}
-              </span>
-              <span style={{ fontSize: '20px', color: suitColour(myCards[0].suit) }}>
-                {suitSymbol(myCards[0].suit)}
-              </span>
-            </div>
-            <div style={holeCardStyle}>
-              <span style={{ fontSize: '28px', color: suitColour(myCards[1].suit) }}>
-                {myCards[1].rank}
-              </span>
-              <span style={{ fontSize: '20px', color: suitColour(myCards[1].suit) }}>
-                {suitSymbol(myCards[1].suit)}
-              </span>
-            </div>
-          </>
+          <Hand3D cards={[myCards[0], myCards[1]]} height={160} />
         ) : (
-          <>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
             <div style={holeCardStyle}>?</div>
             <div style={holeCardStyle}>?</div>
-          </>
+          </div>
         )}
       </div>
 

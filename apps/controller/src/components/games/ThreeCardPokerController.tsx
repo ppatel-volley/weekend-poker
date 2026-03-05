@@ -10,6 +10,7 @@
 
 import { useState } from 'react'
 import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
+import { Hand3D } from '../3d/Hand3D.js'
 import type { ThreeCardPokerGameState, Card } from '@weekend-casino/shared'
 
 const ANTE_AMOUNTS = [10, 25, 50, 100, 250, 500]
@@ -20,7 +21,7 @@ function CardDisplay({ card }: { card: Card }) {
     spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663',
   }
   const suitColours: Record<string, string> = {
-    spades: '#ecf0f1', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#ecf0f1',
+    spades: '#1a1a2e', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#1a1a2e',
   }
   return (
     <div style={{
@@ -187,11 +188,7 @@ function DecisionView({
     <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '18px' }}>YOUR HAND</div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-        {myHand.cards.map((card, i) => (
-          <CardDisplay key={i} card={card} />
-        ))}
-      </div>
+      <Hand3D cards={myHand.cards} height={140} />
 
       <div style={{ textAlign: 'center', color: '#aaa' }}>
         Ante: ${myHand.anteBet}
@@ -256,11 +253,7 @@ function ResultsView({
       {tcp.dealerRevealed && (
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>DEALER</div>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
-            {tcp.dealerHand.cards.map((card, i) => (
-              <CardDisplay key={i} card={card as Card} />
-            ))}
-          </div>
+          <Hand3D cards={tcp.dealerHand.cards as Card[]} height={100} />
           <div style={{
             marginTop: '8px',
             padding: '8px',
@@ -279,11 +272,7 @@ function ResultsView({
       {/* Player hand */}
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>YOUR HAND</div>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
-          {myHand.cards.map((card, i) => (
-            <CardDisplay key={i} card={card} />
-          ))}
-        </div>
+        <Hand3D cards={myHand.cards} height={100} />
       </div>
 
       {/* Result */}

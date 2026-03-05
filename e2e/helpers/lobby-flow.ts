@@ -29,18 +29,21 @@ export async function startGame(
   await expect(nameInput).toBeVisible({ timeout: 10_000 })
   await nameInput.fill(playerName)
 
-  // Select game
-  const gameButton = controllerPage.getByRole('button', { name: label })
-  await expect(gameButton).toBeVisible({ timeout: 5_000 })
-  await gameButton.click()
+  // Select game — use getByText with exact match then click parent button,
+  // because getByRole('button', { name: 'Blackjack' }) matches both
+  // "Blackjack" and "Competitive Blackjack" (strict mode violation).
+  const gameLabel = controllerPage.getByText(label, { exact: true })
+  await expect(gameLabel).toBeVisible({ timeout: 5_000 })
+  await gameLabel.click()
 
   // Click READY
   const readyButton = controllerPage.getByRole('button', { name: /^READY$/i })
   await expect(readyButton).toBeVisible()
   await readyButton.click()
 
-  // Wait for START button to appear and click it
-  const startButton = controllerPage.getByRole('button', { name: new RegExp(`START.*${label}`, 'i') })
+  // Wait for START button to appear and click it.
+  // Use getByText to find the exact "START {LABEL}" text.
+  const startButton = controllerPage.getByRole('button', { name: new RegExp(`^START ${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })
   await expect(startButton).toBeVisible({ timeout: 10_000 })
   await startButton.click()
 

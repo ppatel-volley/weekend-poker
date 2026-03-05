@@ -46,6 +46,15 @@ export const roulettePlaceBetsPhase = {
     const roundNumber = (state.roulette?.roundNumber ?? 0) + 1
     adapted.dispatch('rouletteInitRound', activePlayers, roundNumber)
     adapted.dispatch('setDealerMessage', 'Place your bets!')
+
+    // Auto-confirm bots' bets so the phase can advance when human players confirm.
+    // Bots have no controller UI so they'd otherwise hang the betting phase forever.
+    const updatedState = adapted.getState()
+    const botPlayers = updatedState.players.filter((p: any) => p.isBot)
+    for (const bot of botPlayers) {
+      adapted.dispatch('rouletteConfirmBets', bot.id)
+    }
+
     return adapted.getState()
   },
   endIf: (ctx: any) => {
@@ -86,6 +95,15 @@ export const rouletteSpinPhase = {
   onBegin: async (ctx: any) => {
     const adapted = adaptPhaseCtx(ctx)
     await adapted.dispatchThunk('rouletteSpinWheel')
+
+    // Auto-complete spin after the thunk runs. The display client can
+    // call rouletteCompleteSpinFromClient earlier if animation finishes
+    // before this, but in headless/E2E mode there's no display animation.
+    // The rouletteSpinWheel thunk schedules an 8s fallback via setTimeout,
+    // but VGF phase context is stale by then so ctx.dispatch fails.
+    // Setting spinComplete here ensures the phase always advances.
+    adapted.dispatch('rouletteSetSpinComplete', true)
+
     return adapted.getState()
   },
   endIf: (ctx: any) => {
