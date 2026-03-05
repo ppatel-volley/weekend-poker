@@ -250,21 +250,21 @@ export async function playDrawRound(page: Page): Promise<void> {
 export async function playCurrentGameRound(page: Page): Promise<void> {
   const heading = page.getByTestId('game-heading')
   await expect(heading).toBeVisible({ timeout: 30_000 })
-  const text = (await heading.textContent()) ?? ''
+  const text = ((await heading.textContent()) ?? '').toLowerCase()
 
-  if (text.includes("Hold'em")) {
+  if (text.includes("hold'em")) {
     await playHoldemRound(page)
-  } else if (text.includes('5-Card Draw')) {
+  } else if (text.includes('5-card draw')) {
     await playDrawRound(page)
-  } else if (text.includes('Blackjack Arena') || text.includes('Competitive')) {
+  } else if (text.includes('blackjack arena') || text.includes('competitive')) {
     await playBjcRound(page)
-  } else if (text.includes('Blackjack')) {
+  } else if (text.includes('blackjack')) {
     await playBlackjackRound(page)
-  } else if (text.includes('Three Card')) {
+  } else if (text.includes('three card')) {
     await playTcpRound(page)
-  } else if (text.includes('Roulette')) {
+  } else if (text.includes('roulette')) {
     await playRouletteRound(page)
-  } else if (text.includes('Craps')) {
+  } else if (text.includes('craps')) {
     await playCrapsRound(page)
   } else {
     throw new Error(`Unknown game heading: "${text}"`)

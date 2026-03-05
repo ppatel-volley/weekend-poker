@@ -1,4 +1,4 @@
-import { useStateSync } from '../../hooks/useVGFHooks.js'
+import { useStateSync, useDispatch } from '../../hooks/useVGFHooks.js'
 import { CASINO_GAME_LABELS } from '@weekend-casino/shared'
 import type { CasinoGame } from '@weekend-casino/shared'
 
@@ -20,6 +20,7 @@ interface GameResult {
  */
 export function GameNightLeaderboardController() {
   const state = useStateSync()
+  const dispatch = useDispatch()
   const gn = state?.gameNight as {
     playerScores?: Record<string, PlayerScore>
     gameLineup?: CasinoGame[]
@@ -202,6 +203,31 @@ export function GameNightLeaderboardController() {
           </p>
         </div>
       )}
+
+      {/* Continue button — dispatches gnSetLeaderboardReady to advance the phase.
+          The server-side setTimeout fallback may not fire (VGF context stale, Learning 008),
+          so this button is the primary advancement mechanism. */}
+      <button
+        data-testid="gn-continue"
+        onClick={() => {
+          ;(dispatch as (name: string, ...args: unknown[]) => void)('gnSetLeaderboardReady')
+        }}
+        style={{
+          width: '100%',
+          padding: '16px',
+          fontSize: '16px',
+          fontWeight: 700,
+          borderRadius: '12px',
+          border: '1px solid rgba(212, 175, 55, 0.3)',
+          background: 'linear-gradient(145deg, rgba(212, 175, 55, 0.15) 0%, rgba(212, 175, 55, 0.05) 100%)',
+          color: '#f5d680',
+          cursor: 'pointer',
+          fontFamily: 'system-ui, sans-serif',
+          marginTop: '12px',
+        }}
+      >
+        {nextGame ? 'CONTINUE' : 'VIEW RESULTS'}
+      </button>
     </div>
   )
 }
