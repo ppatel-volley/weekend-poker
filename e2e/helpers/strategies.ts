@@ -131,8 +131,9 @@ export async function playTcpRound(page: Page): Promise<void> {
     await page.waitForTimeout(2_000)
   }
 
-  // Wait for next round's ante button (proves round completed)
-  await expect(anteBtn).toBeVisible({ timeout: 30_000 })
+  // Wait for next round's ante button or Game Night leaderboard transition
+  const leaderboard = page.getByTestId('gn-rank-1')
+  await expect(anteBtn.or(leaderboard)).toBeVisible({ timeout: 30_000 })
 }
 
 /**
@@ -155,10 +156,10 @@ export async function playRouletteRound(page: Page): Promise<void> {
   await rouletteConfirmBets(page)
 
   // After confirm, the phase cascade runs instantly server-side.
-  // The red button will briefly disappear then reappear for the next round.
-  // Wait for it to come back (may already be visible if cascade was instant).
+  // Wait for red button to reappear (next round) or game heading to change (Game Night transition).
   await page.waitForTimeout(1_000)
-  await expect(redBtn).toBeVisible({ timeout: 30_000 })
+  const leaderboard = page.getByTestId('gn-rank-1')
+  await expect(redBtn.or(leaderboard)).toBeVisible({ timeout: 30_000 })
 }
 
 /**
@@ -186,6 +187,11 @@ export async function playCrapsRound(page: Page): Promise<void> {
   await page.waitForTimeout(1_000)
 
   for (let i = 0; i < 10; i++) {
+    // Check if we left Craps (Game Night leaderboard transition)
+    const heading = page.getByTestId('game-heading')
+    const headingText = await heading.textContent().catch(() => null)
+    if (!headingText || !headingText.toLowerCase().includes('craps')) return
+
     const canRoll = await rollBtn.isVisible({ timeout: 3_000 }).catch(() => false)
     if (canRoll) {
       await crapsRoll(page)

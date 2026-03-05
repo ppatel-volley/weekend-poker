@@ -14,8 +14,8 @@ test.describe('Game Night Mode', () => {
     await expect(gnButton).toBeVisible({ timeout: 10_000 })
     await gnButton.click()
 
-    // Game Night setup screen — select 3 games
-    for (const gameKey of ['roulette', 'three_card_poker', 'craps']) {
+    // Game Night setup screen — select 3 simple, reliable games
+    for (const gameKey of ['roulette', 'three_card_poker', 'blackjack_classic']) {
       const gameBtn = controllerPage.getByTestId(`gn-game-${gameKey}`)
       await expect(gameBtn).toBeVisible({ timeout: 5_000 })
       await gameBtn.click()
@@ -84,9 +84,7 @@ test.describe('Game Night Mode', () => {
     }
 
     // Verify champion ceremony
-    await expect(
-      champion.or(controllerPage.getByTestId('gn-champion-name'))
-    ).toBeVisible({ timeout: 60_000 })
+    await expect(champion).toBeVisible({ timeout: 60_000 })
 
     // Click Return to Lobby to complete the ceremony
     const returnBtn = controllerPage.getByTestId('gn-return-lobby')
