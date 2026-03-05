@@ -33,6 +33,58 @@ type ThunkCtx = {
   logger?: any
 }
 
+/**
+ * Inline check-advance logic using only ctx.dispatch (no sub-thunks).
+ * VGF's StateSyncSessionHandler may not properly evaluate endIf after
+ * sub-thunk dispatches, so we inline the logic as direct reducer calls.
+ */
+function inlineCheckAdvance(ctx: ThunkCtx, playerId: string): void {
+  const state = ctx.getState()
+  const bj = state.blackjack
+  if (!bj) return
+
+  const ps = bj.playerStates.find(p => p.playerId === playerId)
+  if (!ps) return
+
+  // Check if current player has more hands to play (splits)
+  const nextHandIndex = ps.activeHandIndex + 1
+  if (nextHandIndex < ps.hands.length) {
+    const nextHand = ps.hands[nextHandIndex]
+    if (nextHand && !nextHand.stood && !nextHand.busted) {
+      ctx.dispatch('bjAdvanceHand', playerId)
+      return
+    }
+  }
+
+  // All hands for this player done — advance turn
+  ctx.dispatch('bjAdvanceTurn')
+
+  // Auto-stand consecutive bots after the advance
+  let updated = ctx.getState()
+  while (updated.blackjack) {
+    const bjU = updated.blackjack
+    if (bjU.currentTurnIndex >= bjU.turnOrder.length) break
+    const nextPlayerId = bjU.turnOrder[bjU.currentTurnIndex]
+    const nextPlayer = updated.players.find((p: any) => p.id === nextPlayerId)
+    if (!nextPlayer?.isBot) break
+    const nextPs = bjU.playerStates.find((p: any) => p.playerId === nextPlayerId)
+    if (nextPs && !nextPs.hands[0]?.stood && !nextPs.hands[0]?.busted) {
+      ctx.dispatch('bjStandHand', nextPlayerId)
+      ctx.dispatch('bjAdvanceTurn')
+    } else {
+      break
+    }
+    updated = ctx.getState()
+  }
+
+  // Check if all turns complete
+  const finalState = ctx.getState()
+  const bjFinal = finalState.blackjack!
+  if (bjFinal.currentTurnIndex >= bjFinal.turnOrder.length) {
+    ctx.dispatch('bjSetPlayerTurnsComplete', true)
+  }
+}
+
 /** Ensures a shoe exists in server state, creating one if needed. */
 function ensureShoe(sessionId: string, numberOfDecks: number): Card[] {
   const serverState = getServerGameState(sessionId)
@@ -247,7 +299,7 @@ export const bjThunks = {
 
     // If busted or 21, auto-advance
     if (handValue.isBusted || handValue.value === 21) {
-      await ctx.dispatchThunk('bjCheckAdvance', playerId)
+      inlineCheckAdvance(ctx, playerId)
     }
   },
 
@@ -260,7 +312,7 @@ export const bjThunks = {
     if (!playerId) return
 
     ctx.dispatch('bjStandHand', playerId)
-    await ctx.dispatchThunk('bjCheckAdvance', playerId)
+    inlineCheckAdvance(ctx, playerId)
   },
 
   /**
@@ -310,7 +362,7 @@ export const bjThunks = {
       handValue.isBusted,
     )
 
-    await ctx.dispatchThunk('bjCheckAdvance', playerId)
+    inlineCheckAdvance(ctx, playerId)
   },
 
   /**
@@ -375,7 +427,7 @@ export const bjThunks = {
       // Advance to second hand
       ctx.dispatch('bjAdvanceHand', playerId)
       ctx.dispatch('bjStandHand', playerId)
-      await ctx.dispatchThunk('bjCheckAdvance', playerId)
+      inlineCheckAdvance(ctx, playerId)
     }
   },
 
@@ -397,7 +449,7 @@ export const bjThunks = {
     if (!activeHand || activeHand.cards.length !== 2) return
 
     ctx.dispatch('bjSurrender', playerId)
-    await ctx.dispatchThunk('bjCheckAdvance', playerId)
+    inlineCheckAdvance(ctx, playerId)
   },
 
   /**

@@ -227,15 +227,54 @@ export const drawEvaluateAndDistribute = async (ctx: ThunkCtx): Promise<void> =>
 // ── Helper ────────────────────────────────────────────────────────
 
 function drawAdvanceToNextPlayer(ctx: ThunkCtx): void {
-  const state = ctx.getState()
-  const drawState = state.fiveCardDraw
+  let state = ctx.getState()
+  let drawState = state.fiveCardDraw
   if (!drawState) return
 
-  const bettingState = asBettingState(state)
-  if (!isBettingRoundComplete(bettingState as any) && !isOnlyOnePlayerRemaining(bettingState as any)) {
-    const nextIdx = nextActivePlayer(state.players, drawState.activePlayerIndex)
-    if (nextIdx !== -1) {
-      ctx.dispatch('drawSetActivePlayer', nextIdx)
+  let bettingState = asBettingState(state)
+  if (isBettingRoundComplete(bettingState as any) || isOnlyOnePlayerRemaining(bettingState as any)) return
+
+  const nextIdx = nextActivePlayer(state.players, drawState.activePlayerIndex)
+  if (nextIdx === -1) return
+  ctx.dispatch('drawSetActivePlayer', nextIdx)
+
+  // Auto-play consecutive bots after advancing
+  state = ctx.getState()
+  drawState = state.fiveCardDraw!
+  bettingState = asBettingState(state)
+
+  while (!isBettingRoundComplete(bettingState as any) && !isOnlyOnePlayerRemaining(bettingState as any)) {
+    const activePlayer = state.players[drawState.activePlayerIndex]
+    if (!activePlayer?.isBot) break
+
+    // Bot strategy: check if possible, else call
+    const legalActions = getLegalActions(bettingState as any, activePlayer.id)
+    if (legalActions.length === 0) break
+
+    let botAction = 'fold'
+    if (legalActions.includes('check')) {
+      botAction = 'check'
+    } else if (legalActions.includes('call')) {
+      botAction = 'call'
+      ctx.dispatch('drawUpdatePlayerBet', activePlayer.id, drawState.currentBet)
     }
+    ctx.dispatch('setPlayerLastAction', activePlayer.id, botAction)
+    if (botAction === 'fold') {
+      ctx.dispatch('drawFoldPlayer', activePlayer.id)
+    }
+
+    // Advance to next
+    state = ctx.getState()
+    drawState = state.fiveCardDraw!
+    bettingState = asBettingState(state)
+    if (isBettingRoundComplete(bettingState as any) || isOnlyOnePlayerRemaining(bettingState as any)) break
+
+    const botNextIdx = nextActivePlayer(state.players, drawState.activePlayerIndex)
+    if (botNextIdx === -1) break
+    ctx.dispatch('drawSetActivePlayer', botNextIdx)
+
+    state = ctx.getState()
+    drawState = state.fiveCardDraw!
+    bettingState = asBettingState(state)
   }
 }

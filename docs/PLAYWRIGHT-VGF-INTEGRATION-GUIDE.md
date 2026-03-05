@@ -194,6 +194,59 @@ setTimeout(() => ctx.dispatch('setComplete', true), 8000) // silently fails
 ctx.reducerDispatcher('setComplete', true)
 ```
 
+### 9. Sub-Thunk Dispatch Breaks Phase Transitions
+
+**Problem**: VGF 4.8.0's `StateSyncSessionHandler` creates custom dispatch pipelines for client-dispatched thunks. When a thunk calls `ctx.dispatchThunk('subThunk', ...)`, the sub-thunk may complete but the phase runner's `checkEndPhaseAfterStateUpdate` doesn't properly detect the state changes. Phase transitions that should cascade (via `endIf` returning true) never fire.
+
+**Root cause**: The `StateSyncSessionHandler.handleThunkMessage` uses a local `reducerDispatcher` that calls `processReducerSync` (not `VGFServer.dispatchReducer`). Reducer dispatches from within thunks bypass the `PhaseRunner.checkAndTransitionIfNeeded` guard. The phase transition check only runs once after the outermost thunk completes, but sub-thunk state changes may not be visible in the correct context.
+
+**Fix**: Never use `ctx.dispatchThunk()` within thunks. Inline the sub-thunk logic as a helper function using only `ctx.dispatch()`:
+```typescript
+// BAD — sub-thunk dispatch may prevent phase transitions
+bjStand: async (ctx, playerId) => {
+  ctx.dispatch('bjStandHand', playerId)
+  await ctx.dispatchThunk('bjCheckAdvance', playerId) // phase may never transition
+}
+
+// GOOD — inline all logic with ctx.dispatch()
+function inlineCheckAdvance(ctx, playerId) {
+  ctx.dispatch('bjAdvanceTurn')
+  const updated = ctx.getState()
+  if (updated.currentTurnIndex >= updated.turnOrder.length) {
+    ctx.dispatch('setPlayerTurnsComplete', true)
+  }
+}
+
+bjStand: async (ctx, playerId) => {
+  ctx.dispatch('bjStandHand', playerId)
+  inlineCheckAdvance(ctx, playerId) // uses only ctx.dispatch — phase transitions correctly
+}
+```
+
+### 10. Bots Must Auto-Act After Human Actions (Not Just in onBegin)
+
+**Problem**: Bot auto-play in `onBegin` only handles cases where the bot acts FIRST in the turn order. If the human acts first, after their action the turn advances to the bot, but nobody auto-acts for the bot. The game waits forever for bot input.
+
+**Fix**: When advancing to the next player after a human action, loop through consecutive bots and auto-act for each:
+```typescript
+function advanceToNextPlayer(ctx) {
+  ctx.dispatch('advanceTurn')
+
+  // Auto-play consecutive bots after advancing
+  let state = ctx.getState()
+  while (state.currentTurnIndex < state.turnOrder.length) {
+    const nextPlayer = state.players.find(p => p.id === state.turnOrder[state.currentTurnIndex])
+    if (!nextPlayer?.isBot) break
+    // Bot auto-acts (stand, check, call, etc.)
+    ctx.dispatch('autoAction', nextPlayer.id)
+    ctx.dispatch('advanceTurn')
+    state = ctx.getState()
+  }
+}
+```
+
+This pattern applies to any turn-based game where bots and humans share a turn order.
+
 ## Test Strategy Patterns
 
 ### Lobby Flow Helper
@@ -251,7 +304,10 @@ When adding E2E tests for a new VGF game:
 - [ ] Verify bots auto-act in every phase that waits for all players
 - [ ] Verify bot wallet is initialized in `addBotPlayer`
 - [ ] Phase `onBegin` uses `reducerDispatcher` not `thunkDispatcher` for bot actions
+- [ ] Bots auto-act BOTH in `onBegin` (when bot is first) AND in advance-to-next-player (when bot follows human)
+- [ ] Thunks use `ctx.dispatch()` only — NEVER `ctx.dispatchThunk()` for sub-thunks
 - [ ] Test strategy handles instant phase cascade (don't rely on brief result text)
+- [ ] Test strategy uses `data-testid` locators, not text that may not exist in the controller
 - [ ] Lobby flow uses exact text match for game selection
 - [ ] No `.or()` for co-visible elements (strict mode)
 - [ ] Timeouts appropriate: 30s per action, 120s per test

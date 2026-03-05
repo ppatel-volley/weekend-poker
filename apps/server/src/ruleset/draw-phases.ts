@@ -15,6 +15,7 @@ import {
   getBigBlindIndex,
   findFirstActivePlayerLeftOfButton,
   findFirstActivePlayerLeftOfBB,
+  nextActivePlayer,
 } from '../poker-engine/index.js'
 import { createDeck, shuffleDeck } from '../poker-engine/deck.js'
 import { getServerGameState, setServerGameState } from '../server-game-state.js'
@@ -71,6 +72,43 @@ function asBettingState(state: CasinoGameState) {
     currentBet: drawState.currentBet,
     minRaiseIncrement: drawState.minRaiseIncrement,
     activePlayerIndex: drawState.activePlayerIndex,
+  }
+}
+
+/**
+ * Auto-play bots in Draw betting phases.
+ * Bots check if possible, otherwise call. Uses reducers directly
+ * (thunks unreliable in onBegin — Learning 009).
+ */
+function drawAutoBotPlay(ctx: any): void {
+  let state: CasinoGameState = ctx.getState()
+  const draw = state.fiveCardDraw
+  if (!draw) return
+
+  let bettingState = asBettingState(state)
+  if (isBettingRoundComplete(bettingState as any) || isOnlyOnePlayerRemaining(bettingState as any)) return
+
+  const activePlayer = state.players[draw.activePlayerIndex]
+  if (!activePlayer?.isBot) return
+
+  // Bot strategy: check if possible, else call
+  const canCheck = activePlayer.bet >= draw.currentBet
+  if (canCheck) {
+    ctx.dispatch('setPlayerLastAction', activePlayer.id, 'check')
+  } else {
+    ctx.dispatch('drawUpdatePlayerBet', activePlayer.id, draw.currentBet)
+    ctx.dispatch('setPlayerLastAction', activePlayer.id, 'call')
+  }
+
+  // Advance to next player
+  state = ctx.getState()
+  bettingState = asBettingState(state)
+  if (!isBettingRoundComplete(bettingState as any) && !isOnlyOnePlayerRemaining(bettingState as any)) {
+    const nextIdx = nextActivePlayer(state.players as any, state.fiveCardDraw!.activePlayerIndex)
+    if (nextIdx !== -1) {
+      ctx.dispatch('drawSetActivePlayer', nextIdx)
+      drawAutoBotPlay(ctx) // Recursion for next bot
+    }
   }
 }
 
@@ -179,6 +217,8 @@ export const drawBetting1Phase = makePhase({
     const firstToAct = findFirstActivePlayerLeftOfBB(state.players, state.dealerIndex)
     ctx.dispatch('drawSetActivePlayer', firstToAct)
     ctx.dispatch('drawSetCurrentBet', state.blindLevel.bigBlind)
+    // Auto-play bots at phase start (Learning 009: use reducers, not thunks)
+    drawAutoBotPlay(ctx)
     return ctx.getState()
   },
   onEnd: (ctx: any) => {
@@ -203,9 +243,14 @@ export const drawBetting1Phase = makePhase({
  */
 export const drawDrawPhasePhase = makePhase({
   onBegin: (ctx: any) => {
-    // Reset discard state for new draw
-    // Players with 'active' or 'all_in' status participate
-    // Stand pat (discard 0) is the default — players must confirm
+    // Auto-confirm discards for bots (keep all cards)
+    const state: CasinoGameState = ctx.getState()
+    const botPlayers = state.players.filter(
+      (p: any) => p.isBot && (p.status === 'active' || p.status === 'all_in'),
+    )
+    for (const bot of botPlayers) {
+      ctx.dispatch('drawConfirmDiscard', bot.id)
+    }
     return ctx.getState()
   },
   onEnd: async (ctx: any) => {
@@ -246,6 +291,8 @@ export const drawBetting2Phase = makePhase({
         ctx.dispatch('setPlayerLastAction', player.id, null)
       }
     }
+    // Auto-play bots at phase start (Learning 009: use reducers, not thunks)
+    drawAutoBotPlay(ctx)
     return ctx.getState()
   },
   onEnd: (ctx: any) => {

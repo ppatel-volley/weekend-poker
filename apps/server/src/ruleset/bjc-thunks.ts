@@ -32,6 +32,45 @@ type ThunkCtx = {
   logger?: any
 }
 
+/**
+ * Inline check-advance logic using only ctx.dispatch (no sub-thunks).
+ * VGF's StateSyncSessionHandler may not properly evaluate endIf after
+ * sub-thunk dispatches, so we inline the logic as direct reducer calls.
+ */
+function bjcInlineCheckAdvance(ctx: ThunkCtx): void {
+  const state = ctx.getState()
+  const bjc = state.blackjackCompetitive
+  if (!bjc) return
+
+  // Advance turn (BJC has no splits, so no hand advancement needed)
+  ctx.dispatch('bjcAdvanceTurn')
+
+  // Auto-stand consecutive bots after the advance
+  let updated = ctx.getState()
+  while (updated.blackjackCompetitive) {
+    const bjcU = updated.blackjackCompetitive
+    if (bjcU.currentTurnIndex >= bjcU.turnOrder.length) break
+    const nextPlayerId = bjcU.turnOrder[bjcU.currentTurnIndex]
+    const nextPlayer = updated.players.find((p: any) => p.id === nextPlayerId)
+    if (!nextPlayer?.isBot) break
+    const nextPs = bjcU.playerStates.find((p: any) => p.playerId === nextPlayerId)
+    if (nextPs && !nextPs.hand.stood && !nextPs.hand.busted) {
+      ctx.dispatch('bjcStandHand', nextPlayerId)
+      ctx.dispatch('bjcAdvanceTurn')
+    } else {
+      break
+    }
+    updated = ctx.getState()
+  }
+
+  // Check if all turns complete
+  const finalState = ctx.getState()
+  const bjcFinal = finalState.blackjackCompetitive!
+  if (bjcFinal.currentTurnIndex >= bjcFinal.turnOrder.length) {
+    ctx.dispatch('bjcSetPlayerTurnsComplete', true)
+  }
+}
+
 /** Ensures a shoe exists in server state for competitive mode. */
 function ensureBjcShoe(sessionId: string, numberOfDecks: number = 6): Card[] {
   const serverState = getServerGameState(sessionId)
@@ -236,7 +275,7 @@ export const bjcThunks = {
 
     // If busted or 21, auto-advance
     if (handValue.isBusted || handValue.value === 21) {
-      await ctx.dispatchThunk('bjcCheckAdvance', playerId)
+      bjcInlineCheckAdvance(ctx)
     }
   },
 
@@ -249,7 +288,7 @@ export const bjcThunks = {
     if (!playerId) return
 
     ctx.dispatch('bjcStandHand', playerId)
-    await ctx.dispatchThunk('bjcCheckAdvance', playerId)
+    bjcInlineCheckAdvance(ctx)
   },
 
   /**
@@ -299,7 +338,7 @@ export const bjcThunks = {
       handValue.isBusted,
     )
 
-    await ctx.dispatchThunk('bjcCheckAdvance', playerId)
+    bjcInlineCheckAdvance(ctx)
   },
 
   /**

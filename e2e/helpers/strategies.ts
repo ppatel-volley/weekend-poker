@@ -1,5 +1,5 @@
 import { type Page, expect } from '@playwright/test'
-import { holdemCallOrCheck, bjPlaceBet, bjStand, bjcStand, tcpPlaceAnte, tcpPlay, rouletteBetRed, rouletteConfirmBets, crapsPassLine, crapsConfirmBets, crapsRoll, drawCallOrCheck, drawKeepAll } from './game-actions'
+import { holdemCallOrCheck, bjPlaceBet, bjStand, bjDeclineInsurance, bjcStand, tcpPlaceAnte, tcpPlay, rouletteBetRed, rouletteConfirmBets, crapsPassLine, crapsConfirmBets, crapsRoll, drawCallOrCheck, drawKeepAll } from './game-actions'
 
 /**
  * Play one round of Hold'em: always call/check through all betting rounds.
@@ -26,65 +26,82 @@ export async function playHoldemRound(page: Page): Promise<void> {
 }
 
 /**
- * Play one round of Blackjack Classic: place min bet, then stand immediately.
- * After bet, phases cascade: deal -> player turns (bot may auto-stand first).
- * Detect round completion by watching for place-bet-btn to reappear for the next round.
+ * Play one round of Blackjack Classic: place min bet, handle insurance, then stand.
+ * Phases: BJ_PLACE_BETS → BJ_DEAL_INITIAL → BJ_INSURANCE → BJ_PLAYER_TURNS
+ *       → BJ_DEALER_TURN → BJ_SETTLEMENT → BJ_HAND_COMPLETE → loop
+ *
+ * With bot auto-play in onBegin, the entire round may cascade instantly
+ * (e.g. natural blackjack or all players auto-acted). Handle both cases:
+ * instant cascade and interactive play.
  */
 export async function playBlackjackRound(page: Page): Promise<void> {
   const placeBetBtn = page.getByTestId('place-bet-btn')
   const standBtn = page.getByTestId('stand-btn')
-  const hitBtn = page.getByTestId('hit-btn')
+  const insuranceNo = page.getByRole('button', { name: 'NO' })
 
-  // Wait for any valid BJ state — betting, player turn, or result text
-  await expect(
-    placeBetBtn.or(standBtn).or(hitBtn)
-      .or(page.getByText('Waiting for round'))
-      .or(page.getByText(/Standing at/i))
-      .or(page.getByText(/Dealing cards/i))
-  ).toBeVisible({ timeout: 30_000 })
+  // Wait for betting phase
+  await expect(placeBetBtn).toBeVisible({ timeout: 30_000 })
+  await bjPlaceBet(page)
 
-  // Place bet if in betting phase
-  if (await placeBetBtn.isVisible().catch(() => false)) {
-    await bjPlaceBet(page)
-    await page.waitForTimeout(2_000)
+  // After bet, phases cascade. Poll for actionable state or round completion.
+  for (let i = 0; i < 30; i++) {
+    await page.waitForTimeout(500)
+
+    // Round already completed (instant cascade — natural BJ, all auto-acted)
+    if (await placeBetBtn.isVisible().catch(() => false)) return
+
+    // Insurance prompt — decline it
+    if (await insuranceNo.isVisible().catch(() => false)) {
+      await bjDeclineInsurance(page)
+      continue
+    }
+
+    // Player turns — stand
+    if (await standBtn.isVisible().catch(() => false)) {
+      await bjStand(page)
+      break
+    }
+
+    // Result/settlement text (WON/LOST/PUSH) — round finishing, wait for next
+    const bodyText = await page.evaluate(() => document.body.innerText).catch(() => '')
+    if (/WON \$|LOST \$|PUSH/i.test(bodyText)) break
   }
 
-  // Stand if we get to act (hit/stand buttons visible)
-  if (await standBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    await bjStand(page)
-    await page.waitForTimeout(2_000)
-  }
-
-  // Wait for next round — place-bet-btn reappears, or we see "Waiting for round"
-  // The round may complete instantly if bot auto-acts, so the place-bet-btn
-  // might already be visible or might take a moment.
-  await expect(placeBetBtn).toBeVisible({ timeout: 60_000 })
+  // Wait for next round
+  await expect(placeBetBtn).toBeVisible({ timeout: 30_000 })
 }
 
 /**
  * Play one round of Competitive Blackjack: auto-ante, then stand.
  * BJC has auto-ante. Bot auto-acts in onBegin so the entire round may cascade
- * instantly. Detect round completion by watching for the "Ante:" text to reappear.
+ * instantly. Detect round completion by watching for the ante display to reappear.
  */
 export async function playBjcRound(page: Page): Promise<void> {
   const standBtn = page.getByTestId('stand-btn')
   const anteDisplay = page.getByText(/Ante:/)
 
-  // BJC has auto-ante. Wait for any valid state
-  await expect(
-    standBtn.or(anteDisplay)
-      .or(page.getByText(/Standing at/i))
-      .or(page.getByText(/Your turn/i))
-      .or(page.getByText(/Waiting for/i))
-  ).toBeVisible({ timeout: 30_000 })
+  // BJC has auto-ante. Poll for actionable state or round completion.
+  for (let i = 0; i < 30; i++) {
+    await page.waitForTimeout(500)
 
-  if (await standBtn.isVisible().catch(() => false)) {
-    await bjcStand(page)
-    await page.waitForTimeout(1_000)
-    // Wait for next round's ante display
-    await expect(anteDisplay).toBeVisible({ timeout: 30_000 })
+    // Stand if it's our turn
+    if (await standBtn.isVisible().catch(() => false)) {
+      await bjcStand(page)
+      break
+    }
+
+    // If ante display visible with no stand button, round may have cascaded
+    if (await anteDisplay.isVisible().catch(() => false)) {
+      return // Next round started
+    }
+
+    // Result text visible — round finishing
+    const bodyText = await page.evaluate(() => document.body.innerText).catch(() => '')
+    if (/WON \$|LOST \$|WINNER/i.test(bodyText)) break
   }
-  // If anteDisplay is already visible, round completed via cascade
+
+  // Wait for next round
+  await expect(anteDisplay.or(standBtn)).toBeVisible({ timeout: 30_000 })
 }
 
 /**
@@ -189,31 +206,40 @@ export async function playCrapsRound(page: Page): Promise<void> {
 
 /**
  * Play one round of 5-Card Draw: call/check, keep all, call/check.
+ * With bot auto-play, phases may cascade instantly. The controller shows
+ * action buttons directly (no "Your turn!" text like Hold'em).
  */
 export async function playDrawRound(page: Page): Promise<void> {
-  const result = page.getByText(/YOUR HAND|Hand complete/i)
-
-  // Betting round 1
-  const myTurn1 = page.getByText('Your turn!')
+  const checkBtn = page.getByTestId('check-btn')
+  const callBtn = page.getByTestId('call-btn')
   const keepAll = page.getByTestId('keep-all-btn')
-  await expect(myTurn1.or(keepAll).or(result)).toBeVisible({ timeout: 30_000 })
+  const result = page.getByText(/YOUR HAND|Hand complete/i)
+  const posting = page.getByText(/Posting blinds|Dealing cards/i)
 
-  if (await myTurn1.isVisible().catch(() => false)) {
+  // Betting round 1 — wait for check/call buttons, discard phase, or result
+  await expect(
+    checkBtn.or(callBtn).or(keepAll).or(result).or(posting)
+  ).toBeVisible({ timeout: 30_000 })
+
+  if (await checkBtn.isVisible().catch(() => false) || await callBtn.isVisible().catch(() => false)) {
     await drawCallOrCheck(page)
     await page.waitForTimeout(1_000)
   }
 
-  // Discard phase
-  await expect(keepAll.or(result)).toBeVisible({ timeout: 30_000 })
-  if (await keepAll.isVisible().catch(() => false)) {
-    await drawKeepAll(page)
-    await page.waitForTimeout(1_000)
+  // Discard phase — keep all cards
+  for (let i = 0; i < 15; i++) {
+    await page.waitForTimeout(500)
+    if (await keepAll.isVisible().catch(() => false)) {
+      await drawKeepAll(page)
+      break
+    }
+    if (await result.isVisible().catch(() => false)) break // Round ended early (fold)
+    if (await checkBtn.isVisible().catch(() => false) || await callBtn.isVisible().catch(() => false)) break // Skipped to betting 2
   }
 
   // Betting round 2
-  const myTurn2 = page.getByText('Your turn!')
-  await expect(myTurn2.or(result)).toBeVisible({ timeout: 30_000 })
-  if (await myTurn2.isVisible().catch(() => false)) {
+  await page.waitForTimeout(500)
+  if (await checkBtn.isVisible().catch(() => false) || await callBtn.isVisible().catch(() => false)) {
     await drawCallOrCheck(page)
   }
 }
