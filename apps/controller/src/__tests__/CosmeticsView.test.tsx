@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 
-vi.mock('../hooks/useDeviceToken.js', () => ({
-  useDeviceToken: () => ({ deviceToken: 'test-token' }),
-}))
-
 vi.mock('@weekend-casino/shared', () => ({
   COSMETIC_DEFINITIONS: [
     { id: 'cb_classic_red', name: 'Classic Red', category: 'card_back', unlockedBy: 'first_hand_holdem', previewKey: 'card_back_classic_red' },

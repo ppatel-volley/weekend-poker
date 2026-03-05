@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { CosmeticCategory, OwnedCosmetics } from '@weekend-casino/shared'
 import { COSMETIC_DEFINITIONS } from '@weekend-casino/shared'
-import { useDeviceToken } from '../hooks/useDeviceToken.js'
+import { usePlatformDeviceId } from '../hooks/usePlatformDeviceId.js'
 
 const SERVER_URL =
   (import.meta.env['VITE_SERVER_URL'] as string | undefined) ??
@@ -14,7 +14,7 @@ const CATEGORIES: { key: CosmeticCategory; label: string }[] = [
 ]
 
 export function CosmeticsView() {
-  const { deviceToken } = useDeviceToken()
+  const deviceId = usePlatformDeviceId()
   const [cosmetics, setCosmetics] = useState<OwnedCosmetics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -25,8 +25,8 @@ export function CosmeticsView() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${SERVER_URL}/api/cosmetics/${encodeURIComponent(deviceToken)}`, {
-        headers: { 'x-device-token': deviceToken },
+      const res = await fetch(`${SERVER_URL}/api/cosmetics/${encodeURIComponent(deviceId)}`, {
+        headers: { 'x-device-token': deviceId },
       })
       if (!res.ok) throw new Error(`Failed to load cosmetics (${res.status})`)
       const data = (await res.json()) as OwnedCosmetics
@@ -36,7 +36,7 @@ export function CosmeticsView() {
     } finally {
       setLoading(false)
     }
-  }, [deviceToken])
+  }, [deviceId])
 
   useEffect(() => {
     void fetchCosmetics()
@@ -45,9 +45,9 @@ export function CosmeticsView() {
   const handleEquip = async (cosmeticId: string, category: CosmeticCategory) => {
     setEquipError(null)
     try {
-      const res = await fetch(`${SERVER_URL}/api/cosmetics/${encodeURIComponent(deviceToken)}/equip`, {
+      const res = await fetch(`${SERVER_URL}/api/cosmetics/${encodeURIComponent(deviceId)}/equip`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-device-token': deviceToken },
+        headers: { 'Content-Type': 'application/json', 'x-device-token': deviceId },
         body: JSON.stringify({ cosmeticId, category }),
       })
       if (res.ok) {
