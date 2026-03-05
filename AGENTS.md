@@ -1,5 +1,15 @@
 # AI Agent Guidelines
 
+> This codebase will outlive you. Every shortcut you take becomes
+> someone else's burden. Every hack compounds into technical debt
+> that slows the whole team down.
+>
+> You are not just writing code. You are shaping the future of this
+> project. The patterns you establish will be copied. The corners
+> you cut will be cut again.
+>
+> **Fight entropy. Leave the codebase better than you found it.**
+
 > **Template**: Reusable framework for configuring AI coding agents.
 > Customize [`AGENTS-PROJECT.md`](./AGENTS-PROJECT.md) for your project and swap [`AGENTS-REACT-TS.md`](./AGENTS-REACT-TS.md) for your tech stack.
 >
@@ -543,6 +553,13 @@ pnpm test -- --run  # Runtime behaviour — catches logic errors
 
 **Each agent's prompt MUST include all three verification commands**, not just `vitest run`. The lead agent must also re-run all three after merging.
 
+**Agent prompt requirements (learned from review failures):**
+- Every agent prompt MUST mandate running `pnpm typecheck && pnpm build && npx vitest run` before reporting completion
+- Test fixtures MUST use complete type-conformant objects — never skip required fields. Read the type definition first.
+- When an agent adds a reducer or modifies game logic, require a unit test that verifies the **economic invariants** (wallet deltas, pot totals, payout sums) — not just that "the round completes"
+- When an agent writes error-handling catch blocks, require the catch pattern to be as narrow as possible — match the specific error, never use broad patterns like `/not visible/i`
+- Edge-case tests are mandatory: empty wallet, empty shoe/deck, single player, all players busted
+
 ### File Edit Conflicts (Exponential Backoff — Fallback)
 
 When worktrees aren't viable and agents share a directory, or when agents must co-edit shared files (config, lock files, shared types), use this pattern. When you get a "File has been modified since read" error, retry with exponential backoff:
@@ -571,6 +588,16 @@ For **Standard** mode (recommended) and **Critical** mode (required):
 5. **Document Results** — Add review section to `tasks/todo.md`
 
 > Standard-mode tasks may skip task docs if the change is straightforward and well-understood. Critical-mode tasks must always have task docs.
+
+### Progress Tracking (MANDATORY)
+
+After completing each task, append to `progress.txt`:
+- Task completed and PRD item reference
+- Key decisions made and reasoning
+- Files changed
+- Any blockers or notes for next iteration
+
+Keep entries concise. Sacrifice grammar for the sake of concision. This file helps future iterations skip exploration.
 
 ### Self-Improvement Loop (after corrections on Standard/Critical tasks)
 
