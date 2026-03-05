@@ -87,11 +87,13 @@ function ensureBjcShoe(sessionId: string, numberOfDecks: number = 6): Card[] {
 }
 
 /**
- * Determines winner(s) per PRD 19.3-19.5:
+ * Determines winner per PRD 19.3-19.5:
  * - Highest hand <= 21 wins
  * - If all bust, lowest hand value wins (closest to 21 from above)
- * - Ties: pot split equally
- * - Tie-break: fewer cards, then first to stand (turnOrder position)
+ * - Tie-break chain (always resolves to single winner):
+ *   1. Highest hand value
+ *   2. Fewer cards (achieved value with less hits)
+ *   3. Earlier in turn order (first to stand)
  */
 export function determineWinners(
   playerStates: CasinoGameState['blackjackCompetitive'] extends infer T
@@ -155,19 +157,11 @@ export function determineWinners(
     return turnOrder.indexOf(a.playerId) - turnOrder.indexOf(b.playerId)
   })
 
-  const lowestBust = allBusted[0]!.hand.value
-  const bustWinners = allBusted.filter(ps => ps.hand.value === lowestBust)
-
-  if (bustWinners.length === 1) {
-    return {
-      winnerIds: [bustWinners[0]!.playerId],
-      message: `Everyone busted! ${bustWinners[0]!.playerId} takes it with ${lowestBust} — closest to 21.`,
-    }
-  }
-
+  // Sort already applies full tie-break: lowest value → fewest cards → turn order
+  // First player in sorted array is the single winner
   return {
-    winnerIds: bustWinners.map(w => w.playerId),
-    message: `Everyone busted! Tied at ${lowestBust}. Pot split ${bustWinners.length} ways.`,
+    winnerIds: [allBusted[0]!.playerId],
+    message: `Everyone busted! ${allBusted[0]!.playerId} takes it with ${allBusted[0]!.hand.value} — closest to 21.`,
   }
 }
 
