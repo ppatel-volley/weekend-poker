@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import type { Card } from '@weekend-casino/shared'
@@ -13,6 +13,8 @@ export interface CardDeckContextValue {
   setCardVisibility: (cardName: string, visible: boolean) => void
   /** Return a *clone* of the card group for independent placement. */
   getCardClone: (card: Card) => THREE.Group | null
+  /** True once the GLB mesh map is populated and cards can be cloned. */
+  ready: boolean
 }
 
 const CardDeckContext = createContext<CardDeckContextValue | null>(null)
@@ -45,6 +47,7 @@ const DECK_GLB_PATH = '/52-card_deck.glb'
 export function CardDeckProvider({ children }: { children: React.ReactNode }) {
   const { scene } = useGLTF(DECK_GLB_PATH)
   const meshMapRef = useRef<Map<string, THREE.Group>>(new Map())
+  const [ready, setReady] = useState(false)
 
   // Build the mesh map once on first load.
   useEffect(() => {
@@ -56,10 +59,11 @@ export function CardDeckProvider({ children }: { children: React.ReactNode }) {
     }
 
     meshMapRef.current = map
+    setReady(true)
   }, [scene])
 
-  // Note: closures read meshMapRef.current at call-time (not capture-time)
-  // so they always see the populated map after the useEffect runs.
+  // Rebuild context value when ready flips — this triggers consumer re-renders
+  // so CardModel components re-call getCardClone with a populated mesh map.
   const value = useMemo<CardDeckContextValue>(() => {
     const setCardVisibility = (cardName: string, visible: boolean) => {
       const group = meshMapRef.current.get(cardName)
@@ -79,8 +83,9 @@ export function CardDeckProvider({ children }: { children: React.ReactNode }) {
       get meshMap() { return meshMapRef.current },
       setCardVisibility,
       getCardClone,
+      ready,
     }
-  }, [])
+  }, [ready])
 
   return (
     <CardDeckContext value={value}>

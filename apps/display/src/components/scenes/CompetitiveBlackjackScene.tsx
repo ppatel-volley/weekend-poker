@@ -20,8 +20,8 @@ function CardModel({
   card: Card
   position: [number, number, number]
 }) {
-  const { getCardClone } = useCardDeck()
-  const clone = useMemo(() => getCardClone(card), [getCardClone, card])
+  const { getCardClone, ready } = useCardDeck()
+  const clone = useMemo(() => ready ? getCardClone(card) : null, [ready, card.rank, card.suit, getCardClone])
 
   if (!clone) return null
 

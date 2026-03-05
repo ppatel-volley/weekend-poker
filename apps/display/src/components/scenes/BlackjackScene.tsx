@@ -23,8 +23,9 @@ function CardModel({
   faceUp?: boolean
   position: [number, number, number]
 }) {
-  const { getCardClone } = useCardDeck()
-  const clone = useMemo(() => getCardClone(card), [getCardClone, card])
+  const { getCardClone, ready } = useCardDeck()
+  // Re-clone when deck becomes ready or card changes (rank/suit are primitives)
+  const clone = useMemo(() => ready ? getCardClone(card) : null, [ready, card.rank, card.suit, getCardClone])
 
   if (!clone) return null
 

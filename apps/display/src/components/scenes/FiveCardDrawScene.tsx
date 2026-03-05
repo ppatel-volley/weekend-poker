@@ -25,10 +25,11 @@ function CardModel({
   rotation?: [number, number, number]
   opacity?: number
 }) {
-  const { getCardClone } = useCardDeck()
+  const { getCardClone, ready } = useCardDeck()
   const groupRef = useRef<THREE.Group>(null)
 
   useEffect(() => {
+    if (!ready) return
     const parent = groupRef.current
     if (!parent) return
 
@@ -54,7 +55,7 @@ function CardModel({
     })
 
     parent.add(clone)
-  }, [card, faceUp, getCardClone, opacity])
+  }, [ready, card, faceUp, getCardClone, opacity])
 
   // Lay card flat on table: rotate -90° on X
   // Face-down: additionally rotate 180° on Y
