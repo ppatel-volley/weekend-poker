@@ -7,24 +7,34 @@
  * Hand value display, bust/blackjack/push indicators.
  */
 
+import { useMemo } from 'react'
 import { useStateSyncSelector } from '../../hooks/useVGFHooks.js'
+import { CardDeckProvider, useCardDeck } from '../CardDeck.js'
 import type { BlackjackGameState, BlackjackPlayerState } from '@weekend-casino/shared'
+import type { Card } from '@weekend-casino/shared'
 
-/** Card placeholder — face-down or face-up 3D card. */
-function CardPlaceholder({
-  position,
+/** 3D card model from the GLB deck. */
+function CardModel({
+  card,
   faceUp = false,
-  colour = '#2a2a4e',
+  position,
 }: {
-  position: [number, number, number]
+  card: Card
   faceUp?: boolean
-  colour?: string
+  position: [number, number, number]
 }) {
+  const { getCardClone } = useCardDeck()
+  const clone = useMemo(() => getCardClone(card), [getCardClone, card])
+
+  if (!clone) return null
+
   return (
-    <mesh position={position} rotation={faceUp ? [0, 0, 0] : [0, Math.PI, 0]}>
-      <boxGeometry args={[0.35, 0.01, 0.5]} />
-      <meshStandardMaterial color={faceUp ? '#ffffff' : colour} />
-    </mesh>
+    <primitive
+      object={clone}
+      position={position}
+      rotation={faceUp ? [-Math.PI / 2, 0, 0] : [-Math.PI / 2, 0, Math.PI]}
+      scale={[1, 1, 1]}
+    />
   )
 }
 
@@ -83,12 +93,12 @@ function PlayerPosition({
   return (
     <group position={seatPosition}>
       {/* Player's cards */}
-      {hand.cards.map((_card, i) => (
-        <CardPlaceholder
-          key={i}
+      {hand.cards.map((card, i) => (
+        <CardModel
+          key={`${card.rank}-${card.suit}`}
+          card={card}
           position={[(i - (hand.cards.length - 1) / 2) * 0.38, 0, 0]}
           faceUp
-          colour={isBusted ? '#555555' : '#2a2a4e'}
         />
       ))}
 
@@ -138,12 +148,12 @@ function DealerArea({
   return (
     <group position={[0, 0.86, -1.4]}>
       {/* Dealer cards */}
-      {hasCards && dealer.cards.map((_card, i) => (
-        <CardPlaceholder
-          key={i}
+      {hasCards && dealer.cards.map((card, i) => (
+        <CardModel
+          key={`${card.rank}-${card.suit}`}
+          card={card}
           position={[(i - (dealer.cards.length - 1) / 2) * 0.38, 0, 0]}
           faceUp={i === 0 || dealer.holeCardRevealed}
-          colour="#1a1a3e"
         />
       ))}
 
@@ -198,17 +208,19 @@ export function BlackjackScene() {
         </mesh>
       ))}
 
-      {/* Dealer area */}
-      {bj && <DealerArea bj={bj} />}
+      <CardDeckProvider>
+        {/* Dealer area */}
+        {bj && <DealerArea bj={bj} />}
 
-      {/* Player positions */}
-      {bj?.playerStates.map((ps, i) => (
-        <PlayerPosition
-          key={ps.playerId}
-          playerState={ps}
-          seatPosition={SEAT_POSITIONS[i] ?? SEAT_POSITIONS[0]!}
-        />
-      ))}
+        {/* Player positions */}
+        {bj?.playerStates.map((ps, i) => (
+          <PlayerPosition
+            key={ps.playerId}
+            playerState={ps}
+            seatPosition={SEAT_POSITIONS[i] ?? SEAT_POSITIONS[0]!}
+          />
+        ))}
+      </CardDeckProvider>
 
       {/* Bright, glamorous lighting (3500K feel) */}
       <ambientLight intensity={0.35} color="#fff5e6" />
