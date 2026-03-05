@@ -76,7 +76,12 @@ export function CardDeckProvider({ children }: { children: React.ReactNode }) {
       const name = cardToMeshName(card)
       const source = meshMapRef.current.get(name)
       if (!source) return null
-      return source.clone(true)
+      const clone = source.clone(true)
+      // Source cards are hidden (visible=false) to keep textures in GPU memory
+      // without rendering. Clones must be made visible for actual display.
+      clone.visible = true
+      clone.traverse((child) => { child.visible = true })
+      return clone
     }
 
     return {

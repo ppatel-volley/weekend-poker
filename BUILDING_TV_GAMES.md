@@ -3,7 +3,7 @@
 A comprehensive guide for developers and AI agents building TV games on the Volley platform. Covers Fire TV, Samsung Tizen, and LG webOS with D-pad remote navigation.
 
 **Target audience**: Anyone starting a new TV game project from scratch.
-**Reference implementation**: `emoji-multiplatform` and `jeopardy-fire-web`.
+**Reference implementation**: `emoji-multiplatform` and `jeopardy-fire-web` (display/TV). `wheel-of-fortune` (controller/phone).
 
 ---
 
@@ -18,6 +18,10 @@ A comprehensive guide for developers and AI agents building TV games on the Voll
 5. **VGF state starts as `{}`.** Always guard with `"phase" in state` before rendering (Section 4).
 6. **Always override Socket.IO transports.** Default is websocket-only; set `transports: ["polling", "websocket"]` (Section 4).
 7. **Reference implementation is at `emoji-multiplatform`** (same parent directory). When unsure about a pattern, check the reference code.
+8. **VWR device testing requires human-owned credentials.** The `@volley/vwr-s3-cli` needs an active AWS SSO session (TVDevelopers role) that only the human can create. **Never attempt `aws sso login` or `aws configure sso` yourself.** Instead, check whether the human already has an active session by running `aws sts get-caller-identity --profile <profile>`. If that fails, tell the human to follow the credential setup steps in Section 11. Once the session is active, you *can* run CLI commands like `npx @volley/vwr-s3-cli setup ...` and `npx @volley/vwr-s3-cli get ...` on their behalf.
+9. **Amplitude flag management also requires the AWS session.** The `flag add`, `flag remove`, and `flag status` sub-commands use the same SSO credentials. Same rule: verify the session first, hand off login to the human if it's expired.
+10. **Always pass `--platform` exactly.** Valid values are `SAMSUNG_TV`, `LG_TV`, `FIRE_TV`, `IOS_MOBILE`, `ANDROID_MOBILE`, or `WEB`. Case and underscores matter — `firetv` or `fire-tv` will fail silently.
+11. **Controller apps MUST use `@volley/platform-sdk`.** Do not generate random UUIDs for device identity — use `useDeviceInfo()` from the Platform SDK. All Volley production apps wrap in `PlatformProvider`. See Section 16 for the full controller setup guide.
 
 ---
 
@@ -27,7 +31,6 @@ A comprehensive guide for developers and AI agents building TV games on the Voll
 1. [Project Scaffolding](#1-project-scaffolding)
 2. [Architecture Overview](#2-architecture-overview)
 3. [Platform SDK Setup](#3-platform-sdk-setup)
-   - 3.1. [Server-Side Account Integration (v2.2)](#31-server-side-account-integration-v22)
 4. [VGF Setup](#4-vgf-setup)
 5. [TV Remote Input Handling](#5-tv-remote-input-handling)
 6. [D-pad Navigation Patterns](#6-d-pad-navigation-patterns)
@@ -35,10 +38,12 @@ A comprehensive guide for developers and AI agents building TV games on the Voll
 8. [On-Screen Keyboard](#8-on-screen-keyboard)
 9. [Remote Mode vs Controller Mode](#9-remote-mode-vs-controller-mode)
 10. [Dev Mode Testing](#10-dev-mode-testing)
-11. [Vite Build Configuration for TV](#11-vite-build-configuration-for-tv)
-12. [TV Deployment](#12-tv-deployment)
-13. [Common Pitfalls](#13-common-pitfalls)
-14. [Complete Code Examples](#14-complete-code-examples)
+11. [Dev and Test Workflows with VWR](#11-dev-and-test-workflows-with-vwr)
+12. [Vite Build Configuration for TV](#12-vite-build-configuration-for-tv)
+13. [TV Deployment](#13-tv-deployment)
+14. [Common Pitfalls](#14-common-pitfalls)
+15. [Complete Code Examples](#15-complete-code-examples)
+16. [Controller App Development (Phone)](#16-controller-app-development-phone)
 
 ---
 
@@ -578,52 +583,6 @@ export function isTV(platform: TVPlatform): boolean {
 | `volley_platform` | TV shell | Platform detection override (FIRE_TV, SAMSUNG_TV, LG_TV) |
 | `volley_account` | TV shell | User account ID for tracking |
 | `sessionId` | VGF | Game session identifier |
-
-### 3.1. Server-Side Account Integration (v2.2)
-
-The Hub passes user identity to games via URL query params → Socket.IO query → VGF server `onConnect`. The server resolves identity for persistence (profiles, achievements, cosmetics).
-
-**Three identity tiers** (strongest to weakest):
-
-| Tier | Source | Field | Context |
-|------|--------|-------|---------|
-| Authenticated | `useAccount()` from Platform SDK | `accountId` / `volley_account` | User completed QR code device auth |
-| Anonymous | `useAnonymousId()` from Platform SDK | `anonymousId` | Device-level, no auth needed |
-| Dev Token | `localStorage` UUID | `deviceToken` / `userId` | Dev-mode fallback |
-
-**Server-side identity resolution pattern:**
-
-```typescript
-// apps/server/src/persistence/identity-resolver.ts
-export function resolveIdentity(metadata: Record<string, unknown>): ResolvedIdentity {
-  // Priority 1: Platform SDK authenticated account
-  const accountId = metadata['accountId'] ?? metadata['volley_account']
-  if (typeof accountId === 'string' && accountId.length > 0) {
-    return { token: accountId, source: 'platform_account' }
-  }
-
-  // Priority 2: Platform SDK anonymous device identity
-  const anonymousId = metadata['anonymousId']
-  if (typeof anonymousId === 'string' && anonymousId.length > 0) {
-    return { token: anonymousId, source: 'platform_anonymous' }
-  }
-
-  // Priority 3: Dev-mode device token
-  const deviceToken = metadata['deviceToken'] ?? metadata['userId']
-  if (typeof deviceToken === 'string' && deviceToken.length > 0) {
-    return { token: deviceToken, source: 'device_token' }
-  }
-
-  return { token: `anon_${Date.now()}`, source: 'device_token' }
-}
-```
-
-**Key points:**
-- The game server does NOT manage auth — it receives identity from the client
-- Client gets identity from Platform SDK (`useAccount()`, `useAnonymousId()`) or generates a dev token
-- The resolved `persistentId` is used as the Redis key for all persistence (profiles, achievements, challenges, cosmetics)
-- Hub auth flow: QR code device authorisation → Volley Identity API (auth.volley.tv) → `account.id` returned via `useAccount()`
-- Identity API endpoints: `https://auth.volley.tv` (prod), staging/dev variants available
 
 ---
 
@@ -1906,7 +1865,201 @@ if (DEEPGRAM_API_KEY) console.log(`Deepgram proxy: ws://localhost:${DG_PROXY_POR
 
 ---
 
-## 11. Vite Build Configuration for TV
+## 11. Dev and Test Workflows with VWR
+
+VWR (Volley Web Runtime) lets you develop and test your game on real TV and mobile devices by loading it in an iframe inside the shell app. The shell launches VWR, which in turn loads the Hub and your game as iframes. You don't need to worry about shells, VWR Loader, or VWR itself — just ensure you're on the correct SDK and shell versions.
+
+```
+Shell (TV/Mobile) → VWR Loader → VWR → Hub/Games (iframes)
+```
+
+### Prerequisites
+
+| Component | Minimum Version |
+|-----------|----------------|
+| `@volley/platform-sdk` | >= v7.40.3 |
+| Fire TV shell | >= 6.1.0 |
+| Samsung TV shell | >= 1.9.2 |
+| LG TV shell | >= 1.6.0 |
+| Android mobile | >= 2026.02.07 (394) |
+| iOS mobile (dev) | >= v.4.9.4(3) |
+| iOS mobile (prod) | >= v.4.9.4(4) |
+
+> **Versions may shift.** If things aren't working with the latest shell builds, reach out to the @Foundation Team.
+
+Verify your Platform SDK version in `package.json`:
+
+```json
+{
+  "dependencies": {
+    "@volley/platform-sdk": "^v7.40.3"
+  }
+}
+```
+
+### Find Your Device ID
+
+This is a manual step — the human must do this on the physical device.
+
+1. Install or open the **Dev Volley app** (not the production app) on your TV or mobile device.
+2. Navigate to the Hub page.
+3. Look for the **debug overlay** — the device ID is displayed there (e.g. `8wesayw-823dhaw-213sadw`).
+4. Copy it exactly, **including any dashes**. The CLI uses this as a lookup key in S3, so a wrong ID means a config that never gets loaded.
+
+> **For AI agents:** You cannot retrieve the device ID programmatically. Ask the human to read it from the screen and paste it into the chat.
+
+### VWR S3 CLI Setup
+
+The `@volley/vwr-s3-cli` CLI handles device config creation, S3 upload, CloudFront cache invalidation, and Amplitude `vwr-enabled` flag management. No need to clone the platform repo or write JSON by hand.
+
+**1. Set up AWS SSO credentials (human must do this — agents cannot):**
+
+If you've never configured the Volley AWS SSO profile on this machine, run the interactive setup first. You'll need access to the **TVDevelopers** IAM role — if you don't have it, ask your manager or the @Foundation team to grant it.
+
+```bash
+aws configure sso
+```
+
+When prompted, enter:
+
+| Prompt | Value |
+|--------|-------|
+| SSO session name | Any name you like, e.g. `volley` |
+| SSO start URL | `https://volley.awsapps.com/start` |
+| SSO region | `us-east-1` |
+| SSO registration scopes | Press Enter to accept the default |
+
+Your browser will open for authentication. Sign in with your Volley SSO credentials (the same ones you use for Okta/Google SSO). Once you approve, the CLI will list available accounts — select the one with the **TVDevelopers** role. When prompted for a profile name, use something memorable (e.g. `volley-tv`).
+
+Then log in and export the profile:
+
+```bash
+aws sso login --profile volley-tv
+export AWS_PROFILE=volley-tv
+```
+
+To verify it worked:
+
+```bash
+aws sts get-caller-identity --profile volley-tv
+```
+
+You should see your account ID and the TVDevelopers role ARN.
+
+> **SSO sessions expire every 12 hours.** If you get `ExpiredTokenException` or any auth error, re-run `aws sso login --profile volley-tv`. Agents: if a CLI command fails with an auth error, tell the human to re-run this command rather than attempting it yourself.
+
+> **For AI agents:** You can run all `vwr-s3-cli` commands once the human confirms their SSO session is active. Check first with `aws sts get-caller-identity --profile <profile>`. If that returns an error, stop and ask the human to log in.
+
+**2. Create your device config with `setup` (fastest path):**
+
+```bash
+npx @volley/vwr-s3-cli setup \
+    --device-id <your-device-id> \
+    --platform <platform> \
+    --env <env> \
+    --launch-url <your-game-url>
+```
+
+Example — registering a dev device on LG:
+
+```bash
+npx @volley/vwr-s3-cli setup \
+    --device-id 8wesayw-823dhaw-213sadw \
+    --platform LG_TV \
+    --env dev \
+    --launch-url https://my-game.ngrok.io
+```
+
+**CLI flags:**
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--device-id <id>` | Yes | — | Your TV's device ID |
+| `--platform <platform>` | Yes | — | `SAMSUNG_TV`, `LG_TV`, `FIRE_TV`, `IOS_MOBILE`, `ANDROID_MOBILE`, or `WEB` |
+| `--env <env>` | No | `dev` | Environment for defaults (`dev`, `staging`, `prod`) |
+| `--launch-url <url>` | No | — | URL for VWR to load in an iframe (e.g. your ngrok game URL) |
+
+**Environment defaults controlled by `--env`:**
+
+| Field | dev | staging | prod |
+|-------|-----|---------|------|
+| `hubUrl` | `https://game-clients-dev.volley.tv/hub` | `https://game-clients-staging.volley.tv/hub` | `https://game-clients.volley.tv/hub` |
+| `trustedDomains` | `https://game-clients-dev.volley.tv` | `https://game-clients-staging.volley.tv` | `https://game-clients.volley.tv` |
+| `vwrUrl` | Latest VWR version deployed to that env (fetched from S3) | Same | Same |
+
+When `--launch-url` is provided, trusted domains are auto-detected and the command runs non-interactively.
+
+**Alternative: `generate` for full control:**
+
+```bash
+npx @volley/vwr-s3-cli generate
+```
+
+This walks you through each config field step by step with interactive prompts.
+
+### Other CLI Commands
+
+```bash
+# Get your existing config
+npx @volley/vwr-s3-cli get --device-id <id> --platform <platform>
+
+# Edit your config interactively
+npx @volley/vwr-s3-cli edit --device-id <id> --platform <platform>
+
+# Delete your config
+npx @volley/vwr-s3-cli delete --device-id <id> --platform <platform>
+
+# Check built-in help
+npx @volley/vwr-s3-cli --help
+npx @volley/vwr-s3-cli setup --help
+```
+
+### Amplitude `vwr-enabled` Flag
+
+The `vwr-enabled` Amplitude flag is the on/off switch for VWR on a device. Even with an S3 config file, VWR won't load unless the device is on the flag's whitelist. The `setup` command adds your device automatically, but you can manage it manually:
+
+```bash
+# Check flag status
+npx @volley/vwr-s3-cli flag status --device-id <id>
+
+# Add device to flag
+npx @volley/vwr-s3-cli flag add --device-id <id>
+
+# Remove device from flag
+npx @volley/vwr-s3-cli flag remove --device-id <id>
+```
+
+### Launch Your Game
+
+Once the S3 config is uploaded and the Amplitude flag is enabled:
+
+1. **Human step:** Force-quit and relaunch the Dev Volley shell app on your device. VWR config is fetched at app start-up, so a cold restart is required after any config change.
+2. The shell will detect the VWR config for your device ID, load VWR, which will then load the Hub.
+3. If you set a `launchUrl`, VWR will navigate to that URL inside an iframe after the Hub loads.
+
+> **For AI agents:** You can verify the config is correct before the human relaunches by running `npx @volley/vwr-s3-cli get --device-id <id> --platform <platform>` and checking the `launchUrl` and `trustedDomains` values. If the game URL uses ngrok, remind the human that the ngrok tunnel must be running (`ngrok http 3000` or similar) before launching.
+
+### VWR Troubleshooting
+
+**RPC Connection Timeout** (`BrowserIpc.connect: Timed out`):
+Typically caused by trusted origins mismatch. Check the browser console for rejected messages and verify trusted origins match the actual origins (watch for `http` vs `https`, port differences, etc.).
+
+**Unable to use `vwr-s3-cli`:**
+1. Ensure you're logged in via the **TVDeveloper** SSO profile — re-run `aws sso login` if needed.
+2. Check command syntax with `npx @volley/vwr-s3-cli [command] --help`.
+3. Escalate to the @Foundation team if the tool is crashing.
+
+**App fails to launch in VWR:**
+1. Verify the device ID is correctly whitelisted on the Amplitude flag.
+2. Ensure `launchUrl` includes any required query parameters.
+3. Run `npx @volley/vwr-s3-cli get` to inspect your S3 config and `npx @volley/vwr-s3-cli edit` to fix it.
+4. Escalate to @Foundation with your device ID, platform, and shell app version.
+
+> **Source:** [Notion — Dev and Test Workflows with VWR](https://www.notion.so/2e4442bc9713800e82eae17bf850ee25)
+
+---
+
+## 12. Vite Build Configuration for TV
 
 ### Build Target
 
@@ -1980,7 +2133,7 @@ export default defineConfig({
 
 ---
 
-## 12. TV Deployment
+## 13. TV Deployment
 
 ### Overview
 
@@ -2097,7 +2250,7 @@ ares-launch --device <device-name> com.yourpackage
 
 ---
 
-## 13. Common Pitfalls
+## 14. Common Pitfalls
 
 A consolidated list of every gotcha documented in the learnings system.
 
@@ -2124,7 +2277,7 @@ A consolidated list of every gotcha documented in the learnings system.
 
 ---
 
-## 14. Complete Code Examples
+## 15. Complete Code Examples
 
 ### Full App.tsx (Display)
 
@@ -2531,3 +2684,457 @@ For a new TV game project:
 - [ ] Add `@vitejs/plugin-legacy` with `target: "chrome68"` for Fire TV builds
 - [ ] Test with `?inputMode=remote` and `?volley_platform=FIRE_TV`
 - [ ] Deploy to target TV platform (Section 12)
+- [ ] Create `apps/controller` (Section 16) with `@volley/platform-sdk`, `@volley/vgf`, `react-router-dom`
+- [ ] Wrap controller App in `PlatformProvider` (with `gameId`, `stage`, `tracking`)
+- [ ] Use Platform SDK `useDeviceInfo()` for device identity (not custom UUIDs)
+- [ ] Configure Vite code splitting for controller build
+
+---
+
+## 16. Controller App Development (Phone)
+
+This section covers building the **phone controller app** — the mobile web app that players open (via QR code or URL) to interact with a TV game. The controller runs in a mobile browser and communicates with the VGF server over Socket.IO.
+
+> **Context:** This section was written by comparing three production Volley projects:
+> - **Wheel of Fortune** (`wheel-of-fortune`) — VGF game, closest reference for controller patterns
+> - **CoComelon Mobile** (`cocomelon-mobile`) — Platform SDK app (non-VGF, raw WebSocket)
+> - **Weekend Casino** (`weekend-poker`) — VGF game, identified gaps documented below
+
+### 16.1 Required Packages
+
+Every controller app on the Volley platform **must** include these packages:
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `@volley/platform-sdk` | `^7.42.0` | Auth, analytics, lifecycle, device identity, native bridge |
+| `@volley/vgf` | `^4.8.0` | Game state sync, Socket.IO transport, VGF hooks |
+| `react` | `^19.0.0` | UI framework |
+| `react-dom` | `^19.0.0` | DOM renderer |
+| `react-router-dom` | `^7.8.0` | Client-side routing (standard across Volley apps) |
+| `uuid` | `^11.1.0` | UUID generation (fallback identity) |
+
+**Optional but recommended:**
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `@volley/tracking` | `^7.40.0` | Analytics event tracking (if not using platform-sdk's built-in Segment) |
+| `@datadog/browser-rum` | `^6.10.0` | Real User Monitoring — crash reporting, session replay |
+| `@datadog/browser-logs` | `^6.10.0` | Structured browser logging to Datadog |
+
+**Dev dependencies:**
+
+| Package | Purpose |
+|---------|---------|
+| `@vitejs/plugin-react-swc` | Faster JSX transpilation than `@vitejs/plugin-react` (used by WoF) |
+| `vitest` + `@testing-library/react` + `jsdom` | Testing stack |
+| `sass-embedded` | SCSS modules (if using SCSS instead of CSS-in-JS) |
+| `@storybook/react-vite` | Component development (optional) |
+
+### 16.2 Cross-Project Package Comparison
+
+This table shows what each Volley project actually uses in production. **Gaps in the Weekend Casino column are things that need fixing.**
+
+| Package / Feature | Weekend Casino | Wheel of Fortune | CoComelon Mobile |
+|---|---|---|---|
+| **@volley/platform-sdk** | **MISSING** | `7.42.0` | `^7.41.2` |
+| **@volley/tracking** | **MISSING** | via platform-sdk Segment | `^7.40.0` |
+| **@volley/vgf** | `^4.8.0` | `^4.8.0` | N/A (non-VGF) |
+| **@datadog/browser-rum** | **MISSING** | N/A (not at controller) | `^6.10.1` |
+| **react-router-dom** | **MISSING** | `^7.8.1` | `^7.4.0` |
+| **Vite React plugin** | `plugin-react` | `plugin-react-swc` (faster) | `plugin-react` |
+| **Styling** | Inline CSS-in-JS | SCSS modules | CSS modules |
+| **Storybook** | No | Yes | No |
+| **Code splitting** | None | React/vendor/shared chunks | Default |
+| **StrictMode** | Disabled (VGF compat) | Disabled (VGF compat) | N/A |
+| **Device identity** | Custom localStorage UUID | Platform SDK `useDeviceInfo()` | Platform SDK `useAccount()` |
+| **PlatformProvider** | **MISSING** | Yes (wraps entire app) | Yes (wraps entire app) |
+| **Voice/STT** | Deepgram SDK direct | N/A | Platform SDK mic + custom DSP |
+
+### 16.3 PlatformProvider for Controllers
+
+Both Cocomelon and Wheel of Fortune wrap their entire app in `PlatformProvider`. The controller version is simpler than the display version — no `MaybePlatformProvider` conditional needed because the controller always runs in a mobile browser (not on a TV shell), so `volley_hub_session_id` is not required.
+
+```typescript
+// apps/controller/src/App.tsx
+import { PlatformProvider } from "@volley/platform-sdk/react"
+
+const GAME_ID = import.meta.env.VITE_GAME_ID ?? "your-game-id"
+const STAGE = import.meta.env.VITE_PLATFORM_SDK_STAGE ?? "staging"
+const SEGMENT_WRITE_KEY = import.meta.env.VITE_SEGMENT_WRITE_KEY ?? ""
+
+export function App() {
+    return (
+        <PlatformProvider
+            options={{
+                gameId: GAME_ID,
+                appVersion: __APP_VERSION__,  // Defined in vite.config.ts
+                stage: STAGE,
+                tracking: {
+                    segmentWriteKey: SEGMENT_WRITE_KEY,
+                },
+            }}
+        >
+            <ControllerRoot />
+        </PlatformProvider>
+    )
+}
+```
+
+> **Note for Weekend Casino:** Unlike the display app, the controller does NOT need the `MaybePlatformProvider` pattern because it never runs inside the TV shell. The `PlatformProvider` can be rendered unconditionally.
+
+### 16.4 Device Identity
+
+**Do NOT generate random UUIDs in localStorage.** Use Platform SDK's `useDeviceInfo()` hook for device identification. This ties into Volley's user identity system and ensures consistent tracking across sessions.
+
+```typescript
+// WRONG — Weekend Casino's current approach
+function useDeviceToken() {
+    const [token] = useState(() => {
+        return localStorage.getItem("device-token") ?? crypto.randomUUID()
+    })
+    return { deviceToken: token }
+}
+
+// CORRECT — Wheel of Fortune's approach
+import { useDeviceInfo } from "@volley/platform-sdk/react"
+
+function useControllerSession() {
+    const { deviceId } = useDeviceInfo()
+    const sessionId = new URLSearchParams(window.location.search).get("sessionId")
+
+    const transport = useMemo(() =>
+        createSocketIOClientTransport({
+            url: BACKEND_URL,
+            query: {
+                sessionId,
+                userId: deviceId,   // Platform SDK device ID, not random UUID
+                clientType: ClientType.Controller,
+            },
+        }),
+        [sessionId, deviceId],
+    )
+
+    return { transport, sessionId, clientId: deviceId }
+}
+```
+
+### 16.5 VGF Transport Configuration (Controller)
+
+The controller transport setup is similar to the display but uses `ClientType.Controller`:
+
+```typescript
+// apps/controller/src/lib/createControllerTransport.ts
+import { SocketIOClientTransport, ClientType } from "@volley/vgf"
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_SERVER_ENDPOINT ?? "http://localhost:8001"
+
+export function createControllerTransport(sessionId: string, userId: string) {
+    return new SocketIOClientTransport({
+        url: BACKEND_URL,
+        query: {
+            sessionId,
+            userId,
+            clientType: ClientType.Controller,
+        },
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 3000,
+        reconnectionDelayMax: 6000,
+        transports: ["polling", "websocket"],  // MUST include polling fallback
+    })
+}
+```
+
+**Critical:** Do NOT put `query` inside a nested `socketOptions` object. This clobbers VGF's internal session/user/clientType params (see Section 4).
+
+### 16.6 Provider Stacking Order
+
+Wheel of Fortune's provider order (recommended pattern):
+
+```typescript
+// apps/controller/src/App.tsx
+export function App() {
+    return (
+        <PlatformProvider options={platformOptions}>
+            <BrowserRouter>
+                <Routes>
+                    <Route path="/" element={<RoomLayout />}>
+                        <Route index element={<PhaseRouter />} />
+                    </Route>
+                </Routes>
+            </BrowserRouter>
+        </PlatformProvider>
+    )
+}
+
+// apps/controller/src/layouts/RoomLayout.tsx
+export function RoomLayout() {
+    const { transport, sessionId, clientId } = useControllerSession()
+
+    if (!sessionId) return <ErrorScreen message="No session ID found" />
+
+    return (
+        <VGFProvider transport={transport} autoConnect>
+            <SessionProvider sessionId={sessionId}>
+                <LoggerProvider>
+                    <Outlet />
+                </LoggerProvider>
+            </SessionProvider>
+        </VGFProvider>
+    )
+}
+```
+
+**Provider order (outermost to innermost):**
+1. `PlatformProvider` — Auth, analytics, device info (no game dependency)
+2. `BrowserRouter` — URL routing (no game dependency)
+3. `VGFProvider` — Game state transport (needs session ID from URL)
+4. `SessionProvider` — Session context (needs VGF connection)
+5. `LoggerProvider` — Logging context (optional, can go anywhere)
+
+### 16.7 Phase-Based Routing
+
+Both VGF game controllers route UI based on the current game phase. Wheel of Fortune uses a `PhaseRouter` component:
+
+```typescript
+// apps/controller/src/components/PhaseRouter.tsx
+import { vgfHooks } from "../hooks/vgfHooks"
+
+export function PhaseRouter() {
+    const phase = vgfHooks.usePhase()
+
+    switch (phase) {
+        case "LOBBY":
+            return <LobbyController />
+        case "PLAYING":
+            return <PlayingController />
+        case "ROUND_END":
+            return <RoundEndController />
+        case "GAME_OVER":
+            return <GameOverController />
+        default:
+            return <Loading />
+    }
+}
+```
+
+This is functionally identical to Weekend Casino's `GameRouter` pattern. Both are valid — the key is that the server's VGF phase drives the controller's UI.
+
+### 16.8 Typed VGF Hooks
+
+Create a shared hooks file that types the VGF hooks to your game state:
+
+```typescript
+// apps/controller/src/hooks/vgfHooks.ts  (or packages/web-common/)
+import { getVGFHooks, type GameRuleset } from "@volley/vgf"
+import type { YourGameState, PhaseName } from "@your-game/shared"
+
+export const vgfHooks = getVGFHooks<
+    GameRuleset<YourGameState>,
+    YourGameState,
+    PhaseName
+>()
+
+// Re-export for convenience
+export const useStateSync = vgfHooks.useStateSync
+export const useStateSyncSelector = vgfHooks.useStateSyncSelector
+export const useDispatch = vgfHooks.useDispatch
+export const useDispatchThunk = vgfHooks.useDispatchThunk
+export const usePhase = vgfHooks.usePhase
+```
+
+> **Tip:** Wheel of Fortune puts these hooks in a shared `web-common` package so both display and controller use the same typed hooks. This prevents type drift between the two apps.
+
+### 16.9 Vite Configuration for Controllers
+
+```typescript
+// apps/controller/vite.config.ts
+import { defineConfig } from "vite"
+import react from "@vitejs/plugin-react-swc"  // Faster than plugin-react
+import { readFileSync } from "fs"
+
+const pkg = JSON.parse(readFileSync("./package.json", "utf-8"))
+
+export default defineConfig(({ mode }) => ({
+    plugins: [react()],
+    define: {
+        __APP_VERSION__: JSON.stringify(pkg.version),
+    },
+    server: {
+        port: 5174,
+        host: true,  // Allow access from other devices on the network (for phone testing)
+    },
+    build: {
+        target: "es2019",
+        sourcemap: mode === "production",
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    react: ["react", "react-dom"],
+                    "shared-core": [
+                        "@volley/vgf",
+                        "@volley/platform-sdk",
+                    ],
+                },
+            },
+        },
+    },
+    // Base path for deployment (adjust for your CDN/hosting)
+    base: mode === "production"
+        ? "/your-game-controller/latest/"
+        : "/",
+}))
+```
+
+**Key differences from the display Vite config:**
+- No `@vitejs/plugin-legacy` (phones have modern browsers, unlike Fire TV)
+- No `target: "chrome68"` (that's a Fire TV constraint)
+- `host: true` so you can test from a real phone on the same network
+- Deployment base path is for the controller, not the display
+
+### 16.10 Environment Variables
+
+Controller apps should support these environment variables (via Vite's `VITE_` prefix):
+
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `VITE_BACKEND_SERVER_ENDPOINT` | Yes | `http://localhost:8001` | VGF server URL |
+| `VITE_GAME_ID` | Yes | — | Game identifier for Platform SDK |
+| `VITE_PLATFORM_SDK_STAGE` | Yes | `"staging"` | Platform SDK stage |
+| `VITE_SEGMENT_WRITE_KEY` | No | — | Segment analytics key |
+| `VITE_DD_APPLICATION_ID` | No | — | Datadog RUM application ID |
+| `VITE_DD_CLIENT_TOKEN` | No | — | Datadog RUM client token |
+| `VITE_DEEPGRAM_API_KEY` | No | — | Deepgram STT (if using voice) |
+
+Use `.env` files per environment:
+```
+.env              # Local development defaults
+.env.development  # Dev server config
+.env.staging      # Staging config
+.env.production   # Production config
+```
+
+### 16.11 React StrictMode and VGF
+
+**Both Wheel of Fortune and Weekend Casino disable React StrictMode.** VGF's `SocketIOClientTransport` tears down message handlers on unmount. StrictMode's double-mount cycle causes the transport to disconnect and fail to reconnect, breaking state sync permanently.
+
+```typescript
+// main.tsx — do NOT use StrictMode with VGF
+import { createRoot } from "react-dom/client"
+import { App } from "./App"
+
+const root = document.getElementById("root")
+if (!root) throw new Error("Root element not found")
+
+createRoot(root).render(<App />)  // No <StrictMode> wrapper
+```
+
+### 16.12 Mobile-First HTML Template
+
+```html
+<!-- apps/controller/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Your Game - Controller</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body, #root {
+        width: 100%; height: 100%;
+        background: #000;
+        touch-action: manipulation;  /* Prevent double-tap zoom */
+        -webkit-user-select: none; user-select: none;  /* Prevent text selection */
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+```
+
+**Key mobile settings:**
+- `viewport-fit=cover` — extends content under the notch/safe area
+- `user-scalable=no` — prevents pinch-to-zoom (game controller, not a web page)
+- `touch-action: manipulation` — prevents double-tap zoom delay
+- `-webkit-user-select: none` — prevents accidental text selection during gameplay
+
+### 16.13 Shared web-common Package Pattern
+
+Wheel of Fortune uses a `web-common` package shared between display and controller. This prevents type drift and duplicated VGF hook setup:
+
+```
+packages/
+  web-common/
+    src/
+      contexts/
+        SessionProvider.tsx    # Session ID context
+        LoggerProvider.tsx     # Logger context
+      hooks/
+        vgfHooks.ts           # Typed VGF hooks (getVGFHooks<...>())
+        useSessionId.ts       # Session ID hook
+        useLogger.ts          # Logger hook
+      lib/
+        logger.ts             # Console logger with metadata
+        createMockTransport.ts # Debug transport (no server needed)
+      constants/
+        environment.ts        # PLATFORM_API_URL, GAME_ID, etc.
+      utils/
+        classNames.ts         # CSS class utility
+        getPlatformApiUrl.ts  # Platform API URL resolver
+    package.json
+```
+
+This is optional but recommended for projects with both a display and controller app. It ensures both apps use identical VGF hook types and session management.
+
+### 16.14 Cocomelon vs VGF Controller Architecture
+
+Cocomelon Mobile is **not a VGF game** — it uses raw WebSocket with a custom state machine. However, its Platform SDK integration is a good reference:
+
+| Aspect | VGF Controller (WoF, Casino) | Non-VGF Controller (Cocomelon) |
+|--------|------------------------------|-------------------------------|
+| **Transport** | VGF `SocketIOClientTransport` | Custom `WebSocketManager` + `WebSocketDriver` |
+| **State sync** | VGF hooks (`useStateSync`, `usePhase`) | React Context + `useState` |
+| **Routing** | Phase-based (`PhaseRouter`) | Event-based (server sends nav events, `react-router-dom` navigates) |
+| **Game logic** | Server-side VGF reducers/thunks | Server-side (completely separate) |
+| **Platform SDK** | `PlatformProvider` with `gameId`, `stage`, `tracking` | Same pattern, identical config |
+| **Device identity** | `useDeviceInfo()` | `useAccount()` |
+| **Reconnection** | VGF built-in (5 attempts, 3-6s delays) | Custom state machine (15 attempts, exponential backoff, 30s max) |
+| **Microphone** | Deepgram SDK or VGF voice | Platform SDK `useMicrophone()` + custom DSP |
+
+**Key takeaway:** Regardless of whether a game uses VGF, all Volley controller apps use `@volley/platform-sdk` with `PlatformProvider` for auth, analytics, and device identity. This is non-negotiable for production deployment.
+
+### 16.15 Weekend Casino Gap Analysis and Migration Plan
+
+The Weekend Casino controller is missing several packages and patterns that are standard across Volley production apps. Here is the prioritised migration plan:
+
+#### Phase 1 — Platform SDK Integration (Critical)
+
+1. Install `@volley/platform-sdk@^7.42.0`
+2. Wrap `App.tsx` in `PlatformProvider` with `gameId`, `stage`, and tracking config
+3. Replace custom `useDeviceToken` (localStorage UUID) with Platform SDK's `useDeviceInfo()`
+4. Wire up `useAppLifecycleState()` for pause/resume handling
+5. Wire up `useCloseEvent()` for graceful app shutdown
+6. Add env variables: `VITE_GAME_ID`, `VITE_PLATFORM_SDK_STAGE`, `VITE_SEGMENT_WRITE_KEY`
+
+#### Phase 2 — Analytics and Monitoring
+
+1. Confirm whether `@volley/tracking` is bundled in platform-sdk or needs separate install
+2. Add key event tracking: game start, game end, bet placed, voice command used
+3. Consider adding `@datadog/browser-rum` for crash monitoring
+
+#### Phase 3 — Build Improvements
+
+1. Switch from `@vitejs/plugin-react` to `@vitejs/plugin-react-swc` (faster dev rebuilds)
+2. Add Vite `manualChunks` for code splitting (React, vendor, shared-core)
+3. Add proper `base` path for production deployment
+
+#### Phase 4 — Optional Improvements
+
+1. Add `react-router-dom` if URL-based routing is needed for non-game screens
+2. Consider a shared `web-common` package for VGF hooks used by both display and controller
+3. Add Storybook for component development (if the team wants it)

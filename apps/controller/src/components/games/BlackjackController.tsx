@@ -21,7 +21,7 @@ function CardDisplay({ card }: { card: Card }) {
     spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663',
   }
   const suitColours: Record<string, string> = {
-    spades: '#ecf0f1', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#ecf0f1',
+    spades: '#1a1a2e', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#1a1a2e',
   }
   return (
     <div style={{
