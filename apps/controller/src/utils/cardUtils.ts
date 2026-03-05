@@ -32,24 +32,24 @@ const MESH_NAME_FIX = 'Eight of'
 
 /**
  * Traverse the loaded deck scene and build a lookup map from
- * normalised card name (e.g. "Eight of Hearts") to the card's
- * THREE.Group node.
+ * normalised card name (e.g. "Eight of Hearts") to the card's Object3D node.
  *
- * Cards MUST be looked up by name, not index — Hearts, Diamonds,
- * and Clubs are stored in a non-standard order in the GLB.
+ * IMPORTANT: Three.js GLTFLoader converts spaces to underscores in node names.
+ * GLB has "Ace of Spades" but Three.js creates "Ace_of_Spades".
  */
 export function buildCardMeshMap(
   deckScene: THREE.Group,
-): Map<string, THREE.Group> {
-  const map = new Map<string, THREE.Group>()
+): Map<string, THREE.Object3D> {
+  const map = new Map<string, THREE.Object3D>()
 
   deckScene.traverse((child) => {
-    if (!(child instanceof THREE.Group)) return
-    if (!child.name.includes(' of ')) return
+    if (!child.name.includes('_of_')) return
+    if (child.children.length === 0) return
+    const afterOf = child.name.split('_of_')[1] ?? ''
+    if (afterOf.includes('_')) return
 
-    const name = child.name.includes(MESH_NAME_TYPO)
-      ? child.name.replace(MESH_NAME_TYPO, MESH_NAME_FIX)
-      : child.name
+    let name = child.name.replace(/_/g, ' ')
+    if (name.includes(MESH_NAME_TYPO)) name = name.replace(MESH_NAME_TYPO, MESH_NAME_FIX)
 
     map.set(name, child)
   })
@@ -66,11 +66,11 @@ export function cardToMeshName(card: Card): string {
 }
 
 /**
- * Look up the THREE.Group for a given Card from the pre-built mesh map.
+ * Look up the Object3D for a given Card from the pre-built mesh map.
  */
 export function getCardMesh(
   card: Card,
-  meshMap: Map<string, THREE.Group>,
-): THREE.Group | undefined {
+  meshMap: Map<string, THREE.Object3D>,
+): THREE.Object3D | undefined {
   return meshMap.get(cardToMeshName(card))
 }

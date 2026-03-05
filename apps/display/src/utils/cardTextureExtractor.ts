@@ -23,7 +23,7 @@ const TEX_HEIGHT = 512
  * "01_-_Default" and NOT named "07_-_Default".
  */
 function extractFaceTexture(
-  cardGroup: THREE.Group,
+  cardGroup: THREE.Object3D,
 ): THREE.Texture | null {
   let faceTexture: THREE.Texture | null = null
 

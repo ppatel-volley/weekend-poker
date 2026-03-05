@@ -10,8 +10,8 @@ import type { Card } from '@weekend-casino/shared'
 import { buildCardMeshMap, cardToMeshName } from '../../utils/cardUtils.js'
 
 export interface CardDeckContextValue {
-  meshMap: Map<string, THREE.Group>
-  getCardClone: (card: Card) => THREE.Group | null
+  meshMap: Map<string, THREE.Object3D>
+  getCardClone: (card: Card) => THREE.Object3D | null
   ready: boolean
 }
 
@@ -26,21 +26,52 @@ export function useCardDeck(): CardDeckContextValue {
 const DECK_GLB_PATH = '/52-card_deck.glb'
 
 export function CardDeckProvider({ children }: { children: React.ReactNode }) {
-  const { scene } = useGLTF(DECK_GLB_PATH)
-  const meshMapRef = useRef<Map<string, THREE.Group>>(new Map())
+  const gltf = useGLTF(DECK_GLB_PATH)
+  const scene = gltf.scene
+  const meshMapRef = useRef<Map<string, THREE.Object3D>>(new Map())
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    const map = buildCardMeshMap(scene)
+    const map = new Map<string, THREE.Object3D>()
+    const TYPO = 'Eigh of'
+    const FIX = 'Eight of'
+
+    // Three.js GLTFLoader normalises spaces to underscores in node names.
+    // GLB has "Ace of Spades" but Three.js creates "Ace_of_Spades".
+    const nodes = (gltf as any).nodes as Record<string, THREE.Object3D> | undefined
+    if (nodes) {
+      for (const [rawName, node] of Object.entries(nodes)) {
+        if (!rawName.includes('_of_')) continue
+        const afterOf = rawName.split('_of_')[1] ?? ''
+        if (afterOf.includes('_')) continue
+        let name = rawName.replace(/_/g, ' ')
+        if (name.includes('Eigh of')) name = name.replace('Eigh of', 'Eight of')
+        map.set(name, node)
+      }
+    }
+
+    // Fallback: traverse scene
+    if (map.size === 0) {
+      scene.traverse((child) => {
+        if (!child.name.includes('_of_')) return
+        if (child.children.length === 0) return
+        const afterOf = child.name.split('_of_')[1] ?? ''
+        if (afterOf.includes('_')) return
+        let name = child.name.replace(/_/g, ' ')
+        if (name.includes('Eigh of')) name = name.replace('Eigh of', 'Eight of')
+        map.set(name, child)
+      })
+    }
+
     for (const group of map.values()) {
       group.visible = false
     }
     meshMapRef.current = map
     setReady(true)
-  }, [scene])
+  }, [scene, gltf])
 
   const value = useMemo<CardDeckContextValue>(() => {
-    const getCardClone = (card: Card): THREE.Group | null => {
+    const getCardClone = (card: Card): THREE.Object3D | null => {
       const name = cardToMeshName(card)
       const source = meshMapRef.current.get(name)
       if (!source) return null

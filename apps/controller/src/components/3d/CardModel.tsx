@@ -20,7 +20,17 @@ export function CardModel({
 }) {
   const { getCardClone, ready } = useCardDeck()
   const clone = useMemo(
-    () => ready ? getCardClone(card) : null,
+    () => {
+      if (!ready) return null
+      const c = getCardClone(card)
+      if (c) {
+        // Zero out GLB-space transforms so the R3F props control positioning
+        c.position.set(0, 0, 0)
+        c.rotation.set(0, 0, 0)
+        c.scale.set(1, 1, 1)
+      }
+      return c
+    },
     [ready, card.rank, card.suit, getCardClone],
   )
 
