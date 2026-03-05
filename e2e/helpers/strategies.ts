@@ -44,8 +44,8 @@ export async function playBlackjackRound(page: Page): Promise<void> {
   await bjPlaceBet(page)
 
   // After bet, phases cascade. Poll for actionable state or round completion.
-  for (let i = 0; i < 30; i++) {
-    await page.waitForTimeout(500)
+  for (let i = 0; i < 60; i++) {
+    await page.waitForTimeout(250)
 
     // Round already completed (instant cascade — natural BJ, all auto-acted)
     if (await placeBetBtn.isVisible().catch(() => false)) return
@@ -82,8 +82,8 @@ export async function playBjcRound(page: Page): Promise<void> {
   let playerStood = false
 
   // BJC has auto-ante. Poll for actionable state or round completion.
-  for (let i = 0; i < 30; i++) {
-    await page.waitForTimeout(500)
+  for (let i = 0; i < 60; i++) {
+    await page.waitForTimeout(250)
 
     // Stand if it's our turn
     if (await standBtn.isVisible().catch(() => false)) {
@@ -239,8 +239,8 @@ export async function playDrawRound(page: Page): Promise<void> {
   }
 
   // Discard phase — keep all cards
-  for (let i = 0; i < 15; i++) {
-    await page.waitForTimeout(500)
+  for (let i = 0; i < 30; i++) {
+    await page.waitForTimeout(250)
     if (await keepAll.isVisible().catch(() => false)) {
       await drawKeepAll(page)
       break
