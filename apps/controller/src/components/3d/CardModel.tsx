@@ -1,0 +1,37 @@
+/**
+ * Single 3D card model component for the controller.
+ * Uses getCardClone from CardDeckProvider.
+ */
+
+import { useMemo } from 'react'
+import type { Card } from '@weekend-casino/shared'
+import { useCardDeck } from './CardDeckProvider.js'
+
+export function CardModel({
+  card,
+  position = [0, 0, 0],
+  rotation = [-Math.PI / 2, 0, 0],
+  scale = 1,
+}: {
+  card: Card
+  position?: [number, number, number]
+  rotation?: [number, number, number]
+  scale?: number
+}) {
+  const { getCardClone, ready } = useCardDeck()
+  const clone = useMemo(
+    () => ready ? getCardClone(card) : null,
+    [ready, card.rank, card.suit, getCardClone],
+  )
+
+  if (!clone) return null
+
+  return (
+    <primitive
+      object={clone}
+      position={position}
+      rotation={rotation}
+      scale={[scale, scale, scale]}
+    />
+  )
+}
