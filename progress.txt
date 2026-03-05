@@ -1,0 +1,48 @@
+## Branch: fix/e2e-gameplay-bugs
+
+### E2E Gameplay Fixes (all 7 games)
+- BJ/BJC sub-thunk dispatch breaks VGF phase transitions → inlined as reducers
+- BJ/BJC bots not auto-stood after human acts → bot loop in advance helpers
+- Draw bots don't auto-act → drawAutoBotPlay() + auto-confirm discards + post-human bot play
+- Draw strategy used nonexistent "Your turn!" text → switched to testid buttons
+- BJ strategy didn't handle insurance → added insurance decline
+- Game Night leaderboard stuck (setTimeout loses VGF context) → added Continue button
+- Craps heading case mismatch ("CRAPS" vs "Craps") → toLowerCase()
+- Files: bj-thunks.ts, bjc-thunks.ts, bj-phases.ts, bjc-phases.ts, draw-phases.ts, draw-thunks.ts, strategies.ts, game-actions.ts, GameNightLeaderboardController.tsx
+
+### Multiplayer Fixes
+- Cross-page .or() silently fails → independent polling per controller
+- Hold'em has no WON/LOST text → assert action count + stack delta
+- Files: two-player-holdem.test.ts, two-player-bjc.test.ts
+
+### Retention Fixes
+- Challenges: start game first (tab bar only during gameplay), case-sensitive tier names
+- Daily Bonus: navigate to Profile tab, assert heading
+- Files: challenges.test.ts, daily-bonus.test.ts
+
+### Review Pass 8 Fixes
+- CRITICAL: BJ bot double-debit → removed duplicate updateWallet, added wallet check
+- HIGH: BJC underfunded freeroll → bjcRemovePlayer reducer, markPlayerBusted
+- HIGH: BJC test false positive → || to &&
+- HIGH: GN error swallowing → tightened catch pattern
+- MEDIUM: Challenges loading state → require actual tier content
+- MEDIUM: BJC strategy early return → playerStood flag
+- MEDIUM: Hold'em weak proof → stack delta assertion
+- Files: bj-phases.ts, bjc-phases.ts, bjc-reducers.ts, bj-phases.test.ts, bjc-reducers.test.ts, all E2E tests
+
+### Review Pass 9 Fixes
+- CRITICAL: Typecheck failing → added missing CasinoPlayer fields to test fixtures
+- HIGH: BJC tie-break → full chain: value → card count → turn order (no more false splits)
+- MEDIUM: Chip debit before shoe check → reordered in bjDoubleDown, bjSplit, bjcDoubleDown
+- MEDIUM: GN error pattern too broad → narrowed to "Unknown game heading|game-heading"
+- Files: bjc-reducers.test.ts, bjc-thunks.ts, bj-thunks.ts, game-night.test.ts
+
+### AGENTS.md Updates
+- Added stewardship principle ("fight entropy")
+- Added progress.txt tracking requirement
+- Added agent prompt requirements: type-conformant fixtures, economic invariant tests, narrow error patterns, edge-case tests, triple verification gate
+
+### Current State
+- 1945 unit tests passing (110 files)
+- Typecheck PASS, Build PASS
+- 66-67/67 E2E passing (Game Night occasionally flaky due to BJ insurance timing within GN)
