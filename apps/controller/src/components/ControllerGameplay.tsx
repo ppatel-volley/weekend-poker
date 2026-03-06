@@ -3,7 +3,7 @@ import type { PlayerAction, PokerGameState } from '@weekend-casino/shared'
 import { CasinoPhase, BETTING_PHASES, getPhaseLabel } from '@weekend-casino/shared'
 import { useDispatchThunk, useSessionMember, useStateSync } from '../hooks/useVGFHooks.js'
 import { usePrivateHoleCards } from '../hooks/usePrivateHoleCards.js'
-import { Hand3D } from './3d/Hand3D.js'
+import { CardHand2D, CardBack } from './shared/CardDisplay2D.js'
 
 /**
  * Main gameplay controller screen.
@@ -112,11 +112,11 @@ export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
       {/* Hole cards */}
       <div style={{ marginBottom: '24px', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {myCards ? (
-          <Hand3D cards={[myCards[0], myCards[1]]} height={160} />
+          <CardHand2D cards={[myCards[0], myCards[1]]} cardWidth={80} cardHeight={120} fontSize={24} />
         ) : (
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-            <div style={holeCardStyle}>?</div>
-            <div style={holeCardStyle}>?</div>
+            <CardBack width={80} height={120} />
+            <CardBack width={80} height={120} />
           </div>
         )}
       </div>
@@ -179,32 +179,6 @@ export function ControllerGameplay({ phase }: { phase: CasinoPhase }) {
   )
 }
 
-function suitSymbol(suit: string): string {
-  switch (suit) {
-    case 'spades': return '\u2660'
-    case 'hearts': return '\u2665'
-    case 'diamonds': return '\u2666'
-    case 'clubs': return '\u2663'
-    default: return ''
-  }
-}
-
-function suitColour(suit: string): string {
-  return suit === 'hearts' || suit === 'diamonds' ? '#e74c3c' : '#ecf0f1'
-}
-
-const holeCardStyle: React.CSSProperties = {
-  width: '80px',
-  height: '120px',
-  borderRadius: '8px',
-  background: '#fafafa',
-  border: '2px solid #888',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: '24px',
-}
 
 function actionButtonStyle(bg: string): React.CSSProperties {
   return {

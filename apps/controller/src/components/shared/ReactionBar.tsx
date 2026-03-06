@@ -66,7 +66,7 @@ export function ReactionBar() {
   const handleReaction = useCallback((type: ReactionType) => {
     if (!playerId || isRateLimited()) return
 
-    dispatch('sendReaction', playerId, type)
+    dispatch('sendReaction', playerId, type, Date.now())
 
     // Show brief visual cooldown feedback
     setCooldown(true)

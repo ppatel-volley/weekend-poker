@@ -26,38 +26,48 @@ A multi-game casino platform built on the Volley Games Framework (VGF). Server-a
 ## Architecture
 
 ```
-weekend-poker/
+weekend-casino/
 ├── apps/
-│   ├── server/           # VGF game server (port 3000)
+│   ├── server/           # WGFServer game server (port 3000)
 │   │   ├── src/
 │   │   │   ├── ruleset/          # Casino ruleset: phases, reducers, thunks per game
+│   │   │   │   ├── session-thunks.ts    # joinSession/leaveSession (replaces onConnect/onDisconnect)
+│   │   │   │   └── connection-registry.ts # Private messaging (hole card delivery)
+│   │   │   ├── scheduler/        # InMemoryRuntimeSchedulerStore (dev) / RedisRuntimeSchedulerStore (prod)
+│   │   │   ├── services/         # Resilient Redis client factory
+│   │   │   ├── persistence/      # Player identity, profiles, challenges, daily bonus (Redis/DynamoDB)
 │   │   │   ├── poker-engine/     # Hold'em: hand eval, betting, positions, pots
 │   │   │   ├── draw-engine/      # 5-Card Draw: hand eval, discard mechanics
 │   │   │   ├── tcp-engine/       # Three Card Poker: 3-card eval, payouts
 │   │   │   ├── blackjack-engine/ # Blackjack: shoe, dealer strategy, payouts
 │   │   │   ├── roulette-engine/  # Roulette: wheel, bet types, payouts, near-miss
+│   │   │   ├── craps-engine/     # Craps: dice, bet types, come/don't come, point
 │   │   │   ├── bot-engine/       # AI bots: rules engine, Claude LLM, personalities
-│   │   │   └── voice/            # Voice intent parsing (Deepgram STT)
+│   │   │   ├── voice/            # Voice intent parsing (Deepgram STT)
+│   │   │   └── health.ts         # /health (liveness) + /health/ready (readiness)
 │   ├── display/          # React + R3F TV display (port 5173)
+│   │   ├── electron/             # Electron IPC handlers (GameLift Streams)
 │   │   ├── src/
 │   │   │   ├── components/
-│   │   │   │   ├── scenes/       # Per-game 3D scenes (Lobby, Hold'em, Draw, TCP, BJ, Roulette)
+│   │   │   │   ├── scenes/       # Per-game 3D scenes (Lobby, Hold'em, Draw, TCP, BJ, Roulette, Craps)
 │   │   │   │   └── hud/          # Casino HUD overlay (wallet, game info, timer)
+│   │   │   ├── platform/         # MaybePlatformProvider, platform detection
+│   │   │   ├── utils/            # getPlatformApiUrl, ensureLocalHubSessionId, configLoader
 │   │   │   └── hooks/            # VGF state hooks (useCurrentGame, useWallet)
 │   └── controller/       # React mobile controller (port 5174)
 │       ├── src/
 │       │   ├── components/
 │       │   │   ├── games/        # Per-game controller layouts
 │       │   │   └── shared/       # Cross-game: WalletDisplay, VoiceButton, PlayerInfo
-│       │   └── hooks/            # Voice recognition (useVoice with Deepgram)
+│       │   └── hooks/            # Voice recognition, Platform SDK device identity
 ├── packages/
 │   └── shared/           # Shared types, constants, phase enums
-│       ├── src/
-│       │   ├── types/            # CasinoGameState, CasinoPhase, per-game state types
-│       │   └── constants/        # Bet limits, blind levels, game config
 ├── docs/                 # PRD, TDD, canonical decisions, game design
-├── e2e/                  # Playwright E2E tests
-└── learnings/            # Documented mistakes and prevention patterns
+├── e2e/                  # Playwright E2E tests (27 files, 7 projects)
+├── learnings/            # Documented mistakes and prevention patterns (15 entries)
+├── Dockerfile            # Multi-stage production build
+├── docker-compose.yml    # Server + Redis
+└── turbo.json            # Turborepo task orchestration
 ```
 
 ### How It Works
@@ -75,31 +85,46 @@ Card security: hole cards and deck state are stored server-side only. Each contr
 
 - Node.js 22+ (LTS)
 - pnpm 9.15.4 (`corepack enable && corepack prepare pnpm@9.15.4`)
+- Redis 7+ (optional for dev; [Memurai](https://www.memurai.com/) on Windows, `redis-server` on Linux/macOS)
 
 ## Quick Start
 
 ```bash
-# Install dependencies
+# 1. Install dependencies
 pnpm install
 
-# Run all three apps in parallel
+# 2. Copy environment file
+cp .env.example .env
+# Edit .env — at minimum set DEEPGRAM_API_KEY for voice input
+
+# 3. Run all three apps in parallel
 pnpm dev
 ```
 
 This starts:
-- **Server** at `http://localhost:3000`
-- **Display** at `http://localhost:5173`
-- **Controller** at `http://localhost:5174`
+- **Server** at `http://localhost:3000` (WGFServer with Socket.IO)
+- **Display** at `http://localhost:5173` (TV screen, React Three Fiber)
+- **Controller** at `http://localhost:5174` (phone, React)
 
-Open the display in a browser, then open the controller on a phone (or second tab) with the sessionId from the display.
+Open the display in a browser. It shows a QR code and a controller URL with a `?sessionId=...` parameter. Open that URL on a phone or second browser tab to join.
 
 ### Run Apps Individually
 
 ```bash
-pnpm dev:server       # Server only
-pnpm dev:display      # Display only
-pnpm dev:controller   # Controller only
+pnpm dev:server       # Server only (port 3000)
+pnpm dev:display      # Display only (port 5173)
+pnpm dev:controller   # Controller only (port 5174)
 ```
+
+### With Redis (optional, enables persistent scheduling)
+
+If you have Redis/Memurai running locally:
+
+```bash
+REDIS_URL=redis://localhost:6379 pnpm dev:server
+```
+
+Without `REDIS_URL`, the server uses in-memory storage and scheduling (fine for development).
 
 ## Environment Variables
 
@@ -109,13 +134,26 @@ Copy `.env.example` to `.env` and fill in your values:
 cp .env.example .env
 ```
 
-| Variable | Required | App | Description |
-|----------|----------|-----|-------------|
-| `DEEPGRAM_API_KEY` | Yes (for voice) | controller | Deepgram STT API key |
-| `MESHY_API_KEY` | No | — | Meshy AI 3D model generation |
-| `ANTHROPIC_API_KEY` | No | server | Claude API for bot dialogue (falls back to canned responses) |
-| `PORT` | No (default: 3000) | server | HTTP server port |
-| `LOG_LEVEL` | No (default: info) | server | Pino log level |
+### Server Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DEEPGRAM_API_KEY` | Yes (for voice) | — | Deepgram STT API key |
+| `ANTHROPIC_API_KEY` | No | — | Claude API for bot dialogue (falls back to canned responses) |
+| `PORT` | No | `3000` | HTTP server port |
+| `REDIS_URL` | No | — | Redis connection string (e.g. `redis://localhost:6379`). Enables persistent scheduling and durable storage. |
+| `LOG_LEVEL` | No | `info` | Log level (debug, info, warn, error) |
+| `CORS_ORIGIN` | No | `*` | Allowed CORS origins (comma-separated) |
+| `SHUTDOWN_TIMEOUT` | No | `25000` | Graceful shutdown timeout (ms) |
+
+### Controller Variables (in `apps/controller/.env`)
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `VITE_SERVER_URL` | No | `http://localhost:3000` | VGF game server URL |
+| `VITE_GAME_ID` | No | `weekend-casino` | Platform SDK game identifier |
+| `VITE_PLATFORM_SDK_STAGE` | No | `local` | Platform SDK stage (local/test/dev/staging/production) |
+| `VITE_SEGMENT_WRITE_KEY` | No | — | Segment analytics write key |
 
 ## Testing
 
@@ -135,58 +173,65 @@ pnpm --filter @weekend-casino/display test
 pnpm --filter @weekend-casino/controller test
 ```
 
-**Current coverage: 1,305 tests across 75 test files.**
+**Current coverage: 2,022 tests across 120 test files.**
 
 | Package | Test Files | Tests | Covers |
 |---------|-----------|-------|--------|
 | `@weekend-casino/shared` | 10+ | ~130 | Types, phases, wallet, player, session stats, reactions |
-| `@weekend-casino/server` | 55+ | ~1,050 | All game engines, reducers, thunks, phases, voice, bots, roulette, speed variants, game night utils, reducer collision check |
-| `@weekend-casino/display` | 5 | ~30 | Scene router, hooks, platform detection, App exports |
-| `@weekend-casino/controller` | 5 | ~35 | Game router, wallet display, voice hook |
+| `@weekend-casino/server` | 70+ | ~1,500 | All game engines, reducers, thunks, phases, voice, bots, session lifecycle, scheduler, health endpoints, Redis client |
+| `@weekend-casino/display` | 10+ | ~50 | Scene router, hooks, platform detection, config loader, Platform SDK utils |
+| `@weekend-casino/controller` | 16 | ~155 | Game router, wallet display, voice hook, craps/game-night controllers |
 
 ### E2E Tests (Playwright)
 
 ```bash
-# Install Playwright browsers (first time only — required before E2E tests will run)
+# Install Playwright browsers (first time only)
 pnpm exec playwright install
 
-# Run E2E tests (auto-starts dev servers)
+# Run all E2E tests (auto-starts dev servers)
 pnpm test:e2e
+
+# Run specific project
+npx playwright test --project=smoke
+npx playwright test --project=gameplay
+npx playwright test --project=gamenight
 
 # Run with UI
 npx playwright test --ui
-
-# Run specific test file
-npx playwright test e2e/lobby.test.ts
 ```
 
-**7 E2E test files** covering: lobby flow, Hold'em hand lifecycle, game switching, wallet persistence, voice button, TV platform detection, smoke tests.
+**27 E2E test files across 7 projects** covering: smoke tests, lobby flow, all 7 games (Hold'em, Draw, Blackjack, BJC, Roulette, TCP, Craps), game switching, wallet persistence, voice button, TV platform detection, Game Night mode, retention (profile, challenges, daily bonus), and multiplayer.
 
 Playwright is configured with:
 - **Controller project**: Chromium mobile viewport (390x844, iPhone 14)
 - **Display project**: Chromium desktop viewport (1920x1080)
+- **Gameplay project**: Per-game tests with 120s timeout
+- **Game Night project**: Full Game Night flow with 300s timeout
 - Retries: 2 (CI), screenshots on failure, video on first retry
 
-### Type Checking
+### Type Checking and Build
 
 ```bash
-pnpm typecheck
+pnpm typecheck   # TypeScript strict checking (all 4 packages)
+pnpm build        # Production build (all 3 apps)
 ```
 
 ## Commands Reference
 
 | Command | Description |
 |---------|-------------|
-| `pnpm dev` | Start all apps (parallel) |
+| `pnpm dev` | Start all apps via Turborepo (parallel) |
 | `pnpm dev:server` | Start server only |
 | `pnpm dev:display` | Start display only |
 | `pnpm dev:controller` | Start controller only |
-| `pnpm build` | Build all packages |
+| `pnpm build` | Build all packages via Turborepo |
 | `pnpm test -- --run` | Run unit tests once |
 | `pnpm test` | Run unit tests (watch mode) |
 | `pnpm test:e2e` | Run Playwright E2E tests |
-| `pnpm typecheck` | TypeScript check all packages |
+| `pnpm typecheck` | TypeScript check all packages via Turborepo |
 | `pnpm lint` | Lint all packages |
+| `pnpm format` | Format all files with Prettier |
+| `pnpm format:check` | Check formatting without writing |
 | `pnpm clean` | Remove all dist directories |
 
 ## Game Architecture
@@ -261,14 +306,15 @@ Supported commands vary per game (fold, check, call, raise, hit, stand, draw, an
 
 ## Tech Stack
 
-- **Server**: Node.js 22, VGF v4.8.0 (`@volley/vgf`), Express, Pino
-- **Display**: React 19, Vite, Three.js, React Three Fiber, Drei
-- **Controller**: React 19, Vite, Deepgram SDK
+- **Server**: Node.js 22, WGFServer (VGF v4.8.0), Express, `@volley/logger`, Socket.IO, ioredis
+- **Display**: React 19, Vite, Three.js, React Three Fiber, Drei, `@volley/platform-sdk`
+- **Controller**: React 19, Vite, `@volley/platform-sdk`, Deepgram SDK, react-router-dom
 - **Shared**: TypeScript (strict), Vitest
 - **Bots**: Anthropic SDK (Claude), rules-based engine
-- **Monorepo**: pnpm workspaces
-- **E2E**: Playwright
+- **Monorepo**: pnpm workspaces, Turborepo, Prettier + lint-staged
+- **E2E**: Playwright (7 test projects, 27 test files)
 - **Voice**: Deepgram Nova-2 (STT)
+- **Infrastructure**: Docker (multi-stage), Redis 7, health checks (/health, /health/ready)
 
 ## Documentation
 
@@ -289,11 +335,46 @@ Supported commands vary per game (fold, check, call, raise, hit, stand, draw, an
 | `AGENTS.md` | AI agent guidelines |
 | `AGENTS-PROJECT.md` | Project-specific agent config |
 
-## Production Notes
+## Production Deployment
 
-The dev setup uses in-memory storage. For production:
-- Replace `MemoryStorage` with Redis (`ioredis`)
-- Replace no-op scheduler with `RedisRuntimeSchedulerStore`
-- Update CORS origins in `apps/server/src/index.ts`
-- Set `NODE_ENV=production`
-- Configure GameLift Streams for cloud GPU rendering (Display)
+### Docker
+
+```bash
+# Build production image
+docker compose build
+
+# Run with Redis
+docker compose up
+```
+
+The `docker-compose.yml` starts the VGF server and Redis. When `REDIS_URL` is set, the server enables:
+- **RedisPersistence** — `MemoryStorage` with Redis-backed persistence (sessions survive restarts)
+- **RedisRuntimeSchedulerStore** — persistent scheduled actions (survives restarts)
+- **Resilient Redis client** — exponential backoff with jitter, unlimited retries
+- **30s disconnect grace period** — orphaned players cleaned from game state after abrupt disconnects
+
+Without `REDIS_URL` (local dev), `MemoryStorage` and `InMemoryRuntimeSchedulerStore` are used (sessions lost on restart, which is fine for development).
+
+### Health Endpoints
+
+| Endpoint | Purpose | Response |
+|----------|---------|----------|
+| `GET /health` | Liveness probe | Always 200 (process is alive) |
+| `GET /health/ready` | Readiness probe | 200 if Redis healthy, 503 if unhealthy |
+
+### Graceful Shutdown
+
+The server handles `SIGTERM` and `SIGINT` with a 25-second timeout:
+1. Stop WGFServer (drain connections)
+2. Close Redis clients
+3. Close HTTP server
+4. Exit 0
+
+### Production Checklist
+
+- [ ] Set `REDIS_URL` (required for durable scheduling and persistence)
+- [ ] Set `CORS_ORIGIN` to allowed origins (not `*`)
+- [ ] Set `NODE_ENV=production`
+- [ ] Configure GameLift Streams for cloud GPU rendering (Display)
+- [ ] Set `VITE_PLATFORM_SDK_STAGE=production` for controller
+- [ ] Verify `/health/ready` returns 200 before routing traffic

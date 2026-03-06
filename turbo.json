@@ -1,0 +1,26 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["NODE_ENV"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md", "!**/*.test.*", "!**/*.spec.*"],
+      "outputs": ["dist/**", ".electron-builder/**"],
+      "env": ["VITE_*"]
+    },
+    "dev": {
+      "persistent": true
+    },
+    "lint": {
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
+    },
+    "typecheck": {
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
+      "outputs": ["coverage/**"]
+    }
+  }
+}

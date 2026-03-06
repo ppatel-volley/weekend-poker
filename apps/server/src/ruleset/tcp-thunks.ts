@@ -2,7 +2,7 @@
  * Three Card Poker thunks — async orchestration.
  *
  * Per VGF: thunks handle validation, side effects, and multi-dispatch sequences.
- * ctx.dispatch() is synchronous — state visible immediately after.
+ * await ctx.dispatch() is synchronous — state visible immediately after.
  */
 
 import type { CasinoGameState, Card } from '@weekend-casino/shared'
@@ -35,9 +35,14 @@ export const tcpThunks = {
     const tcp = state.threeCardPoker
     if (!tcp) return
 
+    // Reject invalid bet amounts
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+      return
+    }
+
     // Validate ante range
     if (amount < tcp.config.minAnte || amount > tcp.config.maxAnte) {
-      ctx.dispatch('setBetError', playerId, `Ante must be between ${tcp.config.minAnte} and ${tcp.config.maxAnte}`, Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, `Ante must be between ${tcp.config.minAnte} and ${tcp.config.maxAnte}`, Date.now() + 3000)
       return
     }
 
@@ -45,27 +50,27 @@ export const tcpThunks = {
     const walletBalance = state.wallet[playerId] ?? 0
     const totalBet = amount + (pairPlusAmount ?? 0)
     if (totalBet > walletBalance) {
-      ctx.dispatch('setBetError', playerId, 'Insufficient chips', Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, 'Insufficient chips', Date.now() + 3000)
       return
     }
 
     // Validate Pair Plus range
     if (pairPlusAmount !== undefined && pairPlusAmount > 0) {
       if (pairPlusAmount > tcp.config.maxPairPlus) {
-        ctx.dispatch('setBetError', playerId, `Pair Plus max is ${tcp.config.maxPairPlus}`, Date.now() + 3000)
+        await ctx.dispatch('setBetError', playerId, `Pair Plus max is ${tcp.config.maxPairPlus}`, Date.now() + 3000)
         return
       }
-      ctx.dispatch('tcpPlacePairPlus', playerId, pairPlusAmount)
+      await ctx.dispatch('tcpPlacePairPlus', playerId, pairPlusAmount)
     }
 
-    ctx.dispatch('tcpPlaceAnte', playerId, amount)
+    await ctx.dispatch('tcpPlaceAnte', playerId, amount)
 
     // Check if all players have placed antes
     const updated = ctx.getState()
     const tcpUpdated = updated.threeCardPoker!
     const allPlaced = tcpUpdated.playerHands.every(h => h.anteBet > 0)
     if (allPlaced) {
-      ctx.dispatch('tcpSetAllAntesPlaced', true)
+      await ctx.dispatch('tcpSetAllAntesPlaced', true)
     }
   },
 
@@ -87,20 +92,20 @@ export const tcpThunks = {
     for (const hand of tcp.playerHands) {
       const cards: [Card, Card, Card] = [deck[deckIndex]!, deck[deckIndex + 1]!, deck[deckIndex + 2]!]
       playerCards.set(hand.playerId, cards)
-      ctx.dispatch('tcpSetPlayerCards', hand.playerId, cards)
+      await ctx.dispatch('tcpSetPlayerCards', hand.playerId, cards)
       deckIndex += 3
     }
 
     // Deal 3 cards to dealer
     const dealerCards: [Card, Card, Card] = [deck[deckIndex]!, deck[deckIndex + 1]!, deck[deckIndex + 2]!]
-    ctx.dispatch('tcpSetDealerCards', dealerCards)
+    await ctx.dispatch('tcpSetDealerCards', dealerCards)
     deckIndex += 3
 
     // Evaluate player hands immediately (server knows, clients don't see rank yet)
     for (const hand of tcp.playerHands) {
       const cards = playerCards.get(hand.playerId)!
       const result = evaluateTcpHand(cards)
-      ctx.dispatch('tcpSetPlayerHandResult', hand.playerId, result.rank, result.strength)
+      await ctx.dispatch('tcpSetPlayerHandResult', hand.playerId, result.rank, result.strength)
     }
 
     // Store server-side secrets
@@ -115,11 +120,11 @@ export const tcpThunks = {
     // Deduct bets from wallets
     for (const hand of tcp.playerHands) {
       const totalBet = hand.anteBet + hand.pairPlusBet
-      ctx.dispatch('updateWallet', hand.playerId, -totalBet)
+      await ctx.dispatch('updateWallet', hand.playerId, -totalBet)
     }
 
-    ctx.dispatch('tcpSetDealComplete', true)
-    ctx.dispatch('setDealerMessage', 'Cards dealt! Play or fold.')
+    await ctx.dispatch('tcpSetDealComplete', true)
+    await ctx.dispatch('setDealerMessage', 'Cards dealt! Play or fold.')
   },
 
   /**
@@ -141,13 +146,13 @@ export const tcpThunks = {
       const walletBalance = state.wallet[playerId] ?? 0
       if (walletBalance < hand.anteBet) {
         // Insufficient funds — auto-fold instead
-        ctx.dispatch('tcpSetPlayerDecision', playerId, 'fold')
+        await ctx.dispatch('tcpSetPlayerDecision', playerId, 'fold')
       } else {
-        ctx.dispatch('tcpSetPlayerDecision', playerId, 'play')
-        ctx.dispatch('updateWallet', playerId, -hand.anteBet)
+        await ctx.dispatch('tcpSetPlayerDecision', playerId, 'play')
+        await ctx.dispatch('updateWallet', playerId, -hand.anteBet)
       }
     } else {
-      ctx.dispatch('tcpSetPlayerDecision', playerId, decision)
+      await ctx.dispatch('tcpSetPlayerDecision', playerId, decision)
     }
 
     // Check if all players have decided
@@ -155,7 +160,7 @@ export const tcpThunks = {
     const tcpUpdated = updated.threeCardPoker!
     const allDecided = tcpUpdated.playerHands.every(h => h.decision !== 'undecided')
     if (allDecided) {
-      ctx.dispatch('tcpSetAllDecisionsMade', true)
+      await ctx.dispatch('tcpSetAllDecisionsMade', true)
     }
   },
 
@@ -171,12 +176,12 @@ export const tcpThunks = {
     const dealerResult = evaluateTcpHand(dealerCards)
     const qualifies = dealerQualifies(dealerResult)
 
-    ctx.dispatch('tcpRevealDealer', dealerResult.rank, dealerResult.strength, qualifies)
+    await ctx.dispatch('tcpRevealDealer', dealerResult.rank, dealerResult.strength, qualifies)
 
     const msg = qualifies
       ? `Dealer shows ${dealerResult.description}. Dealer qualifies!`
       : `Dealer shows ${dealerResult.description}. Dealer does not qualify!`
-    ctx.dispatch('setDealerMessage', msg)
+    await ctx.dispatch('setDealerMessage', msg)
   },
 
   /**
@@ -203,7 +208,7 @@ export const tcpThunks = {
         hand.decision === 'fold',
       )
 
-      ctx.dispatch('tcpSetPlayerPayout',
+      await ctx.dispatch('tcpSetPlayerPayout',
         hand.playerId,
         payout.anteBonus,
         payout.pairPlusPayout,
@@ -213,18 +218,18 @@ export const tcpThunks = {
 
       // Credit winnings back to wallet
       if (payout.totalReturn > 0) {
-        ctx.dispatch('updateWallet', hand.playerId, payout.totalReturn)
+        await ctx.dispatch('updateWallet', hand.playerId, payout.totalReturn)
       }
     }
 
-    ctx.dispatch('tcpSetPayoutComplete', true)
+    await ctx.dispatch('tcpSetPayoutComplete', true)
   },
 
   /**
    * Complete the round — sync stats, prepare for next round.
    */
   tcpCompleteRound: async (ctx: ThunkCtx) => {
-    ctx.dispatch('tcpSetRoundCompleteReady', true)
-    ctx.dispatch('setDealerMessage', null)
+    await ctx.dispatch('tcpSetRoundCompleteReady', true)
+    await ctx.dispatch('setDealerMessage', null)
   },
 }

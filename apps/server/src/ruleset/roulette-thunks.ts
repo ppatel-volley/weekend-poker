@@ -2,7 +2,7 @@
  * Roulette thunks — async orchestration.
  *
  * Per VGF: thunks handle validation, side effects, and multi-dispatch sequences.
- * ctx.dispatch() is synchronous — state visible immediately after.
+ * await ctx.dispatch() is synchronous — state visible immediately after.
  */
 
 import type { CasinoGameState, RouletteBet, RouletteBetType } from '@weekend-casino/shared'
@@ -40,7 +40,7 @@ type ThunkCtx = {
   logger?: any
 }
 
-let betIdCounter = 0
+import { randomUUID } from 'node:crypto'
 
 export const rouletteThunks = {
   /**
@@ -61,25 +61,30 @@ export const rouletteThunks = {
     const roulette = state.roulette
     if (!roulette) return
 
+    // Reject invalid bet amounts
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+      return
+    }
+
     // Resolve the numbers covered by this bet
     const betNumbers = getNumbersForBet(betType, numbers)
 
     // Validate bet structure
     if (!isValidBet(betType, betNumbers)) {
-      ctx.dispatch('setBetError', playerId, 'Invalid bet placement', Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, 'Invalid bet placement', Date.now() + 3000)
       return
     }
 
     // Validate amount range
     const config = roulette.config
     if (amount < config.minBet) {
-      ctx.dispatch('setBetError', playerId, `Minimum bet is ${config.minBet}`, Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, `Minimum bet is ${config.minBet}`, Date.now() + 3000)
       return
     }
 
     const maxForType = isInsideBet(betType) ? config.maxInsideBet : config.maxOutsideBet
     if (amount > maxForType) {
-      ctx.dispatch('setBetError', playerId, `Maximum bet for this type is ${maxForType}`, Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, `Maximum bet for this type is ${maxForType}`, Date.now() + 3000)
       return
     }
 
@@ -87,19 +92,19 @@ export const rouletteThunks = {
     const playerState = roulette.players.find(p => p.playerId === playerId)
     const currentTotal = playerState?.totalBet ?? 0
     if (currentTotal + amount > config.maxTotalBet) {
-      ctx.dispatch('setBetError', playerId, `Maximum total bet is ${config.maxTotalBet}`, Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, `Maximum total bet is ${config.maxTotalBet}`, Date.now() + 3000)
       return
     }
 
     // Validate wallet balance
     const walletBalance = state.wallet[playerId] ?? 0
     if (currentTotal + amount > walletBalance) {
-      ctx.dispatch('setBetError', playerId, 'Insufficient chips', Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, 'Insufficient chips', Date.now() + 3000)
       return
     }
 
     const bet: RouletteBet = {
-      id: `rbet-${++betIdCounter}`,
+      id: `rbet-${randomUUID()}`,
       playerId,
       type: betType,
       amount,
@@ -108,7 +113,7 @@ export const rouletteThunks = {
       payout: 0,
     }
 
-    ctx.dispatch('roulettePlaceBet', bet)
+    await ctx.dispatch('roulettePlaceBet', bet)
   },
 
   /**
@@ -125,7 +130,7 @@ export const rouletteThunks = {
     const bet = roulette.bets.find(b => b.id === betId)
     if (!bet || bet.playerId !== playerId) return
 
-    ctx.dispatch('rouletteRemoveBet', betId)
+    await ctx.dispatch('rouletteRemoveBet', betId)
   },
 
   /**
@@ -140,19 +145,21 @@ export const rouletteThunks = {
     if (!roulette) return
 
     const walletBalance = state.wallet[playerId] ?? 0
+    const playerState = roulette.players.find(p => p.playerId === playerId)
+    const currentTotal = playerState?.totalBet ?? 0
     let totalNeeded = 0
     for (const bet of previousBets) {
       totalNeeded += bet.amount
     }
 
-    if (totalNeeded > walletBalance) {
-      ctx.dispatch('setBetError', playerId, 'Insufficient chips to repeat all bets', Date.now() + 3000)
+    if (totalNeeded > walletBalance - currentTotal) {
+      await ctx.dispatch('setBetError', playerId, 'Insufficient chips to repeat all bets', Date.now() + 3000)
       return
     }
 
     for (const prevBet of previousBets) {
       const newBet: RouletteBet = {
-        id: `rbet-${++betIdCounter}`,
+        id: `rbet-${randomUUID()}`,
         playerId,
         type: prevBet.type,
         amount: prevBet.amount,
@@ -160,7 +167,7 @@ export const rouletteThunks = {
         status: 'active',
         payout: 0,
       }
-      ctx.dispatch('roulettePlaceBet', newBet)
+      await ctx.dispatch('roulettePlaceBet', newBet)
     }
   },
 
@@ -172,7 +179,7 @@ export const rouletteThunks = {
     const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
     if (!playerId) return
 
-    ctx.dispatch('rouletteClearPlayerBets', playerId)
+    await ctx.dispatch('rouletteClearPlayerBets', playerId)
   },
 
   /**
@@ -184,13 +191,13 @@ export const rouletteThunks = {
     const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
     if (!playerId) return
 
-    ctx.dispatch('rouletteConfirmBets', playerId)
+    await ctx.dispatch('rouletteConfirmBets', playerId)
 
     const updated = ctx.getState()
     const roulette = updated.roulette!
     const allConfirmed = roulette.players.every(p => p.betsConfirmed)
     if (allConfirmed) {
-      ctx.dispatch('rouletteSetAllBetsPlaced', true)
+      await ctx.dispatch('rouletteSetAllBetsPlaced', true)
     }
   },
 
@@ -202,14 +209,14 @@ export const rouletteThunks = {
     const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
     if (!playerId) return
 
-    ctx.dispatch('rouletteClearPlayerBets', playerId)
-    ctx.dispatch('rouletteConfirmBets', playerId)
+    await ctx.dispatch('rouletteClearPlayerBets', playerId)
+    await ctx.dispatch('rouletteConfirmBets', playerId)
 
     const updated = ctx.getState()
     const roulette = updated.roulette!
     const allConfirmed = roulette.players.every(p => p.betsConfirmed)
     if (allConfirmed) {
-      ctx.dispatch('rouletteSetAllBetsPlaced', true)
+      await ctx.dispatch('rouletteSetAllBetsPlaced', true)
     }
   },
 
@@ -235,19 +242,19 @@ export const rouletteThunks = {
 
     // Deduct bets from wallets
     for (const bet of roulette.bets) {
-      ctx.dispatch('updateWallet', bet.playerId, -bet.amount)
+      await ctx.dispatch('updateWallet', bet.playerId, -bet.amount)
     }
 
     // Set winning number in public state (Display needs it for animation targeting)
-    ctx.dispatch('rouletteSetWinningNumber', winningNumber, winningColour)
+    await ctx.dispatch('rouletteSetWinningNumber', winningNumber, winningColour)
 
     // Detect near misses
     const nearMisses = detectNearMisses(winningNumber, roulette.bets)
     if (nearMisses.length > 0) {
-      ctx.dispatch('rouletteSetNearMisses', nearMisses)
+      await ctx.dispatch('rouletteSetNearMisses', nearMisses)
     }
 
-    ctx.dispatch('setDealerMessage', 'The wheel spins!')
+    await ctx.dispatch('setDealerMessage', 'The wheel spins!')
 
     // Schedule fallback: if the Display never reports spin completion,
     // force-complete after 8 seconds to prevent deadlock.
@@ -282,8 +289,8 @@ export const rouletteThunks = {
   rouletteCompleteSpinFromClient: async (ctx: ThunkCtx) => {
     const state = ctx.getState()
     if (state.phase !== 'ROULETTE_SPIN') return
-    ctx.dispatch('rouletteSetSpinComplete', true)
-    ctx.dispatch('rouletteSetSpinState', 'stopped')
+    await ctx.dispatch('rouletteSetSpinComplete', true)
+    await ctx.dispatch('rouletteSetSpinState', 'stopped')
 
     // Cancel the fallback timer since the client reported completion
     try {
@@ -300,8 +307,8 @@ export const rouletteThunks = {
   rouletteForceCompleteSpin: async (ctx: ThunkCtx) => {
     const state = ctx.getState()
     if (state.roulette?.spinComplete) return // Already completed
-    ctx.dispatch('rouletteSetSpinComplete', true)
-    ctx.dispatch('rouletteSetSpinState', 'stopped')
+    await ctx.dispatch('rouletteSetSpinComplete', true)
+    await ctx.dispatch('rouletteSetSpinState', 'stopped')
   },
 
   /**
@@ -325,32 +332,32 @@ export const rouletteThunks = {
       }
     })
 
-    ctx.dispatch('rouletteResolveBets', resolvedBets)
+    await ctx.dispatch('rouletteResolveBets', resolvedBets)
 
     // Calculate per-player payouts
     const playerPayouts = resolveAllBets(roulette.bets, winningNumber)
     for (const [playerId, result] of playerPayouts) {
-      ctx.dispatch('rouletteSetPlayerPayout', playerId, result.totalPayout, result.netResult)
+      await ctx.dispatch('rouletteSetPlayerPayout', playerId, result.totalPayout, result.netResult)
 
       // Credit winnings to wallet
       if (result.totalPayout > 0) {
-        ctx.dispatch('updateWallet', playerId, result.totalPayout)
+        await ctx.dispatch('updateWallet', playerId, result.totalPayout)
       }
     }
 
     // Announce result
     const colour = getNumberColour(winningNumber)
     const colourLabel = colour.charAt(0).toUpperCase() + colour.slice(1)
-    ctx.dispatch('setDealerMessage', `${winningNumber}, ${colourLabel}!`)
+    await ctx.dispatch('setDealerMessage', `${winningNumber}, ${colourLabel}!`)
 
-    ctx.dispatch('rouletteSetResultAnnounced', true)
+    await ctx.dispatch('rouletteSetResultAnnounced', true)
   },
 
   /**
    * Complete payout phase — trigger animations and advance.
    */
   rouletteCompletePayout: async (ctx: ThunkCtx) => {
-    ctx.dispatch('rouletteSetPayoutComplete', true)
+    await ctx.dispatch('rouletteSetPayoutComplete', true)
   },
 
   /**
@@ -363,14 +370,14 @@ export const rouletteThunks = {
 
     // Add to history
     const colour = getNumberColour(roulette.winningNumber)
-    ctx.dispatch('rouletteAddHistory', {
+    await ctx.dispatch('rouletteAddHistory', {
       roundNumber: roulette.roundNumber,
       number: roulette.winningNumber,
       colour,
     })
 
-    ctx.dispatch('rouletteSetRoundCompleteReady', true)
-    ctx.dispatch('setDealerMessage', null)
+    await ctx.dispatch('rouletteSetRoundCompleteReady', true)
+    await ctx.dispatch('setDealerMessage', null)
   },
 }
 

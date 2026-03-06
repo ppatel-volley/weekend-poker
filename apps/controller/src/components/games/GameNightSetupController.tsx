@@ -58,6 +58,7 @@ export function GameNightSetupController() {
       selectedGames,
       roundsPerGame,
       theme,
+      Date.now(),
     )
     ;(dispatch as (name: string, ...args: unknown[]) => void)('gnConfirmSetup')
   }

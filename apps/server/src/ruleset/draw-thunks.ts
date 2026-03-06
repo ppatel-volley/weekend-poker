@@ -61,28 +61,28 @@ export const drawProcessAction = async (
 
   switch (action) {
     case 'fold':
-      ctx.dispatch('drawFoldPlayer', playerId)
+      await ctx.dispatch('drawFoldPlayer', playerId)
       break
     case 'check':
       break
     case 'call':
-      ctx.dispatch('drawUpdatePlayerBet', playerId, drawState.currentBet)
+      await ctx.dispatch('drawUpdatePlayerBet', playerId, drawState.currentBet)
       break
     case 'bet':
       if (amount === undefined) return
-      ctx.dispatch('drawUpdatePlayerBet', playerId, amount)
+      await ctx.dispatch('drawUpdatePlayerBet', playerId, amount)
       break
     case 'raise':
       if (amount === undefined) return
-      ctx.dispatch('drawUpdatePlayerBet', playerId, amount)
+      await ctx.dispatch('drawUpdatePlayerBet', playerId, amount)
       break
     case 'all_in':
-      ctx.dispatch('drawUpdatePlayerBet', playerId, player.stack + player.bet)
+      await ctx.dispatch('drawUpdatePlayerBet', playerId, player.stack + player.bet)
       break
   }
 
-  ctx.dispatch('setPlayerLastAction', playerId, action)
-  drawAdvanceToNextPlayer(ctx)
+  await ctx.dispatch('setPlayerLastAction', playerId, action)
+  await drawAdvanceToNextPlayer(ctx)
 }
 
 /**
@@ -105,8 +105,8 @@ export const drawProcessDiscard = async (
 
   if (!validateDiscardIndices(cardIndices, hand.length)) return
 
-  ctx.dispatch('drawSelectDiscard', playerId, cardIndices)
-  ctx.dispatch('drawConfirmDiscard', playerId)
+  await ctx.dispatch('drawSelectDiscard', playerId, cardIndices)
+  await ctx.dispatch('drawConfirmDiscard', playerId)
 }
 
 /**
@@ -143,7 +143,7 @@ export const drawExecuteReplace = async (ctx: ThunkCtx): Promise<void> => {
 
     const [replacements, remainingDeck] = drawFromDeck(deck, discardIndices.length)
     deck = remainingDeck
-    ctx.dispatch('drawReplaceCards', player.id, replacements)
+    await ctx.dispatch('drawReplaceCards', player.id, replacements)
 
     // Update server-side hole cards
     const currentServerHand = serverState.draw.holeCards.get(player.id)
@@ -161,7 +161,7 @@ export const drawExecuteReplace = async (ctx: ThunkCtx): Promise<void> => {
   serverState.draw.discardPile = discardPile
   setServerGameState(sessionId, serverState)
 
-  ctx.dispatch('drawMarkComplete')
+  await ctx.dispatch('drawMarkComplete')
 }
 
 /**
@@ -178,7 +178,7 @@ export const drawEvaluateAndDistribute = async (ctx: ThunkCtx): Promise<void> =>
 
   // Single player remaining — award full pot
   if (remaining.length === 1) {
-    ctx.dispatch('drawAwardPot', [remaining[0]!.id], [drawState.pot])
+    await ctx.dispatch('drawAwardPot', [remaining[0]!.id], [drawState.pot])
     return
   }
 
@@ -220,13 +220,13 @@ export const drawEvaluateAndDistribute = async (ctx: ThunkCtx): Promise<void> =>
   }
 
   if (winnerIds.length > 0) {
-    ctx.dispatch('drawAwardPot', winnerIds, amounts)
+    await ctx.dispatch('drawAwardPot', winnerIds, amounts)
   }
 }
 
 // ── Helper ────────────────────────────────────────────────────────
 
-function drawAdvanceToNextPlayer(ctx: ThunkCtx): void {
+async function drawAdvanceToNextPlayer(ctx: ThunkCtx): Promise<void> {
   let state = ctx.getState()
   let drawState = state.fiveCardDraw
   if (!drawState) return
@@ -236,7 +236,7 @@ function drawAdvanceToNextPlayer(ctx: ThunkCtx): void {
 
   const nextIdx = nextActivePlayer(state.players, drawState.activePlayerIndex)
   if (nextIdx === -1) return
-  ctx.dispatch('drawSetActivePlayer', nextIdx)
+  await ctx.dispatch('drawSetActivePlayer', nextIdx)
 
   // Auto-play consecutive bots after advancing
   state = ctx.getState()
@@ -256,11 +256,11 @@ function drawAdvanceToNextPlayer(ctx: ThunkCtx): void {
       botAction = 'check'
     } else if (legalActions.includes('call')) {
       botAction = 'call'
-      ctx.dispatch('drawUpdatePlayerBet', activePlayer.id, drawState.currentBet)
+      await ctx.dispatch('drawUpdatePlayerBet', activePlayer.id, drawState.currentBet)
     }
-    ctx.dispatch('setPlayerLastAction', activePlayer.id, botAction)
+    await ctx.dispatch('setPlayerLastAction', activePlayer.id, botAction)
     if (botAction === 'fold') {
-      ctx.dispatch('drawFoldPlayer', activePlayer.id)
+      await ctx.dispatch('drawFoldPlayer', activePlayer.id)
     }
 
     // Advance to next
@@ -271,7 +271,7 @@ function drawAdvanceToNextPlayer(ctx: ThunkCtx): void {
 
     const botNextIdx = nextActivePlayer(state.players, drawState.activePlayerIndex)
     if (botNextIdx === -1) break
-    ctx.dispatch('drawSetActivePlayer', botNextIdx)
+    await ctx.dispatch('drawSetActivePlayer', botNextIdx)
 
     state = ctx.getState()
     drawState = state.fiveCardDraw!

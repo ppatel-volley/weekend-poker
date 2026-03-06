@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { PlatformProvider } from '@volley/platform-sdk/react'
 import {
   VGFProvider,
@@ -13,7 +13,7 @@ import { ReactionBar } from './components/shared/ReactionBar.js'
 import { ProfileView } from './components/ProfileView.js'
 import { ChallengesView } from './components/ChallengesView.js'
 import { CosmeticsView } from './components/CosmeticsView.js'
-import { usePhase } from './hooks/useVGFHooks.js'
+import { usePhase, useDispatchThunk } from './hooks/useVGFHooks.js'
 import { usePlatformDeviceId } from './hooks/usePlatformDeviceId.js'
 
 const SERVER_URL =
@@ -47,12 +47,12 @@ const platformAuthApiUrl = PLATFORM_AUTH_URLS[STAGE]
 
 type ControllerTab = 'game' | 'profile' | 'challenges' | 'cosmetics'
 
-// Ensure volley_hub_session_id exists in local dev — PlatformProvider requires it.
+// Ensure volley_hub_session_id exists in non-production stages — PlatformProvider requires it.
 // Runs at module scope (once on import) to avoid side effects during render.
-if (STAGE === 'local') {
+if (['local', 'test', 'dev', 'staging'].includes(STAGE)) {
   const url = new URL(window.location.href)
   if (!url.searchParams.has('volley_hub_session_id')) {
-    url.searchParams.set('volley_hub_session_id', 'local-dev-hub-session')
+    url.searchParams.set('volley_hub_session_id', crypto.randomUUID())
     window.history.replaceState({}, '', url.toString())
   }
 }
@@ -148,6 +148,31 @@ function ConnectedController() {
     }
     prevIsGameplay.current = isGameplay
   }, [isGameplay, activeTab])
+
+  // Dispatch joinSession thunk once VGF state sync completes (phase becomes non-null)
+  const dispatchThunk = useDispatchThunk() as (name: string, ...args: unknown[]) => void
+  const hasJoined = useRef(false)
+  useEffect(() => {
+    if (phase && !hasJoined.current) {
+      hasJoined.current = true
+      dispatchThunk('joinSession', {})
+    }
+  }, [phase, dispatchThunk])
+
+  // Dispatch leaveSession on page unload only (NOT on visibilitychange).
+  // Backgrounding the tab should NOT remove the player — they may switch apps
+  // briefly and return. Only true page close/navigation triggers cleanup.
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (hasJoined.current) {
+        dispatchThunk('leaveSession')
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [dispatchThunk])
 
   if (!phase) {
     return (

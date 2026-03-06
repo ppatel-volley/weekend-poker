@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import type { CasinoGameState } from '@weekend-casino/shared'
 import {
   REACTION_TYPES,
@@ -31,20 +31,9 @@ function stateWithPlayers(...players: any[]): CasinoGameState {
 }
 
 describe('sendReaction reducer', () => {
-  let dateSpy: ReturnType<typeof vi.spyOn>
-
-  beforeEach(() => {
-    dateSpy = vi.spyOn(Date, 'now')
-  })
-
-  afterEach(() => {
-    dateSpy.mockRestore()
-  })
-
   it('should add a valid reaction to the queue', () => {
-    dateSpy.mockReturnValue(1000)
     const state = stateWithPlayers(makePlayer({ id: 'p1' }))
-    const result = casinoSendReaction(state, 'p1', 'thumbs_up')
+    const result = casinoSendReaction(state, 'p1', 'thumbs_up', 1000)
     expect(result.reactions).toHaveLength(1)
     expect(result.reactions[0]).toEqual({
       playerId: 'p1',
@@ -54,25 +43,22 @@ describe('sendReaction reducer', () => {
   })
 
   it('should not mutate the original state', () => {
-    dateSpy.mockReturnValue(1000)
     const state = stateWithPlayers(makePlayer({ id: 'p1' }))
-    const result = casinoSendReaction(state, 'p1', 'fire')
+    const result = casinoSendReaction(state, 'p1', 'fire', 1000)
     expect(result).not.toBe(state)
     expect(state.reactions).toHaveLength(0)
   })
 
   it('should reject reaction from non-existent player', () => {
-    dateSpy.mockReturnValue(1000)
     const state = stateWithPlayers(makePlayer({ id: 'p1' }))
-    const result = casinoSendReaction(state, 'non-existent', 'fire')
+    const result = casinoSendReaction(state, 'non-existent', 'fire', 1000)
     expect(result).toBe(state)
     expect(result.reactions).toHaveLength(0)
   })
 
   it('should reject invalid reaction type', () => {
-    dateSpy.mockReturnValue(1000)
     const state = stateWithPlayers(makePlayer({ id: 'p1' }))
-    const result = casinoSendReaction(state, 'p1', 'invalid_type' as any)
+    const result = casinoSendReaction(state, 'p1', 'invalid_type' as any, 1000)
     expect(result).toBe(state)
     expect(result.reactions).toHaveLength(0)
   })
@@ -81,18 +67,14 @@ describe('sendReaction reducer', () => {
     const state = stateWithPlayers(makePlayer({ id: 'p1' }))
 
     // Send 3 reactions within the window
-    dateSpy.mockReturnValue(1000)
-    let current = casinoSendReaction(state, 'p1', 'thumbs_up')
-    dateSpy.mockReturnValue(2000)
-    current = casinoSendReaction(current, 'p1', 'fire')
-    dateSpy.mockReturnValue(3000)
-    current = casinoSendReaction(current, 'p1', 'laugh')
+    let current = casinoSendReaction(state, 'p1', 'thumbs_up', 1000)
+    current = casinoSendReaction(current, 'p1', 'fire', 2000)
+    current = casinoSendReaction(current, 'p1', 'laugh', 3000)
 
     expect(current.reactions).toHaveLength(3)
 
     // 4th reaction within window should be rejected
-    dateSpy.mockReturnValue(4000)
-    const rejected = casinoSendReaction(current, 'p1', 'clap')
+    const rejected = casinoSendReaction(current, 'p1', 'clap', 4000)
     expect(rejected).toBe(current)
     expect(rejected.reactions).toHaveLength(3)
   })
@@ -101,16 +83,12 @@ describe('sendReaction reducer', () => {
     const state = stateWithPlayers(makePlayer({ id: 'p1' }))
 
     // Fill up the rate limit
-    dateSpy.mockReturnValue(1000)
-    let current = casinoSendReaction(state, 'p1', 'thumbs_up')
-    dateSpy.mockReturnValue(2000)
-    current = casinoSendReaction(current, 'p1', 'fire')
-    dateSpy.mockReturnValue(3000)
-    current = casinoSendReaction(current, 'p1', 'laugh')
+    let current = casinoSendReaction(state, 'p1', 'thumbs_up', 1000)
+    current = casinoSendReaction(current, 'p1', 'fire', 2000)
+    current = casinoSendReaction(current, 'p1', 'laugh', 3000)
 
     // Wait for window to expire (10s)
-    dateSpy.mockReturnValue(12000)
-    const result = casinoSendReaction(current, 'p1', 'wow')
+    const result = casinoSendReaction(current, 'p1', 'wow', 12000)
     expect(result.reactions).toHaveLength(4)
     expect(result.reactions[3]!.type).toBe('wow')
   })
@@ -122,16 +100,12 @@ describe('sendReaction reducer', () => {
     )
 
     // Fill p1's rate limit
-    dateSpy.mockReturnValue(1000)
-    let current = casinoSendReaction(state, 'p1', 'thumbs_up')
-    dateSpy.mockReturnValue(2000)
-    current = casinoSendReaction(current, 'p1', 'fire')
-    dateSpy.mockReturnValue(3000)
-    current = casinoSendReaction(current, 'p1', 'laugh')
+    let current = casinoSendReaction(state, 'p1', 'thumbs_up', 1000)
+    current = casinoSendReaction(current, 'p1', 'fire', 2000)
+    current = casinoSendReaction(current, 'p1', 'laugh', 3000)
 
     // p2 should still be able to react
-    dateSpy.mockReturnValue(4000)
-    const result = casinoSendReaction(current, 'p2', 'clap')
+    const result = casinoSendReaction(current, 'p2', 'clap', 4000)
     expect(result.reactions).toHaveLength(4)
     expect(result.reactions[3]!.playerId).toBe('p2')
   })
@@ -148,8 +122,7 @@ describe('sendReaction reducer', () => {
     // Send 12 reactions from different players to avoid rate limit
     for (let i = 0; i < 12; i++) {
       const playerId = `p${(i % 4) + 1}`
-      dateSpy.mockReturnValue(i * 4000) // space them out to avoid rate limit
-      current = casinoSendReaction(current, playerId, REACTION_TYPES[i % REACTION_TYPES.length]!)
+      current = casinoSendReaction(current, playerId, REACTION_TYPES[i % REACTION_TYPES.length]!, i * 4000)
     }
 
     expect(current.reactions.length).toBeLessThanOrEqual(MAX_REACTION_QUEUE_SIZE)
@@ -161,11 +134,11 @@ describe('sendReaction reducer', () => {
     const state = stateWithPlayers(makePlayer({ id: 'p1' }))
 
     for (const type of REACTION_TYPES) {
-      dateSpy.mockReturnValue(Date.now() + 100000) // avoid rate limit
       const result = casinoSendReaction(
         { ...state, reactions: [] },
         'p1',
         type,
+        100000,
       )
       expect(result.reactions).toHaveLength(1)
       expect(result.reactions[0]!.type).toBe(type)
@@ -173,9 +146,8 @@ describe('sendReaction reducer', () => {
   })
 
   it('should NOT affect game state fields (purely cosmetic)', () => {
-    dateSpy.mockReturnValue(1000)
     const state = stateWithPlayers(makePlayer({ id: 'p1', stack: 5000 }))
-    const result = casinoSendReaction(state, 'p1', 'fire')
+    const result = casinoSendReaction(state, 'p1', 'fire', 1000)
 
     // Verify no game state was affected
     expect((result.players[0] as any).stack).toBe(5000)
@@ -189,5 +161,12 @@ describe('sendReaction reducer', () => {
   it('should include reactions field in initial state', () => {
     const state = createInitialCasinoState()
     expect(state.reactions).toEqual([])
+  })
+
+  it('should use the provided timestamp, not Date.now() (D-011)', () => {
+    const state = stateWithPlayers(makePlayer({ id: 'p1' }))
+    const specificTimestamp = 9999999999999
+    const result = casinoSendReaction(state, 'p1', 'fire', specificTimestamp)
+    expect(result.reactions[0]!.timestamp).toBe(specificTimestamp)
   })
 })

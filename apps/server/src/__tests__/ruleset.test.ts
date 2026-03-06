@@ -104,11 +104,17 @@ describe('pokerRuleset', () => {
 
   // ── Connection handlers ────────────────────────────────────
 
-  it('should have onConnect and onDisconnect handlers', () => {
-    expect(pokerRuleset.onConnect).toBeDefined()
-    expect(typeof pokerRuleset.onConnect).toBe('function')
-    expect(pokerRuleset.onDisconnect).toBeDefined()
-    expect(typeof pokerRuleset.onDisconnect).toBe('function')
+  it('should NOT export onConnect/onDisconnect — WGFServer does not call lifecycle hooks (Learning 015)', () => {
+    expect((pokerRuleset as any).onConnect).toBeUndefined()
+    expect((pokerRuleset as any).onDisconnect).toBeUndefined()
+  })
+
+  it('should have joinSession and leaveSession thunks (WGFServer path)', () => {
+    const thunks = pokerRuleset.thunks as Record<string, unknown>
+    expect(thunks.joinSession).toBeDefined()
+    expect(typeof thunks.joinSession).toBe('function')
+    expect(thunks.leaveSession).toBeDefined()
+    expect(typeof thunks.leaveSession).toBe('function')
   })
 
   // ── Actions (deprecated) ───────────────────────────────────

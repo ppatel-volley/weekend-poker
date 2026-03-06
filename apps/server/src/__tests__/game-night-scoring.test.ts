@@ -66,6 +66,7 @@ function makeStateWithGN(overrides: Partial<CasinoGameState> = {}): CasinoGameSt
     ['holdem', 'roulette', 'blackjack_classic'],
     5,
     'classic',
+    1700000000000,
   )
 }
 
@@ -379,7 +380,7 @@ describe('determineChampion', () => {
 describe('gnInitGameNight', () => {
   it('should initialise gameNight with all fields', () => {
     const state = makeState()
-    const result = gnInitGameNight(state, ['holdem', 'roulette', 'blackjack_classic'], 5, 'neon')
+    const result = gnInitGameNight(state, ['holdem', 'roulette', 'blackjack_classic'], 5, 'neon', 1700000000000)
 
     expect(result.gameNight).toBeDefined()
     const gn = result.gameNight!
@@ -393,7 +394,7 @@ describe('gnInitGameNight', () => {
     expect(gn.gameResults).toEqual([])
     expect(gn.theme).toBe('neon')
     expect(gn.championId).toBeNull()
-    expect(gn.startedAt).toBeGreaterThan(0)
+    expect(gn.startedAt).toBe(1700000000000)
     expect(gn.leaderboardReady).toBe(false)
     expect(gn.championReady).toBe(false)
     expect(gn.achievements).toEqual([])
@@ -402,7 +403,7 @@ describe('gnInitGameNight', () => {
 
   it('should initialise playerScores for all current players', () => {
     const state = makeState()
-    const result = gnInitGameNight(state, ['holdem'], 3, 'classic')
+    const result = gnInitGameNight(state, ['holdem'], 3, 'classic', 1700000000000)
     const gn = result.gameNight!
 
     expect(Object.keys(gn.playerScores)).toEqual(['p1', 'p2'])
@@ -423,7 +424,7 @@ describe('gnInitGameNight', () => {
   it('should not mutate original state', () => {
     const state = makeState()
     const original = { ...state }
-    gnInitGameNight(state, ['holdem'], 3, 'classic')
+    gnInitGameNight(state, ['holdem'], 3, 'classic', 1700000000000)
     expect(state.gameNight).toEqual(original.gameNight)
   })
 })

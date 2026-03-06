@@ -159,7 +159,7 @@ export const rouletteRoundCompletePhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
-    incrementGameNightRoundIfActive(ctx)
+    incrementGameNightRoundIfActive(ctx, Date.now())
     const adapted = adaptPhaseCtx(ctx)
     await adapted.dispatchThunk('rouletteCompleteRound')
     return adapted.getState()

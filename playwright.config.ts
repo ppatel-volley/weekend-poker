@@ -97,19 +97,19 @@ export default defineConfig({
 
   webServer: [
     {
-      command: 'pnpm dev:server',
+      command: 'NODE_OPTIONS=--max-old-space-size=4096 pnpm dev:server',
       port: 3000,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
     },
     {
-      command: 'pnpm dev:display',
+      command: 'NODE_OPTIONS=--max-old-space-size=4096 pnpm dev:display',
       port: 5173,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
     },
     {
-      command: 'pnpm dev:controller',
+      command: 'NODE_OPTIONS=--max-old-space-size=4096 pnpm dev:controller',
       port: 5174,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,

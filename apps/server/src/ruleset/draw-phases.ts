@@ -344,7 +344,7 @@ export const drawHandCompletePhase = makePhase({
         ctx.dispatch('markPlayerBusted', player.id)
       }
     }
-    incrementGameNightRoundIfActive(ctx)
+    incrementGameNightRoundIfActive(ctx, Date.now())
     return ctx.getState()
   },
   endIf: () => true,

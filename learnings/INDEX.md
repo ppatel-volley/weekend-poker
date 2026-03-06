@@ -13,17 +13,30 @@
 | New game implementation | 004 |
 | Dependencies / pnpm install | 005 |
 | React 19 compatibility | 005 |
-| VGF dispatch / reducers | 006, 009 |
-| VGF phase internals / cascade | 009 |
+| VGF dispatch / reducers | 006, 009, 015 |
+| VGF phase internals / cascade | 009, 015 |
+| VGF 4.8.0 migration / WGFServer | 015 |
+| PlatformProvider / auth / VPN | 015 |
 | Multi-agent type integration | 007 |
 | vi.mock factory sync | 007 |
 | Vitest vs typecheck/build | 007 |
 | Shared type changes | 003, 007 |
 | Controller-server integration | 006 |
-| Security fixes / closing paths | 008 |
+| Security fixes / closing paths | 008, 016 |
 | Voice pipeline security | 008 |
 | Host-only access control | 008 |
 | Phase config reducer exposure | 006, 008 |
+| Connection registry spoofing | 016 |
+| Socket.IO identity validation | 016 |
+| Private data routing | 016 |
+| VGF broadcast message format | 017 |
+| Manual state broadcast | 017 |
+| Client Zod schema validation | 017 |
+| Redis client consolidation | 018 |
+| Connection leaks / shutdown | 018 |
+| Docker container security | 019 |
+| Non-root containers | 019 |
+| BuildKit secrets | 019 |
 | Retention / persistence | 010 |
 | API contract testing | 010 |
 | Session-scoped state | 010 |
@@ -101,6 +114,31 @@ Adding intent patterns to `parseVoiceIntent.ts` without adding routing in `proce
 **Category:** Persistence, API Contracts, Session State, Atomicity
 Side-channel persistence systems (profiles, achievements, challenges, cosmetics) need complete write pipelines, not just storage + detection. Key lessons: (1) Define API contracts before building server+client in parallel — mock-heavy tests create false confidence. (2) Module-level Maps for session tracking MUST include sessionId in keys and wire cleanup to disconnect. (3) Never use setTimeout for critical state mutations — dispatch synchronously, snapshot original state for rollback. (4) String cross-references between definition tables need referential integrity tests. (5) Calendar math: never approximate (dayOfYear/7), use explicit day-of-week calculations.
 
+### 015 — VGF 4.8.0 Migration (from emoji-multiplatform)
+**Severity:** Critical
+**Category:** VGF, Phase Management, WGFServer, PlatformProvider
+Three breaking changes in VGF 4.8.0: (1) `PhaseModificationError` — reducers cannot modify `state.phase`, use `nextPhase` + `TRANSITION_TO_PHASE` thunk + `endIf`/`next` pattern. (2) `WGFServer` does NOT call `onConnect`/`onDisconnect` lifecycle hooks — move all session setup to client-initiated thunks. (3) PlatformProvider auth requires Volley VPN for local dev. Sourced from emoji-multiplatform migration; see full details in `emoji-multiplatform/learnings/038`.
+
+### 016 — Connection Registry Must Validate Session Membership
+**Severity:** Critical
+**Category:** Security, VGF, Private Data
+Socket.IO handshake query params (`userId`, `sessionId`, `clientType`) are entirely client-controlled. A malicious client can spoof a `userId` matching another player, overwriting their connection registry entry and hijacking private data (hole cards). Always validate `userId` against VGF session membership via `storage.getSessionMemberById()` BEFORE registering connections. Same principle as Learning 008 applied to Socket.IO.
+
+### 017 — VGF Broadcast Message Format Must Match Client Schema
+**Severity:** Critical
+**Category:** VGF, State Management
+VGF clients validate incoming messages via Zod schemas. Manual broadcasts must use uppercase `TYPE` (`STATE_UPDATE` not `state_update`) and full session envelope (`{ session: { sessionId, members, state } }` not bare `{ state }`). Direct `storage.updateSessionState()` bypasses GameRunner — no state freezing, no `endIf` checks, no version increment. Use only as last resort when VGF dispatch isn't available.
+
+### 018 — Redis Client Consolidation in Server Processes
+**Severity:** High
+**Category:** Infrastructure, Redis, Production
+Don't create multiple Redis clients per server process. Weekend Casino had three (resilient, persistence, scheduler) with different retry configs, causing inconsistent failure modes, connection leaks on shutdown, and resource waste. Create ONE shared resilient client, pass it to all consumers via dependency injection, close it in a single shutdown path.
+
+### 019 — Docker Container Security Checklist
+**Severity:** High
+**Category:** Docker, Security, DevOps
+Mandatory for production Docker images: (1) Never run as root — add `USER` directive. (2) Use `/health/ready` (readiness) not `/health` (liveness) for `HEALTHCHECK`. (3) Don't copy devDependencies into production image. (4) Use BuildKit secrets for npm tokens — never bake into layers. (5) Add Redis volume mounts in docker-compose. (6) Pin base image versions (`node:22-alpine`, not `node:latest`).
+
 ## Cross-Reference
 
 | Topic | Learnings |
@@ -176,3 +214,32 @@ Side-channel persistence systems (profiles, achievements, challenges, cosmetics)
 | Multi-page E2E assertions | 013 |
 | Nullish coalescing precedence | 014 |
 | ?? vs >= operator binding | 014 |
+| VGF 4.8.0 PhaseModificationError | 015 |
+| WGFServer no onConnect/onDisconnect | 015 |
+| TRANSITION_TO_PHASE / nextPhase | 015 |
+| ensureLocalHubSessionId | 015 |
+| auth-dev.volley.tv CORS / VPN | 015 |
+| DevScheduler thunk context wiring | 015 |
+| Connection registry spoofing | 016 |
+| Socket.IO handshake validation | 016 |
+| userId spoofing / identity hijack | 016 |
+| getSessionMemberById | 016 |
+| Private data routing (hole cards) | 016 |
+| Client-supplied identity trust | 016 |
+| VGF broadcast message format | 017 |
+| STATE_UPDATE uppercase type | 017 |
+| Full session envelope broadcast | 017 |
+| storage.updateSessionState bypass | 017 |
+| Zod schema silent rejection | 017 |
+| Stale client state after update | 017 |
+| Multiple Redis clients | 018 |
+| Redis retry config inconsistency | 018 |
+| Connection leak on shutdown | 018 |
+| Redis dependency injection | 018 |
+| Docker non-root USER directive | 019 |
+| HEALTHCHECK readiness vs liveness | 019 |
+| devDependencies in production | 019 |
+| BuildKit secrets for npm tokens | 019 |
+| Redis volume persistence | 019 |
+| Unpinned base images | 019 |
+| hadolint / trivy image scanning | 019 |

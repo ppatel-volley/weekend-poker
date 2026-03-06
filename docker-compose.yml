@@ -1,0 +1,43 @@
+services:
+  vgf-server:
+    build:
+      context: .
+      target: ${NODE_ENV:-development}
+      secrets:
+        - npm_token
+    ports:
+      - "${VGF_PORT:-8001}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - REDIS_URL=redis://redis:6379
+      - PORT=3000
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - game-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - game-network
+
+volumes:
+  redis-data:
+
+networks:
+  game-network:
+    driver: bridge
+
+secrets:
+  npm_token:
+    environment: NPM_TOKEN

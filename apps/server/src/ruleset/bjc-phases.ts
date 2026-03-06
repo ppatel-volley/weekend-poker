@@ -316,7 +316,7 @@ export const bjcHandCompletePhase = {
   reducers: {},
   thunks: {},
   onBegin: (ctx: any) => {
-    incrementGameNightRoundIfActive(ctx)
+    incrementGameNightRoundIfActive(ctx, Date.now())
 
     // Inlined from bjcCompleteRound thunk — thunkDispatcher fails in onBegin (Learning 009)
     const state: CasinoGameState = ctx.getState()

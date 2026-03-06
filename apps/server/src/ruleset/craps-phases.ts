@@ -284,7 +284,7 @@ export const crapsRoundCompletePhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
-    incrementGameNightRoundIfActive(ctx)
+    incrementGameNightRoundIfActive(ctx, Date.now())
     const adapted = adaptPhaseCtx(ctx)
     const state = adapted.getState()
 

@@ -186,7 +186,7 @@ export const tcpRoundCompletePhase = {
   reducers: {},
   thunks: {},
   onBegin: async (ctx: any) => {
-    incrementGameNightRoundIfActive(ctx)
+    incrementGameNightRoundIfActive(ctx, Date.now())
     const adapted = adaptPhaseCtx(ctx)
     await adapted.dispatchThunk('tcpCompleteRound')
     return adapted.getState()

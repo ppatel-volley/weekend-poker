@@ -345,6 +345,7 @@ export function LobbyController() {
             [],
             5,
             'classic',
+            Date.now(),
           )
         }}
         style={{
