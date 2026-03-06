@@ -16,13 +16,17 @@ export default defineConfig(({ mode }) => ({
   build: {
     // No explicit build.target — modern bundle uses Vite default (esnext).
     // Legacy browser support (Chrome 68+, Safari 12+) handled by plugin-legacy above.
+    sourcemap: mode === 'development' ? 'inline' as const : true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'three': ['three'],
-          'r3f': ['@react-three/fiber'],
-          'drei': ['@react-three/drei'],
-          'postprocessing': ['@react-three/postprocessing'],
+        manualChunks(id: string) {
+          if (id.includes('@volley/') || id.includes('@weekend-casino/'))
+            return 'shared-core-deps'
+          if (id.includes('three') || id.includes('@react-three'))
+            return 'three-vendor'
+          if (id.includes('react-dom')) return 'react-dom'
+          if (id.includes('/react/')) return 'react'
+          if (id.includes('node_modules')) return 'vendor'
         },
       },
     },

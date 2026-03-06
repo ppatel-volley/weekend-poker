@@ -1,10 +1,12 @@
 /**
  * Tests for the connection registry — targeted client messaging for private data.
+ * Covers both VGF IConnection (legacy) and Socket.IO Socket (WGFServer) paths.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   registerConnection,
+  registerSocket,
   unregisterConnection,
   emitToClient,
   _resetAllConnections,
@@ -21,11 +23,18 @@ function makeMockConnection(disposed = false) {
   }
 }
 
+function makeMockSocket(connected = true) {
+  return {
+    emit: vi.fn(),
+    connected,
+  }
+}
+
 beforeEach(() => {
   _resetAllConnections()
 })
 
-describe('connection-registry', () => {
+describe('connection-registry (VGF path)', () => {
   it('emitToClient sends message to registered connection', () => {
     const conn = makeMockConnection()
     registerConnection('session-1', 'player-1', conn as any)
@@ -82,6 +91,79 @@ describe('connection-registry', () => {
   it('_resetAllConnections clears all connections', () => {
     const conn = makeMockConnection()
     registerConnection('session-1', 'player-1', conn as any)
+
+    _resetAllConnections()
+
+    const sent = emitToClient('session-1', 'player-1', 'test', {})
+    expect(sent).toBe(false)
+  })
+})
+
+describe('connection-registry (Socket.IO path)', () => {
+  it('emitToClient sends message to registered socket', () => {
+    const socket = makeMockSocket()
+    registerSocket('session-1', 'player-1', socket)
+
+    const sent = emitToClient('session-1', 'player-1', 'privateHoleCards', { cards: ['Ah', 'Kd'] })
+
+    expect(sent).toBe(true)
+    expect(socket.emit).toHaveBeenCalledWith('private_data', {
+      type: 'privateHoleCards',
+      payload: [{ cards: ['Ah', 'Kd'] }],
+    })
+  })
+
+  it('emitToClient returns false for disconnected socket', () => {
+    const socket = makeMockSocket(false) // disconnected
+    registerSocket('session-1', 'player-1', socket)
+
+    const sent = emitToClient('session-1', 'player-1', 'privateHoleCards', {})
+    expect(sent).toBe(false)
+  })
+
+  it('unregisterConnection removes a socket registration', () => {
+    const socket = makeMockSocket()
+    registerSocket('session-1', 'player-1', socket)
+
+    unregisterConnection('session-1', 'player-1')
+
+    const sent = emitToClient('session-1', 'player-1', 'test', {})
+    expect(sent).toBe(false)
+  })
+
+  it('socket registration overwrites VGF connection for same key', () => {
+    const conn = makeMockConnection()
+    const socket = makeMockSocket()
+
+    registerConnection('session-1', 'player-1', conn as any)
+    registerSocket('session-1', 'player-1', socket)
+
+    emitToClient('session-1', 'player-1', 'test', 'data')
+
+    // Socket should receive the message, not the VGF connection
+    expect(socket.emit).toHaveBeenCalledTimes(1)
+    expect(conn.emit).not.toHaveBeenCalled()
+  })
+
+  it('sockets are isolated by session ID', () => {
+    const socket1 = makeMockSocket()
+    const socket2 = makeMockSocket()
+
+    registerSocket('session-1', 'player-1', socket1)
+    registerSocket('session-2', 'player-1', socket2)
+
+    emitToClient('session-1', 'player-1', 'test', 'data1')
+    emitToClient('session-2', 'player-1', 'test', 'data2')
+
+    expect(socket1.emit).toHaveBeenCalledTimes(1)
+    expect(socket2.emit).toHaveBeenCalledTimes(1)
+    expect(socket1.emit).toHaveBeenCalledWith('private_data', { type: 'test', payload: ['data1'] })
+    expect(socket2.emit).toHaveBeenCalledWith('private_data', { type: 'test', payload: ['data2'] })
+  })
+
+  it('_resetAllConnections clears socket registrations too', () => {
+    const socket = makeMockSocket()
+    registerSocket('session-1', 'player-1', socket)
 
     _resetAllConnections()
 

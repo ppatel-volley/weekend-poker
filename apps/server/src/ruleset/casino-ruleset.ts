@@ -131,6 +131,7 @@ import { validatePlayerIdOrBot, getAuthorizedPlayerId, isCallerHost, validateBet
 import { registerConnection, unregisterConnection, emitToClient } from './connection-registry.js'
 import { resolveIdentity, playerStore, dailyBonusStore, challengeStore } from '../persistence/index.js'
 import { clearSessionTracker } from '../persistence/challenge-utils.js'
+import { sessionThunks } from './session-thunks.js'
 
 // ── Bot Manager (module-level singleton per server process) ─────
 const botManager = new BotManager()
@@ -422,35 +423,35 @@ const holdemThunks = {
         action,
       )
       if (error) {
-        ctx.dispatch('setBetError', playerId, error, Date.now() + 3000)
+        await ctx.dispatch('setBetError', playerId, error, Date.now() + 3000)
         return
       }
     }
 
     switch (action) {
       case 'fold':
-        ctx.dispatch('foldPlayer', playerId)
+        await ctx.dispatch('foldPlayer', playerId)
         break
       case 'check':
         break
       case 'call':
-        ctx.dispatch('updatePlayerBet', playerId, state.currentBet)
+        await ctx.dispatch('updatePlayerBet', playerId, state.currentBet)
         break
       case 'bet':
         if (amount === undefined) return
-        ctx.dispatch('updatePlayerBet', playerId, amount)
+        await ctx.dispatch('updatePlayerBet', playerId, amount)
         break
       case 'raise':
         if (amount === undefined) return
-        ctx.dispatch('updatePlayerBet', playerId, amount)
+        await ctx.dispatch('updatePlayerBet', playerId, amount)
         break
       case 'all_in':
-        ctx.dispatch('updatePlayerBet', playerId, player.stack + player.bet)
+        await ctx.dispatch('updatePlayerBet', playerId, player.stack + player.bet)
         break
     }
 
-    ctx.dispatch('setPlayerLastAction', playerId, action)
-    advanceToNextPlayer(ctx)
+    await ctx.dispatch('setPlayerLastAction', playerId, action)
+    await advanceToNextPlayer(ctx)
   }),
 
   processVoiceCommand: (async (ctx: ThunkCtx, transcript: string) => {
@@ -503,7 +504,7 @@ const holdemThunks = {
         await ctx.dispatchThunk('bjPlaceBet', playerId, amount)
         return
       }
-      if (phase === CasinoPhase.BjInsurance && intent === 'bj_insurance') {
+      if (phase === CasinoPhase.BjInsurance && (intent === 'bj_insurance' || intent === 'roulette_even')) {
         await ctx.dispatchThunk('bjProcessInsurance', playerId, true)
         return
       }
@@ -602,19 +603,19 @@ const holdemThunks = {
       }
 
       if (crapsRollPhases.includes(phase)) {
-        if (intent === 'craps_roll') { ctx.dispatch('crapsSetRollComplete', true); return }
+        if (intent === 'craps_roll') { await ctx.dispatch('crapsSetRollComplete', true); return }
       }
     }
   }),
 
   startHand: (async (ctx: ThunkCtx) => {
-    ctx.dispatch('resetHandState')
+    await ctx.dispatch('resetHandState')
   }),
 
   evaluateHands: (async (ctx: ThunkCtx) => {
     const result = resolveWinners(ctx.getState(), ctx.getSessionId())
     if (result) {
-      ctx.dispatch('awardPot', result.winnerIds, result.amounts)
+      await ctx.dispatch('awardPot', result.winnerIds, result.amounts)
     }
   }),
 
@@ -625,7 +626,7 @@ const holdemThunks = {
     )
 
     if (remaining.length === 1) {
-      ctx.dispatch('awardPot', [remaining[0]!.id], [state.pot])
+      await ctx.dispatch('awardPot', [remaining[0]!.id], [state.pot])
       return
     }
 
@@ -637,12 +638,12 @@ const holdemThunks = {
     const legalActions = getLegalActions(asPokerState(state), playerId)
 
     if (legalActions.includes('check')) {
-      ctx.dispatch('setPlayerLastAction', playerId, 'check')
+      await ctx.dispatch('setPlayerLastAction', playerId, 'check')
     } else {
-      ctx.dispatch('foldPlayer', playerId)
+      await ctx.dispatch('foldPlayer', playerId)
     }
 
-    advanceToNextPlayer(ctx)
+    await advanceToNextPlayer(ctx)
   }),
 
   botDecision: (async (ctx: ThunkCtx, botId: string) => {
@@ -697,7 +698,7 @@ const holdemThunks = {
 
     // Set dialogue as dealer message if present
     if (decision.dialogue) {
-      ctx.dispatch('setDealerMessage', `${bot.name}: ${decision.dialogue}`)
+      await ctx.dispatch('setDealerMessage', `${bot.name}: ${decision.dialogue}`)
     }
 
     // SECURITY: Bot actions dispatch reducers directly — never go through
@@ -705,25 +706,25 @@ const holdemThunks = {
     const action = decision.action
     switch (action) {
       case 'fold':
-        ctx.dispatch('foldPlayer', botId)
+        await ctx.dispatch('foldPlayer', botId)
         break
       case 'call':
-        ctx.dispatch('updatePlayerBet', botId, state.currentBet)
+        await ctx.dispatch('updatePlayerBet', botId, state.currentBet)
         break
       case 'bet':
       case 'raise':
         if (decision.amount !== undefined) {
-          ctx.dispatch('updatePlayerBet', botId, decision.amount)
+          await ctx.dispatch('updatePlayerBet', botId, decision.amount)
         }
         break
       case 'all_in':
-        ctx.dispatch('updatePlayerBet', botId, bot.stack + bot.bet)
+        await ctx.dispatch('updatePlayerBet', botId, bot.stack + bot.bet)
         break
       // 'check' — no state change needed
     }
 
-    ctx.dispatch('setPlayerLastAction', botId, action)
-    advanceToNextPlayer(ctx)
+    await ctx.dispatch('setPlayerLastAction', botId, action)
+    await advanceToNextPlayer(ctx)
   }),
 
   /**
@@ -757,7 +758,7 @@ const holdemThunks = {
       console.warn('[SECURITY] Non-host attempted to select game. Rejecting.')
       return
     }
-    ctx.dispatch('setSelectedGame', game)
+    await ctx.dispatch('setSelectedGame', game)
   }),
 
   /**
@@ -770,7 +771,7 @@ const holdemThunks = {
       return
     }
     // SECURITY: Use internal reducer — 'confirmGameSelection' is blocked for clients.
-    ctx.dispatch('_confirmGameSelectionInternal')
+    await ctx.dispatch('_confirmGameSelectionInternal')
   }),
 
   // Full sit-out logic (skip in turn order, hold seat) deferred to v2.1
@@ -780,7 +781,7 @@ const holdemThunks = {
     if (!player) return
 
     if (player.status !== 'busted') {
-      ctx.dispatch('setPlayerLastAction', playerId, null)
+      await ctx.dispatch('setPlayerLastAction', playerId, null)
     }
   }),
 
@@ -794,7 +795,7 @@ const holdemThunks = {
 
   // Full session end (persist stats, leaderboard) deferred to v2.1
   endSession: (async (ctx: ThunkCtx) => {
-    ctx.dispatch('setDealerMessage', 'Session ending. Thanks for playing!')
+    await ctx.dispatch('setDealerMessage', 'Session ending. Thanks for playing!')
   }),
 }
 
@@ -850,13 +851,13 @@ function resolveWinners(
   return { winnerIds, amounts }
 }
 
-function advanceToNextPlayer(ctx: ThunkCtx): void {
+async function advanceToNextPlayer(ctx: ThunkCtx): Promise<void> {
   const state = ctx.getState()
   const pokerState = asPokerState(state)
   if (!isBettingRoundComplete(pokerState) && !isOnlyOnePlayerRemaining(pokerState)) {
     const nextIdx = nextActivePlayer(state.players, state.activePlayerIndex)
     if (nextIdx !== -1) {
-      ctx.dispatch('setActivePlayer', nextIdx)
+      await ctx.dispatch('setActivePlayer', nextIdx)
 
       // Auto-act for bots immediately using simple strategy (check > call > fold).
       // This avoids waiting for the AI-based botDecision thunk (10s timeout)
@@ -870,14 +871,14 @@ function advanceToNextPlayer(ctx: ThunkCtx): void {
           botAction = 'check'
         } else if (botLegalActions.includes('call')) {
           botAction = 'call'
-          ctx.dispatch('updatePlayerBet', nextPlayer.id, updatedState.currentBet)
+          await ctx.dispatch('updatePlayerBet', nextPlayer.id, updatedState.currentBet)
         }
-        ctx.dispatch('setPlayerLastAction', nextPlayer.id, botAction)
+        await ctx.dispatch('setPlayerLastAction', nextPlayer.id, botAction)
         if (botAction === 'fold') {
-          ctx.dispatch('foldPlayer', nextPlayer.id)
+          await ctx.dispatch('foldPlayer', nextPlayer.id)
         }
         // Recursively advance (next player might also be a bot)
-        advanceToNextPlayer(ctx)
+        await advanceToNextPlayer(ctx)
       }
     }
   }
@@ -1273,7 +1274,7 @@ const handCompletePhase = makePhase({
       }
     }
     // Game Night round tracking (no-op when GN inactive)
-    incrementGameNightRoundIfActive(ctx)
+    incrementGameNightRoundIfActive(ctx, Date.now())
     return ctx.getState()
   },
   endIf: () => true,
@@ -1373,7 +1374,8 @@ const phases = {
 
 // ── Connection handlers ────────────────────────────────────────────
 
-const onConnect = async (ctx: ConnCtx) => {
+// Retained but not exported — WGFServer does not call lifecycle hooks (Learning 015)
+const _onConnect = async (ctx: ConnCtx) => {
   const { clientType } = ctx.connection.metadata
   const clientId = ctx.getClientId()
   const sessionId = ctx.getSessionId()
@@ -1497,7 +1499,7 @@ const onConnect = async (ctx: ConnCtx) => {
   }
 }
 
-const onDisconnect = async (ctx: ConnCtx) => {
+const _onDisconnect = async (ctx: ConnCtx) => {
   const clientId = ctx.getClientId()
   const sessionId = ctx.getSessionId()
 
@@ -1580,6 +1582,7 @@ export const casinoRuleset = {
   },
   thunks: {
     ...casinoThunks,
+    ...sessionThunks,
     ...holdemThunks,
     ...tcpThunks,
     ...bjThunks,
@@ -1599,6 +1602,9 @@ export const casinoRuleset = {
   // qa-audit-fixes.test.ts — deferred to dedicated test-hardening pass.
   phases: phases as any,
   actions: {},
-  onConnect,
-  onDisconnect,
+  // Removed from export — WGFServer does not call lifecycle hooks (Learning 015)
 } satisfies GameRuleset<CasinoGameState>
+
+// Suppress TS6133 for retained-but-unexported lifecycle handlers
+void _onConnect
+void _onDisconnect

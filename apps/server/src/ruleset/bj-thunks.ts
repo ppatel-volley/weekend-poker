@@ -2,7 +2,7 @@
  * Blackjack Classic thunks — async orchestration.
  *
  * Per VGF: thunks handle validation, side effects, and multi-dispatch sequences.
- * ctx.dispatch() is synchronous — state visible immediately after.
+ * await ctx.dispatch() is synchronous — state visible immediately after.
  */
 
 import type { CasinoGameState, Card } from '@weekend-casino/shared'
@@ -38,7 +38,7 @@ type ThunkCtx = {
  * VGF's StateSyncSessionHandler may not properly evaluate endIf after
  * sub-thunk dispatches, so we inline the logic as direct reducer calls.
  */
-function inlineCheckAdvance(ctx: ThunkCtx, playerId: string): void {
+async function inlineCheckAdvance(ctx: ThunkCtx, playerId: string): Promise<void> {
   const state = ctx.getState()
   const bj = state.blackjack
   if (!bj) return
@@ -51,13 +51,13 @@ function inlineCheckAdvance(ctx: ThunkCtx, playerId: string): void {
   if (nextHandIndex < ps.hands.length) {
     const nextHand = ps.hands[nextHandIndex]
     if (nextHand && !nextHand.stood && !nextHand.busted) {
-      ctx.dispatch('bjAdvanceHand', playerId)
+      await ctx.dispatch('bjAdvanceHand', playerId)
       return
     }
   }
 
   // All hands for this player done — advance turn
-  ctx.dispatch('bjAdvanceTurn')
+  await ctx.dispatch('bjAdvanceTurn')
 
   // Auto-stand consecutive bots after the advance
   let updated = ctx.getState()
@@ -69,8 +69,8 @@ function inlineCheckAdvance(ctx: ThunkCtx, playerId: string): void {
     if (!nextPlayer?.isBot) break
     const nextPs = bjU.playerStates.find((p: any) => p.playerId === nextPlayerId)
     if (nextPs && !nextPs.hands[0]?.stood && !nextPs.hands[0]?.busted) {
-      ctx.dispatch('bjStandHand', nextPlayerId)
-      ctx.dispatch('bjAdvanceTurn')
+      await ctx.dispatch('bjStandHand', nextPlayerId)
+      await ctx.dispatch('bjAdvanceTurn')
     } else {
       break
     }
@@ -81,7 +81,7 @@ function inlineCheckAdvance(ctx: ThunkCtx, playerId: string): void {
   const finalState = ctx.getState()
   const bjFinal = finalState.blackjack!
   if (bjFinal.currentTurnIndex >= bjFinal.turnOrder.length) {
-    ctx.dispatch('bjSetPlayerTurnsComplete', true)
+    await ctx.dispatch('bjSetPlayerTurnsComplete', true)
   }
 }
 
@@ -112,26 +112,31 @@ export const bjThunks = {
     const bj = state.blackjack
     if (!bj) return
 
+    // Reject invalid bet amounts
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+      return
+    }
+
     const config = bj.config
     if (amount < config.minBet || amount > config.maxBet) {
-      ctx.dispatch('setBetError', playerId, `Bet must be between ${config.minBet} and ${config.maxBet}`, Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, `Bet must be between ${config.minBet} and ${config.maxBet}`, Date.now() + 3000)
       return
     }
 
     const walletBalance = state.wallet[playerId] ?? 0
     if (amount > walletBalance) {
-      ctx.dispatch('setBetError', playerId, 'Insufficient chips', Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, 'Insufficient chips', Date.now() + 3000)
       return
     }
 
-    ctx.dispatch('bjPlaceBet', playerId, amount)
+    await ctx.dispatch('bjPlaceBet', playerId, amount)
 
     // Check if all players have placed bets
     const updated = ctx.getState()
     const bjUpdated = updated.blackjack!
     const allPlaced = bjUpdated.playerStates.every(ps => ps.hands[0]!.bet > 0)
     if (allPlaced) {
-      ctx.dispatch('bjSetAllBetsPlaced', true)
+      await ctx.dispatch('bjSetAllBetsPlaced', true)
     }
   },
 
@@ -148,7 +153,7 @@ export const bjThunks = {
 
     // Deduct bets from wallets
     for (const ps of bj.playerStates) {
-      ctx.dispatch('updateWallet', ps.playerId, -ps.hands[0]!.bet)
+      await ctx.dispatch('updateWallet', ps.playerId, -ps.hands[0]!.bet)
     }
 
     // Deal round-robin: one card to each player, then dealer, repeat
@@ -179,7 +184,7 @@ export const bjThunks = {
       const cards = playerCards.get(ps.playerId)!
       const handValue = evaluateBlackjackHand(cards)
       const isBj = isNaturalBlackjack(cards)
-      ctx.dispatch(
+      await ctx.dispatch(
         'bjSetPlayerCards',
         ps.playerId,
         cards,
@@ -192,7 +197,7 @@ export const bjThunks = {
     // Dispatch dealer hand (only first card visible)
     const dealerEval = evaluateBlackjackHand(dealerCards)
     const dealerBj = isNaturalBlackjack(dealerCards)
-    ctx.dispatch(
+    await ctx.dispatch(
       'bjSetDealerCards',
       dealerCards,
       dealerEval.value,
@@ -203,10 +208,10 @@ export const bjThunks = {
     // Update shoe penetration
     const totalCards = bj.config.numberOfDecks * 52
     const penetration = calculatePenetration(shoe.length, totalCards) * 100
-    ctx.dispatch('bjSetShoePenetration', penetration)
+    await ctx.dispatch('bjSetShoePenetration', penetration)
 
-    ctx.dispatch('bjSetDealComplete', true)
-    ctx.dispatch('setDealerMessage', 'Cards dealt!')
+    await ctx.dispatch('bjSetDealComplete', true)
+    await ctx.dispatch('setDealerMessage', 'Cards dealt!')
   },
 
   /**
@@ -227,13 +232,13 @@ export const bjThunks = {
       const insuranceAmount = Math.floor(ps.hands[0]!.bet / 2)
       const walletBalance = state.wallet[playerId] ?? 0
       if (insuranceAmount <= walletBalance) {
-        ctx.dispatch('bjSetInsuranceBet', playerId, insuranceAmount)
-        ctx.dispatch('updateWallet', playerId, -insuranceAmount)
+        await ctx.dispatch('bjSetInsuranceBet', playerId, insuranceAmount)
+        await ctx.dispatch('updateWallet', playerId, -insuranceAmount)
       } else {
-        ctx.dispatch('bjDeclineInsurance', playerId)
+        await ctx.dispatch('bjDeclineInsurance', playerId)
       }
     } else {
-      ctx.dispatch('bjDeclineInsurance', playerId)
+      await ctx.dispatch('bjDeclineInsurance', playerId)
     }
 
     // Check if all players have resolved insurance
@@ -241,7 +246,7 @@ export const bjThunks = {
     const bjUpdated = updated.blackjack!
     const allResolved = bjUpdated.playerStates.every(p => p.insuranceResolved)
     if (allResolved) {
-      ctx.dispatch('bjSetInsuranceComplete', true)
+      await ctx.dispatch('bjSetInsuranceComplete', true)
     }
   },
 
@@ -255,9 +260,9 @@ export const bjThunks = {
 
     // Mark all players as resolved
     for (const ps of bj.playerStates) {
-      ctx.dispatch('bjDeclineInsurance', ps.playerId)
+      await ctx.dispatch('bjDeclineInsurance', ps.playerId)
     }
-    ctx.dispatch('bjSetInsuranceComplete', true)
+    await ctx.dispatch('bjSetInsuranceComplete', true)
   },
 
   /**
@@ -288,7 +293,7 @@ export const bjThunks = {
     const newCards = [...activeHand.cards, card]
     const handValue = evaluateBlackjackHand(newCards)
 
-    ctx.dispatch(
+    await ctx.dispatch(
       'bjAddCardToHand',
       playerId,
       card,
@@ -299,7 +304,7 @@ export const bjThunks = {
 
     // If busted or 21, auto-advance
     if (handValue.isBusted || handValue.value === 21) {
-      inlineCheckAdvance(ctx, playerId)
+      await inlineCheckAdvance(ctx, playerId)
     }
   },
 
@@ -311,8 +316,8 @@ export const bjThunks = {
     const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
     if (!playerId) return
 
-    ctx.dispatch('bjStandHand', playerId)
-    inlineCheckAdvance(ctx, playerId)
+    await ctx.dispatch('bjStandHand', playerId)
+    await inlineCheckAdvance(ctx, playerId)
   },
 
   /**
@@ -335,7 +340,7 @@ export const bjThunks = {
     // Check wallet for additional bet
     const walletBalance = state.wallet[playerId] ?? 0
     if (activeHand.bet > walletBalance) {
-      ctx.dispatch('setBetError', playerId, 'Insufficient chips to double', Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, 'Insufficient chips to double', Date.now() + 3000)
       return
     }
 
@@ -346,7 +351,7 @@ export const bjThunks = {
     if (!shoe || shoe.length === 0) return
 
     // Deduct additional bet (shoe confirmed available)
-    ctx.dispatch('updateWallet', playerId, -activeHand.bet)
+    await ctx.dispatch('updateWallet', playerId, -activeHand.bet)
 
     const card = shoe.shift()!
     setServerGameState(sessionId, serverState)
@@ -354,7 +359,7 @@ export const bjThunks = {
     const newCards = [...activeHand.cards, card]
     const handValue = evaluateBlackjackHand(newCards)
 
-    ctx.dispatch(
+    await ctx.dispatch(
       'bjDoubleDown',
       playerId,
       card,
@@ -363,7 +368,7 @@ export const bjThunks = {
       handValue.isBusted,
     )
 
-    inlineCheckAdvance(ctx, playerId)
+    await inlineCheckAdvance(ctx, playerId)
   },
 
   /**
@@ -389,7 +394,7 @@ export const bjThunks = {
     // Check wallet for additional bet
     const walletBalance = state.wallet[playerId] ?? 0
     if (activeHand.bet > walletBalance) {
-      ctx.dispatch('setBetError', playerId, 'Insufficient chips to split', Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, 'Insufficient chips to split', Date.now() + 3000)
       return
     }
 
@@ -400,7 +405,7 @@ export const bjThunks = {
     if (!shoe || shoe.length < 2) return
 
     // Deduct additional bet (shoe confirmed available)
-    ctx.dispatch('updateWallet', playerId, -activeHand.bet)
+    await ctx.dispatch('updateWallet', playerId, -activeHand.bet)
 
     const newCard1 = shoe.shift()!
     const newCard2 = shoe.shift()!
@@ -411,7 +416,7 @@ export const bjThunks = {
     const hand1Val = evaluateBlackjackHand(hand1Cards)
     const hand2Val = evaluateBlackjackHand(hand2Cards)
 
-    ctx.dispatch(
+    await ctx.dispatch(
       'bjSplitHand',
       playerId,
       newCard1,
@@ -425,11 +430,11 @@ export const bjThunks = {
     // Check if Ace split — one card only per hand, auto-stand
     const isAceSplit = activeHand.cards[0]!.rank === 'A'
     if (isAceSplit) {
-      ctx.dispatch('bjStandHand', playerId)
+      await ctx.dispatch('bjStandHand', playerId)
       // Advance to second hand
-      ctx.dispatch('bjAdvanceHand', playerId)
-      ctx.dispatch('bjStandHand', playerId)
-      inlineCheckAdvance(ctx, playerId)
+      await ctx.dispatch('bjAdvanceHand', playerId)
+      await ctx.dispatch('bjStandHand', playerId)
+      await inlineCheckAdvance(ctx, playerId)
     }
   },
 
@@ -450,8 +455,8 @@ export const bjThunks = {
     const activeHand = ps.hands[ps.activeHandIndex]
     if (!activeHand || activeHand.cards.length !== 2) return
 
-    ctx.dispatch('bjSurrender', playerId)
-    inlineCheckAdvance(ctx, playerId)
+    await ctx.dispatch('bjSurrender', playerId)
+    await inlineCheckAdvance(ctx, playerId)
   },
 
   /**
@@ -470,19 +475,19 @@ export const bjThunks = {
     if (nextHandIndex < ps.hands.length) {
       const nextHand = ps.hands[nextHandIndex]
       if (nextHand && !nextHand.stood && !nextHand.busted) {
-        ctx.dispatch('bjAdvanceHand', playerId)
+        await ctx.dispatch('bjAdvanceHand', playerId)
         return
       }
     }
 
     // All hands for this player done — advance turn
-    ctx.dispatch('bjAdvanceTurn')
+    await ctx.dispatch('bjAdvanceTurn')
 
     // Check if all turns complete
     const updated = ctx.getState()
     const bjUpdated = updated.blackjack!
     if (bjUpdated.currentTurnIndex >= bjUpdated.turnOrder.length) {
-      ctx.dispatch('bjSetPlayerTurnsComplete', true)
+      await ctx.dispatch('bjSetPlayerTurnsComplete', true)
     }
   },
 
@@ -518,19 +523,19 @@ export const bjThunks = {
     setServerGameState(sessionId, serverState)
 
     const dealerEval = evaluateBlackjackHand(finalCards)
-    ctx.dispatch(
+    await ctx.dispatch(
       'bjSetDealerFinalHand',
       finalCards,
       dealerEval.value,
       dealerEval.isSoft,
       dealerEval.isBusted,
     )
-    ctx.dispatch('bjSetDealerTurnComplete', true)
+    await ctx.dispatch('bjSetDealerTurnComplete', true)
 
     const dealerDesc = dealerEval.isBusted
       ? `Dealer busts with ${dealerEval.value}!`
       : `Dealer has ${dealerEval.value}.`
-    ctx.dispatch('setDealerMessage', dealerDesc)
+    await ctx.dispatch('setDealerMessage', dealerDesc)
   },
 
   /**
@@ -587,15 +592,15 @@ export const bjThunks = {
       const totalWagered = ps.hands.reduce((sum, h) => sum + (h.doubled ? h.bet * 2 : h.bet), 0) + ps.insuranceBet
       const netResult = totalPayout - totalWagered
 
-      ctx.dispatch('bjSetPlayerPayout', ps.playerId, totalPayout, netResult)
+      await ctx.dispatch('bjSetPlayerPayout', ps.playerId, totalPayout, netResult)
 
       // Credit winnings back to wallet
       if (totalPayout > 0) {
-        ctx.dispatch('updateWallet', ps.playerId, totalPayout)
+        await ctx.dispatch('updateWallet', ps.playerId, totalPayout)
       }
     }
 
-    ctx.dispatch('bjSetSettlementComplete', true)
+    await ctx.dispatch('bjSetSettlementComplete', true)
   },
 
   /**
@@ -616,10 +621,10 @@ export const bjThunks = {
         const newShoe = shuffleShoe(createShoe(bj.config.numberOfDecks))
         serverState.blackjack = { shoe: newShoe, dealerHoleCard: null }
         setServerGameState(sessionId, serverState)
-        ctx.dispatch('setDealerMessage', 'Shuffling the shoe...')
+        await ctx.dispatch('setDealerMessage', 'Shuffling the shoe...')
       }
     }
 
-    ctx.dispatch('bjSetRoundCompleteReady', true)
+    await ctx.dispatch('bjSetRoundCompleteReady', true)
   },
 }

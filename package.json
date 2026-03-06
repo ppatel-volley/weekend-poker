@@ -3,21 +3,30 @@
   "private": true,
   "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "dev": "pnpm -r --parallel dev",
+    "dev": "turbo dev",
     "dev:server": "pnpm --filter @weekend-casino/server dev",
     "dev:display": "pnpm --filter @weekend-casino/display dev",
     "dev:controller": "pnpm --filter @weekend-casino/controller dev",
-    "build": "pnpm -r build",
+    "build": "turbo build",
     "test": "vitest",
     "test:run": "vitest run",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "turbo typecheck",
     "test:e2e": "playwright test",
-    "lint": "pnpm -r lint",
-    "clean": "pnpm -r clean"
+    "lint": "turbo lint",
+    "clean": "pnpm -r clean",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "[ -z \"$CI\" ] && git rev-parse --git-dir > /dev/null 2>&1 && git config core.hooksPath .hooks || true"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,json}": "prettier --write"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@types/node": "^22.13.1",
+    "lint-staged": "^16.3.2",
+    "prettier": "^3.8.1",
+    "turbo": "^2.8.13",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
   }

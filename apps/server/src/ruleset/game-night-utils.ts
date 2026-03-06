@@ -48,7 +48,7 @@ export function wrapWithGameNightCheck(innerNext: NextFunction): NextFunction {
  * Supports both raw VGF context (ctx.reducerDispatcher) and
  * adapted context (ctx.dispatch from adaptPhaseCtx/makePhase).
  */
-export function incrementGameNightRoundIfActive(ctx: any): void {
+export function incrementGameNightRoundIfActive(ctx: any, timestamp: number): void {
   const state: CasinoGameState = ctx.getState()
   if (state.gameNight?.active) {
     const dispatch = ctx.reducerDispatcher ?? ctx.dispatch
@@ -62,7 +62,7 @@ export function incrementGameNightRoundIfActive(ctx: any): void {
           playerId: ach.playerId,
           type: ach.type,
           gameIndex: state.gameNight!.currentGameIndex,
-          timestamp: Date.now(),
+          timestamp,
         })
       }
     }

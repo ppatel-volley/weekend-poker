@@ -14,9 +14,12 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ['react', 'react-dom'],
-          'shared-core': ['@weekend-casino/shared'],
+        manualChunks(id) {
+          if (id.includes('react-dom')) return 'react-dom'
+          if (id.includes('/react/')) return 'react'
+          if (id.includes('@volley/') || id.includes('@weekend-casino/'))
+            return 'shared-core'
+          if (id.includes('node_modules')) return 'vendor'
         },
       },
     },

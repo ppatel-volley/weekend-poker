@@ -37,13 +37,13 @@ type ThunkCtx = {
  * VGF's StateSyncSessionHandler may not properly evaluate endIf after
  * sub-thunk dispatches, so we inline the logic as direct reducer calls.
  */
-function bjcInlineCheckAdvance(ctx: ThunkCtx): void {
+async function bjcInlineCheckAdvance(ctx: ThunkCtx): Promise<void> {
   const state = ctx.getState()
   const bjc = state.blackjackCompetitive
   if (!bjc) return
 
   // Advance turn (BJC has no splits, so no hand advancement needed)
-  ctx.dispatch('bjcAdvanceTurn')
+  await ctx.dispatch('bjcAdvanceTurn')
 
   // Auto-stand consecutive bots after the advance
   let updated = ctx.getState()
@@ -55,8 +55,8 @@ function bjcInlineCheckAdvance(ctx: ThunkCtx): void {
     if (!nextPlayer?.isBot) break
     const nextPs = bjcU.playerStates.find((p: any) => p.playerId === nextPlayerId)
     if (nextPs && !nextPs.hand.stood && !nextPs.hand.busted) {
-      ctx.dispatch('bjcStandHand', nextPlayerId)
-      ctx.dispatch('bjcAdvanceTurn')
+      await ctx.dispatch('bjcStandHand', nextPlayerId)
+      await ctx.dispatch('bjcAdvanceTurn')
     } else {
       break
     }
@@ -67,7 +67,7 @@ function bjcInlineCheckAdvance(ctx: ThunkCtx): void {
   const finalState = ctx.getState()
   const bjcFinal = finalState.blackjackCompetitive!
   if (bjcFinal.currentTurnIndex >= bjcFinal.turnOrder.length) {
-    ctx.dispatch('bjcSetPlayerTurnsComplete', true)
+    await ctx.dispatch('bjcSetPlayerTurnsComplete', true)
   }
 }
 
@@ -177,16 +177,21 @@ export const bjcThunks = {
 
     const ante = bjc.anteAmount
 
+    // Reject invalid ante amounts
+    if (typeof ante !== 'number' || !Number.isFinite(ante) || ante <= 0) {
+      return
+    }
+
     for (const ps of bjc.playerStates) {
       const walletBalance = state.wallet[ps.playerId] ?? 0
       if (walletBalance < ante) continue
 
-      ctx.dispatch('bjcPlaceAnte', ps.playerId, ante)
-      ctx.dispatch('updateWallet', ps.playerId, -ante)
-      ctx.dispatch('bjcAddToPot', ante)
+      await ctx.dispatch('bjcPlaceAnte', ps.playerId, ante)
+      await ctx.dispatch('updateWallet', ps.playerId, -ante)
+      await ctx.dispatch('bjcAddToPot', ante)
     }
 
-    ctx.dispatch('bjcSetAllAntesPlaced', true)
+    await ctx.dispatch('bjcSetAllAntesPlaced', true)
   },
 
   /**
@@ -226,7 +231,7 @@ export const bjcThunks = {
       const cards = playerCards.get(ps.playerId)!
       const handValue = evaluateBlackjackHand(cards)
       const isBj = isNaturalBlackjack(cards)
-      ctx.dispatch(
+      await ctx.dispatch(
         'bjcSetPlayerCards',
         ps.playerId,
         cards,
@@ -239,10 +244,10 @@ export const bjcThunks = {
     // Update shoe penetration
     const totalCards = 6 * 52
     const penetration = calculatePenetration(shoe.length, totalCards) * 100
-    ctx.dispatch('bjcSetShoePenetration', penetration)
+    await ctx.dispatch('bjcSetShoePenetration', penetration)
 
-    ctx.dispatch('bjcSetDealComplete', true)
-    ctx.dispatch('setDealerMessage', 'Cards dealt! Good luck!')
+    await ctx.dispatch('bjcSetDealComplete', true)
+    await ctx.dispatch('setDealerMessage', 'Cards dealt! Good luck!')
   },
 
   /**
@@ -270,7 +275,7 @@ export const bjcThunks = {
     const newCards = [...ps.hand.cards, card]
     const handValue = evaluateBlackjackHand(newCards)
 
-    ctx.dispatch(
+    await ctx.dispatch(
       'bjcAddCardToHand',
       playerId,
       card,
@@ -281,7 +286,7 @@ export const bjcThunks = {
 
     // If busted or 21, auto-advance
     if (handValue.isBusted || handValue.value === 21) {
-      bjcInlineCheckAdvance(ctx)
+      await bjcInlineCheckAdvance(ctx)
     }
   },
 
@@ -293,8 +298,8 @@ export const bjcThunks = {
     const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
     if (!playerId) return
 
-    ctx.dispatch('bjcStandHand', playerId)
-    bjcInlineCheckAdvance(ctx)
+    await ctx.dispatch('bjcStandHand', playerId)
+    await bjcInlineCheckAdvance(ctx)
   },
 
   /**
@@ -316,7 +321,7 @@ export const bjcThunks = {
     // Check wallet for additional bet
     const walletBalance = state.wallet[playerId] ?? 0
     if (ps.hand.bet > walletBalance) {
-      ctx.dispatch('setBetError', playerId, 'Insufficient chips to double', Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, 'Insufficient chips to double', Date.now() + 3000)
       return
     }
 
@@ -327,8 +332,8 @@ export const bjcThunks = {
     if (!shoe || shoe.length === 0) return
 
     // Deduct additional bet and add to pot (shoe confirmed available)
-    ctx.dispatch('updateWallet', playerId, -ps.hand.bet)
-    ctx.dispatch('bjcAddToPot', ps.hand.bet)
+    await ctx.dispatch('updateWallet', playerId, -ps.hand.bet)
+    await ctx.dispatch('bjcAddToPot', ps.hand.bet)
 
     const card = shoe.shift()!
     setServerGameState(sessionId, serverState)
@@ -336,7 +341,7 @@ export const bjcThunks = {
     const newCards = [...ps.hand.cards, card]
     const handValue = evaluateBlackjackHand(newCards)
 
-    ctx.dispatch(
+    await ctx.dispatch(
       'bjcDoubleDown',
       playerId,
       card,
@@ -345,7 +350,7 @@ export const bjcThunks = {
       handValue.isBusted,
     )
 
-    bjcInlineCheckAdvance(ctx)
+    await bjcInlineCheckAdvance(ctx)
   },
 
   /**
@@ -358,13 +363,13 @@ export const bjcThunks = {
     if (!bjc) return
 
     // Advance turn
-    ctx.dispatch('bjcAdvanceTurn')
+    await ctx.dispatch('bjcAdvanceTurn')
 
     // Check if all turns complete
     const updated = ctx.getState()
     const bjcUpdated = updated.blackjackCompetitive!
     if (bjcUpdated.currentTurnIndex >= bjcUpdated.turnOrder.length) {
-      ctx.dispatch('bjcSetPlayerTurnsComplete', true)
+      await ctx.dispatch('bjcSetPlayerTurnsComplete', true)
     }
   },
 
@@ -372,8 +377,8 @@ export const bjcThunks = {
    * Showdown — reveal all hands (in competitive, all cards are already visible).
    */
   bjcShowdown: async (ctx: ThunkCtx) => {
-    ctx.dispatch('bjcSetShowdownComplete', true)
-    ctx.dispatch('setDealerMessage', 'Showdown!')
+    await ctx.dispatch('bjcSetShowdownComplete', true)
+    await ctx.dispatch('setDealerMessage', 'Showdown!')
   },
 
   /**
@@ -396,12 +401,12 @@ export const bjcThunks = {
 
       for (let i = 0; i < winnerIds.length; i++) {
         const payout = share + (i === 0 ? remainder : 0)
-        ctx.dispatch('updateWallet', winnerIds[i]!, payout)
+        await ctx.dispatch('updateWallet', winnerIds[i]!, payout)
       }
     }
 
-    ctx.dispatch('bjcSetSettlementResult', winnerIds, message)
-    ctx.dispatch('setDealerMessage', message)
+    await ctx.dispatch('bjcSetSettlementResult', winnerIds, message)
+    await ctx.dispatch('setDealerMessage', message)
   },
 
   /**
@@ -425,10 +430,10 @@ export const bjcThunks = {
           playerHoleCards: new Map(),
         }
         setServerGameState(sessionId, serverState)
-        ctx.dispatch('setDealerMessage', 'Shuffling the shoe...')
+        await ctx.dispatch('setDealerMessage', 'Shuffling the shoe...')
       }
     }
 
-    ctx.dispatch('bjcSetRoundCompleteReady', true)
+    await ctx.dispatch('bjcSetRoundCompleteReady', true)
   },
 }

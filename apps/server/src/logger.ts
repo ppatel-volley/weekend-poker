@@ -1,11 +1,17 @@
-import pino from 'pino'
+import { createLogger } from '@volley/logger'
 
 /**
- * Application logger — uses pino for structured JSON logging.
+ * Application logger — uses @volley/logger (pino wrapper) for structured JSON logging.
  * Configure LOG_LEVEL via environment variable (default: 'info').
  *
- * Pino's interface is compatible with VGF's ILogger (trace, debug, info, warn, error, fatal).
+ * ILogger interface is directly compatible with VGF's ILogger (trace, debug, info, warn, error, fatal).
  */
-export const logger = pino({
+export const logger = createLogger({
+  type: 'node',
   level: process.env['LOG_LEVEL'] ?? 'info',
+  formatters: {
+    level(label: string) {
+      return { level: label }
+    },
+  },
 })

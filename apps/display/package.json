@@ -24,15 +24,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "@noriginmedia/norigin-spatial-navigation": "^2.1.0",
+    "@volley/platform-sdk": "7.42.0",
     "three": "^0.172.0"
-  },
-  "peerDependencies": {
-    "@volley/platform-sdk": "*"
-  },
-  "peerDependenciesMeta": {
-    "@volley/platform-sdk": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@testing-library/react": "^16.2.0",

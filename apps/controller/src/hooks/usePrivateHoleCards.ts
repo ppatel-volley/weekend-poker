@@ -40,7 +40,7 @@ export function usePrivateHoleCards(playerId: string): [Card, Card] | undefined 
       }
     }
 
-    client.transport.on('message' as any, handler)
+    client.transport.on('private_data' as any, handler)
     return () => {
       // VGF transport doesn't expose removeListener; handler is cleaned up on unmount
     }

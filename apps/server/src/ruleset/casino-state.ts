@@ -292,29 +292,30 @@ export const casinoSetInputMode: Reducer<[InputMode]> = (state, mode) => ({
  * Send a reaction (cosmetic only — no game state impact).
  * Rate-limited: max 3 per player per 10 seconds (server-enforced).
  * Reactions queue is capped at MAX_REACTION_QUEUE_SIZE (10).
+ *
+ * D-011: timestamp is passed as a parameter (not computed inside reducer).
  */
-export const casinoSendReaction: Reducer<[string, ReactionType]> = (state, playerId, reactionType) => {
+export const casinoSendReaction: Reducer<[string, ReactionType, number]> = (state, playerId, reactionType, timestamp) => {
   // Validate player exists
   if (!state.players.some(p => p.id === playerId)) return state
 
   // Validate reaction type
   if (!(REACTION_TYPES as readonly string[]).includes(reactionType)) return state
 
-  const now = Date.now()
-
   // Rate limit check: count recent reactions from this player within the window
-  const windowStart = now - REACTION_RATE_LIMIT.windowMs
+  const windowStart = timestamp - REACTION_RATE_LIMIT.windowMs
   const recentCount = state.reactions.filter(
     r => r.playerId === playerId && r.timestamp >= windowStart,
   ).length
 
   if (recentCount >= REACTION_RATE_LIMIT.maxReactions) return state
 
-  const newReaction = { playerId, type: reactionType, timestamp: now }
+  const newReaction = { playerId, type: reactionType, timestamp }
   const updatedReactions = [...state.reactions, newReaction].slice(-MAX_REACTION_QUEUE_SIZE)
 
   return { ...state, reactions: updatedReactions }
 }
+
 
 // ── Speed Config Reducers (v2.0) ────────────────────────────────
 
@@ -493,11 +494,12 @@ export const casinoClearDailyBonus: Reducer = state => ({
  * Initialise a Game Night session with full state.
  * Sets up gameLineup, roundsPerGame, theme, and playerScores for all current players.
  */
-export const gnInitGameNight: Reducer<[CasinoGame[], number, GameNightTheme]> = (
+export const gnInitGameNight: Reducer<[CasinoGame[], number, GameNightTheme, number]> = (
   state,
   gameLineup,
   roundsPerGame,
   theme,
+  startedAt,
 ) => {
   const playerScores: Record<string, GameNightPlayerTotal> = {}
   for (const player of state.players) {
@@ -527,7 +529,7 @@ export const gnInitGameNight: Reducer<[CasinoGame[], number, GameNightTheme]> = 
       gameResults: [],
       theme,
       championId: null,
-      startedAt: Date.now(),
+      startedAt,
       leaderboardReady: false,
       championReady: false,
       achievements: [],
@@ -684,7 +686,7 @@ export const casinoProcessVoiceCommand: Thunk<[string]> = async (ctx, transcript
   console.log('[VOICE] Transcript received:', transcript)
   // NOTE: This stub is overridden by holdemThunks.processVoiceCommand in casino-ruleset.ts
   // which has full multi-game voice routing. This fallback only fires if the override is removed.
-  ctx.dispatch('enqueueTTS', {
+  await ctx.dispatch('enqueueTTS', {
     text: `I heard: "${transcript}". Processing...`,
     priority: 'normal',
   })
@@ -696,7 +698,7 @@ export const casinoProcessVoiceCommand: Thunk<[string]> = async (ctx, transcript
  */
 export const casinoRequestTTS: Thunk<[string, TTSPriority?]> = async (ctx, text, priority) => {
   console.log('[TTS] Requested:', text)
-  ctx.dispatch('enqueueTTS', {
+  await ctx.dispatch('enqueueTTS', {
     text,
     priority: priority ?? 'normal',
   })
@@ -706,11 +708,19 @@ export const casinoRequestTTS: Thunk<[string, TTSPriority?]> = async (ctx, text,
  * Handle rebuy request (player buys additional chips).
  * Per D-005, wallet is synced at sync points.
  */
+const MAX_REBUY_AMOUNT = STARTING_WALLET_BALANCE
+const MAX_WALLET_BALANCE = STARTING_WALLET_BALANCE * 10
+
 export const casinoHandleRebuy: Thunk<[string, number]> = async (ctx, playerId, amount) => {
+  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return
+  if (amount > MAX_REBUY_AMOUNT) return
+
   const currentBalance = ctx.getState().wallet[playerId] ?? 0
+  if (currentBalance + amount > MAX_WALLET_BALANCE) return
+
   const newBalance = currentBalance + amount
-  ctx.dispatch('setWalletBalance', playerId, newBalance)
-  ctx.dispatch('setDealerMessage', `${playerId} rebuys for ${amount} chips!`)
+  await ctx.dispatch('setWalletBalance', playerId, newBalance)
+  await ctx.dispatch('setDealerMessage', `${playerId} rebuys for ${amount} chips!`)
 }
 
 /**
@@ -718,7 +728,7 @@ export const casinoHandleRebuy: Thunk<[string, number]> = async (ctx, playerId, 
  */
 export const casinoTriggerVideo: Thunk<[any]> = async (ctx, config) => {
   console.log('[VIDEO] Triggering:', config.assetKey)
-  ctx.dispatch('setVideoPlayback', {
+  await ctx.dispatch('setVideoPlayback', {
     assetKey: config.assetKey,
     mode: config.mode ?? 'full_screen',
     startedAt: Date.now(),
@@ -736,7 +746,7 @@ export const casinoTriggerVideo: Thunk<[any]> = async (ctx, config) => {
  */
 export const casinoCompleteVideo: Thunk = async (ctx) => {
   if (ctx.getState().videoPlayback) {
-    ctx.dispatch('clearVideoPlayback')
+    await ctx.dispatch('clearVideoPlayback')
   }
 }
 
@@ -745,7 +755,7 @@ export const casinoCompleteVideo: Thunk = async (ctx) => {
  * Uses explicit reducer dispatch per endIf Rule 3 (no implicit phase changes).
  */
 export const casinoActivateRemoteMode: Thunk = async (ctx) => {
-  ctx.dispatch('setInputMode', 'remote')
+  await ctx.dispatch('setInputMode', 'remote')
 }
 
 // ── Exports ────────────────────────────────────────────────────────
@@ -843,8 +853,8 @@ export const gnCalculateScoresThunk: Thunk = async (ctx) => {
     }
   }
 
-  ctx.dispatch('gnUpdateScores', updatedScores)
-  ctx.dispatch('gnAddGameResult', {
+  await ctx.dispatch('gnUpdateScores', updatedScores)
+  await ctx.dispatch('gnAddGameResult', {
     game: state.selectedGame ?? 'holdem',
     gameIndex: gn.currentGameIndex,
     rankings: gameScores,
@@ -866,9 +876,9 @@ export const gnDetermineChampionThunk: Thunk = async (ctx) => {
   const championId = determineChampion(gn.playerScores)
 
   if (championId) {
-    ctx.dispatch('gnSetChampion', championId)
+    await ctx.dispatch('gnSetChampion', championId)
     const name = gn.playerScores[championId]?.playerName ?? championId
-    ctx.dispatch('setDealerMessage', `${name} is the Game Night Champion!`)
+    await ctx.dispatch('setDealerMessage', `${name} is the Game Night Champion!`)
   }
 }
 

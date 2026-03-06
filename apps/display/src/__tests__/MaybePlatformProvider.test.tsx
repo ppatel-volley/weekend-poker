@@ -31,7 +31,7 @@ describe('MaybePlatformProvider', () => {
     // Ensure clean URL state
     Object.defineProperty(window, 'location', {
       writable: true,
-      value: { search: '', href: 'http://localhost:5173/' },
+      value: { search: '', href: 'http://localhost:5173/', pathname: '/' },
     })
   })
 

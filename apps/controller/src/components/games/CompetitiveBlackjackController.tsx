@@ -14,37 +14,9 @@
 import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
 import { useLastResult } from '../../hooks/useLastResult.js'
 import { ResultToast } from '../shared/ResultToast.js'
-import { Hand3D } from '../3d/Hand3D.js'
-import type { CasinoGameState, BlackjackCompetitiveGameState, BjcPlayerState, Card } from '@weekend-casino/shared'
+import { CardHand2D } from '../shared/CardDisplay2D.js'
+import type { CasinoGameState, BlackjackCompetitiveGameState, BjcPlayerState } from '@weekend-casino/shared'
 
-/** Card display component. */
-function CardDisplay({ card }: { card: Card }) {
-  const suitSymbols: Record<string, string> = {
-    spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663',
-  }
-  const suitColours: Record<string, string> = {
-    spades: '#1a1a2e', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#1a1a2e',
-  }
-  return (
-    <div style={{
-      width: '55px',
-      height: '80px',
-      background: 'white',
-      borderRadius: '6px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: suitColours[card.suit] ?? '#333',
-      fontSize: '18px',
-      fontWeight: 'bold',
-      border: '2px solid #ddd',
-    }}>
-      <div>{card.rank}</div>
-      <div style={{ fontSize: '14px' }}>{suitSymbols[card.suit]}</div>
-    </div>
-  )
-}
 
 /** Hand value badge. */
 function HandValueBadge({ value, isSoft, isBusted, isBlackjack }: {
@@ -164,7 +136,7 @@ function PlayerActionsView({
 
       {/* My hand */}
       <div style={{ textAlign: 'center' }}>
-        <Hand3D cards={hand.cards} height={120} />
+        <CardHand2D cards={hand.cards} />
         <HandValueBadge
           value={hand.value}
           isSoft={hand.isSoft}
@@ -282,7 +254,7 @@ function ResultsView({
                 isBlackjack={ps.hand.isBlackjack}
               />
             </div>
-            <Hand3D cards={ps.hand.cards} height={80} />
+            <CardHand2D cards={ps.hand.cards} />
             {isThisWinner && (
               <div style={{ marginTop: '4px', color: '#2ecc71', fontWeight: 'bold' }}>
                 WINNER

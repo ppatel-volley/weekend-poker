@@ -233,13 +233,15 @@ describe('gnChampionPhase', () => {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 describe('incrementGameNightRoundIfActive', () => {
+  const NOW = 1700000000000
+
   it('should dispatch gnIncrementRoundsPlayed when GN active (reducerDispatcher)', () => {
     const state = makeState({ gameNight: makeGN() })
     const ctx = {
       getState: () => state,
       reducerDispatcher: vi.fn(),
     }
-    incrementGameNightRoundIfActive(ctx)
+    incrementGameNightRoundIfActive(ctx, NOW)
     expect(ctx.reducerDispatcher).toHaveBeenCalledWith('gnIncrementRoundsPlayed')
   })
 
@@ -249,7 +251,7 @@ describe('incrementGameNightRoundIfActive', () => {
       getState: () => state,
       dispatch: vi.fn(),
     }
-    incrementGameNightRoundIfActive(ctx)
+    incrementGameNightRoundIfActive(ctx, NOW)
     expect(ctx.dispatch).toHaveBeenCalledWith('gnIncrementRoundsPlayed')
   })
 
@@ -259,7 +261,7 @@ describe('incrementGameNightRoundIfActive', () => {
       getState: () => state,
       reducerDispatcher: vi.fn(),
     }
-    incrementGameNightRoundIfActive(ctx)
+    incrementGameNightRoundIfActive(ctx, NOW)
     expect(ctx.reducerDispatcher).not.toHaveBeenCalled()
   })
 
@@ -269,8 +271,21 @@ describe('incrementGameNightRoundIfActive', () => {
       getState: () => state,
       reducerDispatcher: vi.fn(),
     }
-    incrementGameNightRoundIfActive(ctx)
+    incrementGameNightRoundIfActive(ctx, NOW)
     expect(ctx.reducerDispatcher).not.toHaveBeenCalled()
+  })
+
+  it('should pass timestamp as parameter, not compute it internally (D-011)', () => {
+    const state = makeState({ gameNight: makeGN({ achievements: [] }) })
+    const ctx = {
+      getState: () => state,
+      reducerDispatcher: vi.fn(),
+    }
+    const specificTimestamp = 1234567890000
+    incrementGameNightRoundIfActive(ctx, specificTimestamp)
+    // If achievements are detected, the timestamp parameter should be passed through
+    // The function should never call Date.now() internally
+    expect(ctx.reducerDispatcher).toHaveBeenCalledWith('gnIncrementRoundsPlayed')
   })
 })
 

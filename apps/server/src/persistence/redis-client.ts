@@ -3,6 +3,11 @@
  *
  * Uses ioredis if REDIS_URL is set (production), else ioredis-mock (dev).
  * Same module-level singleton approach as server-game-state.ts.
+ *
+ * TODO: Consolidate with the shared resilientRedis client from index.ts.
+ * This singleton has a different lifecycle (lazy init, no retry strategy)
+ * which makes it safe to keep separate for now, but ideally there should
+ * be a single Redis client for the entire process.
  */
 
 import type Redis from 'ioredis'

@@ -2,7 +2,7 @@
  * Craps thunks — async orchestration.
  *
  * Per VGF: thunks handle validation, side effects, and multi-dispatch sequences.
- * ctx.dispatch() is synchronous — state visible immediately after.
+ * await ctx.dispatch() is synchronous — state visible immediately after.
  */
 
 import type { CasinoGameState, CrapsBetType, CrapsBet, CrapsComeBet } from '@weekend-casino/shared'
@@ -44,8 +44,7 @@ type ThunkCtx = {
   logger?: any
 }
 
-let betIdCounter = 0
-let comeBetIdCounter = 0
+import { randomUUID } from 'node:crypto'
 
 export const crapsThunks = {
   /**
@@ -68,13 +67,18 @@ export const crapsThunks = {
 
     const config = craps.config
 
+    // Reject invalid bet amounts
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+      return
+    }
+
     // Validate amount
     if (amount < config.minBet) {
-      ctx.dispatch('setBetError', playerId, `Minimum bet is ${config.minBet}`, Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, `Minimum bet is ${config.minBet}`, Date.now() + 3000)
       return
     }
     if (amount > config.maxBet) {
-      ctx.dispatch('setBetError', playerId, `Maximum bet is ${config.maxBet}`, Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, `Maximum bet is ${config.maxBet}`, Date.now() + 3000)
       return
     }
 
@@ -83,14 +87,14 @@ export const crapsThunks = {
     const playerState = craps.players.find(p => p.playerId === playerId)
     const currentAtRisk = playerState?.totalAtRisk ?? 0
     if (currentAtRisk + amount > walletBalance) {
-      ctx.dispatch('setBetError', playerId, 'Insufficient chips', Date.now() + 3000)
+      await ctx.dispatch('setBetError', playerId, 'Insufficient chips', Date.now() + 3000)
       return
     }
 
     // Type-specific validation
     if (betType === 'place') {
       if (targetNumber == null || !isValidPlaceNumber(targetNumber)) {
-        ctx.dispatch('setBetError', playerId, 'Invalid place bet number', Date.now() + 3000)
+        await ctx.dispatch('setBetError', playerId, 'Invalid place bet number', Date.now() + 3000)
         return
       }
     }
@@ -98,7 +102,7 @@ export const crapsThunks = {
     if (betType === 'pass_odds' || betType === 'dont_pass_odds') {
       // Odds require a point to be established
       if (!craps.puckOn || craps.point === null) {
-        ctx.dispatch('setBetError', playerId, 'Cannot place odds without an established point', Date.now() + 3000)
+        await ctx.dispatch('setBetError', playerId, 'Cannot place odds without an established point', Date.now() + 3000)
         return
       }
       // Validate odds multiplier
@@ -108,11 +112,11 @@ export const crapsThunks = {
         (betType === 'pass_odds' ? b.type === 'pass_line' : b.type === 'dont_pass'),
       )
       if (!parentBet) {
-        ctx.dispatch('setBetError', playerId, 'No qualifying pass/don\'t pass bet for odds', Date.now() + 3000)
+        await ctx.dispatch('setBetError', playerId, 'No qualifying pass/don\'t pass bet for odds', Date.now() + 3000)
         return
       }
       if (amount > parentBet.amount * config.maxOddsMultiplier) {
-        ctx.dispatch('setBetError', playerId, `Maximum odds is ${config.maxOddsMultiplier}x`, Date.now() + 3000)
+        await ctx.dispatch('setBetError', playerId, `Maximum odds is ${config.maxOddsMultiplier}x`, Date.now() + 3000)
         return
       }
     }
@@ -120,7 +124,7 @@ export const crapsThunks = {
     // Come/Don't Come bets
     if (betType === 'come' || betType === 'dont_come') {
       const comeBet: CrapsComeBet = {
-        id: `cbet-${++comeBetIdCounter}`,
+        id: `cbet-${randomUUID()}`,
         playerId,
         type: betType,
         amount,
@@ -128,14 +132,15 @@ export const crapsThunks = {
         oddsAmount: 0,
         status: 'active',
       }
-      ctx.dispatch('crapsPlaceComeBet', comeBet)
+      await ctx.dispatch('crapsPlaceComeBet', comeBet)
+      await ctx.dispatch('updateWallet', playerId, -amount)
       return
     }
 
     // Come/Don't Come odds
     if (betType === 'come_odds' || betType === 'dont_come_odds') {
       if (targetNumber == null) {
-        ctx.dispatch('setBetError', playerId, 'Must specify come point for odds', Date.now() + 3000)
+        await ctx.dispatch('setBetError', playerId, 'Must specify come point for odds', Date.now() + 3000)
         return
       }
       const parentComeBet = craps.comeBets.find(cb =>
@@ -145,17 +150,17 @@ export const crapsThunks = {
         (betType === 'come_odds' ? cb.type === 'come' : cb.type === 'dont_come'),
       )
       if (!parentComeBet) {
-        ctx.dispatch('setBetError', playerId, 'No qualifying come bet for odds', Date.now() + 3000)
+        await ctx.dispatch('setBetError', playerId, 'No qualifying come bet for odds', Date.now() + 3000)
         return
       }
       if (amount > parentComeBet.amount * config.maxOddsMultiplier) {
-        ctx.dispatch('setBetError', playerId, `Maximum odds is ${config.maxOddsMultiplier}x`, Date.now() + 3000)
+        await ctx.dispatch('setBetError', playerId, `Maximum odds is ${config.maxOddsMultiplier}x`, Date.now() + 3000)
         return
       }
     }
 
     const bet: CrapsBet = {
-      id: `crbet-${++betIdCounter}`,
+      id: `crbet-${randomUUID()}`,
       playerId,
       type: betType,
       amount,
@@ -165,7 +170,8 @@ export const crapsThunks = {
       payout: 0,
     }
 
-    ctx.dispatch('crapsPlaceBet', bet)
+    await ctx.dispatch('crapsPlaceBet', bet)
+    await ctx.dispatch('updateWallet', playerId, -amount)
   },
 
   /**
@@ -176,13 +182,13 @@ export const crapsThunks = {
     const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
     if (!playerId) return
 
-    ctx.dispatch('crapsSetPlayerConfirmed', playerId, true)
+    await ctx.dispatch('crapsSetPlayerConfirmed', playerId, true)
 
     const updated = ctx.getState()
     const craps = updated.craps!
     const allConfirmed = craps.players.every(p => p.betsConfirmed)
     if (allConfirmed) {
-      ctx.dispatch('crapsSetAllBetsPlaced', true)
+      await ctx.dispatch('crapsSetAllBetsPlaced', true)
     }
   },
 
@@ -194,13 +200,13 @@ export const crapsThunks = {
     const playerId = validatePlayerIdOrBot(ctx as any, claimedPlayerId, state)
     if (!playerId) return
 
-    ctx.dispatch('crapsSetPlayerConfirmed', playerId, true)
+    await ctx.dispatch('crapsSetPlayerConfirmed', playerId, true)
 
     const updated = ctx.getState()
     const craps = updated.craps!
     const allConfirmed = craps.players.every(p => p.betsConfirmed)
     if (allConfirmed) {
-      ctx.dispatch('crapsSetAllBetsPlaced', true)
+      await ctx.dispatch('crapsSetAllBetsPlaced', true)
     }
   },
 
@@ -226,18 +232,10 @@ export const crapsThunks = {
     }
     setServerGameState(sessionId, serverState)
 
-    // Deduct active bets from wallets (field bets are one-roll, deduct on placement)
-    for (const bet of craps.bets.filter(b => b.status === 'active')) {
-      // Only deduct on first roll for non-field bets, or always for field
-      if (bet.type === 'field') {
-        ctx.dispatch('updateWallet', bet.playerId, -bet.amount)
-      }
-    }
-
     const rollNumber = craps.rollHistory.length + 1
-    ctx.dispatch('crapsSetRollResult', die1, die2, rollNumber)
-    ctx.dispatch('setDealerMessage', `${die1} and ${die2}!`)
-    ctx.dispatch('crapsSetRollComplete', true)
+    await ctx.dispatch('crapsSetRollResult', die1, die2, rollNumber)
+    await ctx.dispatch('setDealerMessage', `${die1} and ${die2}!`)
+    await ctx.dispatch('crapsSetRollComplete', true)
   },
 
   /**
@@ -288,7 +286,7 @@ export const crapsThunks = {
     })
 
     // Single atomic dispatch for all resolutions (RC-1)
-    ctx.dispatch('crapsResolveBets', resolvedBets, resolvedComeBets)
+    await ctx.dispatch('crapsResolveBets', resolvedBets, resolvedComeBets)
 
     // Calculate payouts and update wallets
     const playerPayouts: Record<string, number> = {}
@@ -315,37 +313,37 @@ export const crapsThunks = {
 
     for (const [playerId, payout] of Object.entries(playerPayouts)) {
       if (payout > 0) {
-        ctx.dispatch('updateWallet', playerId, payout)
+        await ctx.dispatch('updateWallet', playerId, payout)
       }
     }
 
     // Determine outcome flags
     if (puckOn && point !== null) {
       if (total === 7) {
-        ctx.dispatch('crapsSetSevenOut', true)
-        ctx.dispatch('setDealerMessage', 'Seven out!')
+        await ctx.dispatch('crapsSetSevenOut', true)
+        await ctx.dispatch('setDealerMessage', 'Seven out!')
       } else if (total === point) {
-        ctx.dispatch('crapsSetPointHit', true)
-        ctx.dispatch('crapsSetPoint', null)
-        ctx.dispatch('crapsSetPuckOn', false)
-        ctx.dispatch('setDealerMessage', `${total}! Winner!`)
+        await ctx.dispatch('crapsSetPointHit', true)
+        await ctx.dispatch('crapsSetPoint', null)
+        await ctx.dispatch('crapsSetPuckOn', false)
+        await ctx.dispatch('setDealerMessage', `${total}! Winner!`)
       }
     } else {
       // Come-out roll
       if (isNatural(total)) {
-        ctx.dispatch('setDealerMessage', `${total}! Winner on the come-out!`)
+        await ctx.dispatch('setDealerMessage', `${total}! Winner on the come-out!`)
       } else if (isCraps(total)) {
-        ctx.dispatch('setDealerMessage', `${total}! Craps!`)
+        await ctx.dispatch('setDealerMessage', `${total}! Craps!`)
       } else if (isPoint(total)) {
         // Establish the point
-        ctx.dispatch('crapsSetPoint', total)
-        ctx.dispatch('crapsSetPuckOn', true)
-        ctx.dispatch('setDealerMessage', `The point is ${total}!`)
+        await ctx.dispatch('crapsSetPoint', total)
+        await ctx.dispatch('crapsSetPuckOn', true)
+        await ctx.dispatch('setDealerMessage', `The point is ${total}!`)
         // Turn on place bets now that puck is ON (if configured)
       }
     }
 
-    ctx.dispatch('crapsSetResolutionComplete', true)
+    await ctx.dispatch('crapsSetResolutionComplete', true)
   },
 
   /**
@@ -359,11 +357,11 @@ export const crapsThunks = {
     // Return come bet amounts to wallets
     for (const cb of craps.comeBets) {
       if (cb.status === 'active') {
-        ctx.dispatch('updateWallet', cb.playerId, cb.amount + cb.oddsAmount)
+        await ctx.dispatch('updateWallet', cb.playerId, cb.amount + cb.oddsAmount)
       }
     }
 
-    ctx.dispatch('crapsReturnComeBets')
+    await ctx.dispatch('crapsReturnComeBets')
   },
 
   /**
@@ -374,7 +372,7 @@ export const crapsThunks = {
     const craps = state.craps
     if (!craps) return
 
-    ctx.dispatch('crapsSetRoundCompleteReady', true)
-    ctx.dispatch('setDealerMessage', null)
+    await ctx.dispatch('crapsSetRoundCompleteReady', true)
+    await ctx.dispatch('setDealerMessage', null)
   },
 }

@@ -12,8 +12,8 @@ A comprehensive guide for developers and AI agents building TV games on the Voll
 **Read this section first.** These are the most common failure modes when an AI agent builds a TV game:
 
 1. **NPM authentication required.** The `@volley/vgf` and `@volley/platform-sdk` packages are published to npmjs.com under the `@volley` scope. If `pnpm add @volley/vgf` fails with 404 or 403, **stop and ask the user to run `npm login`** to authenticate with their Volley org npm account.
-2. **Never render `PlatformProvider` unconditionally.** It crashes without `volley_hub_session_id` (only present on real TVs). Always use the `MaybePlatformProvider` pattern (Section 3).
-3. **Always use thunks for phase transitions.** Never use a reducer dispatch to trigger a phase change — `endIf` cascade will crash `onBegin` with a wrong context shape. Use a thunk with explicit `dispatch("SET_PHASE", ...)` (Section 4, endIf Rules).
+2. **Use unconditional `PlatformProvider` with `ensureLocalHubSessionId()`.** In local/dev/staging, inject a fallback `volley_hub_session_id` URL param before React renders so PlatformProvider always has what it needs. `MaybePlatformProvider` is only needed if PlatformProvider crashes your app (e.g. auth server unreachable without VPN).
+3. **Always use `await ctx.dispatchThunk('TRANSITION_TO_PHASE', targetPhase)` for phase transitions.** Never dispatch `SET_PHASE` or modify `state.phase` directly -- VGF 4.8.0 throws `PhaseModificationError`. The thunk sets `state.nextPhase` and lets `endIf`/`next` handle the transition.
 4. **Never put `query` inside `socketOptions`.** It clobbers VGF's internal `sessionId`, `userId`, and `clientType` (Section 4, Transport Configuration).
 5. **VGF state starts as `{}`.** Always guard with `"phase" in state` before rendering (Section 4).
 6. **Always override Socket.IO transports.** Default is websocket-only; set `transports: ["polling", "websocket"]` (Section 4).
@@ -22,12 +22,13 @@ A comprehensive guide for developers and AI agents building TV games on the Voll
 9. **Amplitude flag management also requires the AWS session.** The `flag add`, `flag remove`, and `flag status` sub-commands use the same SSO credentials. Same rule: verify the session first, hand off login to the human if it's expired.
 10. **Always pass `--platform` exactly.** Valid values are `SAMSUNG_TV`, `LG_TV`, `FIRE_TV`, `IOS_MOBILE`, `ANDROID_MOBILE`, or `WEB`. Case and underscores matter — `firetv` or `fire-tv` will fail silently.
 11. **Controller apps MUST use `@volley/platform-sdk`.** Do not generate random UUIDs for device identity — use `useDeviceInfo()` from the Platform SDK. All Volley production apps wrap in `PlatformProvider`. See Section 16 for the full controller setup guide.
-12. **Use `WGFServer`, not `VGFServer`.** The older `VGFServer` class creates Socket.IO internally and lacks production features. `WGFServer` accepts an explicit Socket.IO instance and supports `RedisRuntimeSchedulerStore`. See Section 17.
+12. **Use `WGFServer`, not `VGFServer`.** The older `VGFServer` class creates Socket.IO internally and lacks production features. `WGFServer` accepts an explicit Socket.IO instance and supports `RedisRuntimeSchedulerStore`. See Section 17. **Note:** WGFServer does NOT call `onConnect`/`onDisconnect` lifecycle hooks. Those are `StateSyncSessionHandlers`-only (old `VGFServer` pattern). Handle all session setup via client-initiated thunks instead.
 13. **Use `@volley/logger`, not raw pino.** All Volley services use `@volley/logger` with `createLoggerHttpMiddleware` for request tracing via UUID. Raw pino lacks request IDs and structured HTTP logging. See Section 17.3.
 14. **Redis must be resilient.** Never use `ioredis-mock` in production. Use exponential backoff with jitter (`retryStrategy`), `maxRetriesPerRequest: null`, and `enableOfflineQueue: true`. See Section 17.4.
 15. **Health endpoints: two, not one.** Every server needs `/health` (liveness) AND `/health/ready` (readiness with dependency checks). Kubernetes/ECS/GameLift route traffic based on readiness. See Section 17.5.
 16. **Platform URLs must be stage-aware.** Never hardcode `platform-dev.volley-services.net`. Use a lookup table: local/dev -> dev, staging -> staging, production -> production. See Section 18.2.
 17. **Display Electron IPC must be dynamic.** Do not use a static preload object. Use `ipcMain.handle()` + `ipcRenderer.invoke()` for session ID, backend URL, and stage. See Section 18.3.
+18. **Local dev with PlatformProvider requires Volley VPN.** The `auth-dev.volley.tv` server CORS-blocks localhost without VPN access. If you see CORS errors from auth endpoints, connect to the VPN before retrying.
 
 ---
 

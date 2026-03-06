@@ -10,39 +10,11 @@
 
 import { useState } from 'react'
 import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
-import { Hand3D } from '../3d/Hand3D.js'
+import { CardHand2D } from '../shared/CardDisplay2D.js'
 import type { ThreeCardPokerGameState, Card } from '@weekend-casino/shared'
 
 const ANTE_AMOUNTS = [10, 25, 50, 100, 250, 500]
 
-/** Card display component — shows rank and suit. */
-function CardDisplay({ card }: { card: Card }) {
-  const suitSymbols: Record<string, string> = {
-    spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663',
-  }
-  const suitColours: Record<string, string> = {
-    spades: '#1a1a2e', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#1a1a2e',
-  }
-  return (
-    <div style={{
-      width: '70px',
-      height: '100px',
-      background: 'white',
-      borderRadius: '8px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: suitColours[card.suit] ?? '#333',
-      fontSize: '20px',
-      fontWeight: 'bold',
-      border: '2px solid #ddd',
-    }}>
-      <div>{card.rank}</div>
-      <div style={{ fontSize: '16px' }}>{suitSymbols[card.suit]}</div>
-    </div>
-  )
-}
 
 /** Ante betting screen. */
 function AnteBettingView({
@@ -188,7 +160,7 @@ function DecisionView({
     <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '18px' }}>YOUR HAND</div>
 
-      <Hand3D cards={myHand.cards} height={140} />
+      <CardHand2D cards={myHand.cards} cardWidth={70} cardHeight={100} fontSize={20} />
 
       <div style={{ textAlign: 'center', color: '#aaa' }}>
         Ante: ${myHand.anteBet}
@@ -253,7 +225,7 @@ function ResultsView({
       {tcp.dealerRevealed && (
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>DEALER</div>
-          <Hand3D cards={tcp.dealerHand.cards as Card[]} height={100} />
+          <CardHand2D cards={tcp.dealerHand.cards as Card[]} />
           <div style={{
             marginTop: '8px',
             padding: '8px',
@@ -272,7 +244,7 @@ function ResultsView({
       {/* Player hand */}
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>YOUR HAND</div>
-        <Hand3D cards={myHand.cards} height={100} />
+        <CardHand2D cards={myHand.cards} />
       </div>
 
       {/* Result */}

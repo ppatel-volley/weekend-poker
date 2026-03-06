@@ -184,6 +184,7 @@ describe('GameNightSetupController', () => {
       ['holdem', 'roulette', 'blackjack_classic'],
       5,
       'classic',
+      expect.any(Number),
     )
     expect(mockDispatch).toHaveBeenCalledWith('gnConfirmSetup')
   })
@@ -419,6 +420,7 @@ describe('LobbyController - Game Night button', () => {
       [],
       5,
       'classic',
+      expect.any(Number),
     )
   })
 })

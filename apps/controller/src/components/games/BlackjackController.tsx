@@ -13,39 +13,11 @@ import { useState } from 'react'
 import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
 import { useLastResult } from '../../hooks/useLastResult.js'
 import { ResultToast } from '../shared/ResultToast.js'
-import { Hand3D } from '../3d/Hand3D.js'
+import { CardHand2D } from '../shared/CardDisplay2D.js'
 import type { BlackjackGameState, Card } from '@weekend-casino/shared'
 
 const BET_AMOUNTS = [10, 25, 50, 100, 250, 500]
 
-/** Card display component. */
-function CardDisplay({ card }: { card: Card }) {
-  const suitSymbols: Record<string, string> = {
-    spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663',
-  }
-  const suitColours: Record<string, string> = {
-    spades: '#1a1a2e', hearts: '#e74c3c', diamonds: '#e74c3c', clubs: '#1a1a2e',
-  }
-  return (
-    <div style={{
-      width: '55px',
-      height: '80px',
-      background: 'white',
-      borderRadius: '6px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: suitColours[card.suit] ?? '#333',
-      fontSize: '18px',
-      fontWeight: 'bold',
-      border: '2px solid #ddd',
-    }}>
-      <div>{card.rank}</div>
-      <div style={{ fontSize: '14px' }}>{suitSymbols[card.suit]}</div>
-    </div>
-  )
-}
 
 /** Hand value badge. */
 function HandValueBadge({ value, isSoft, isBusted, isBlackjack }: {
@@ -229,7 +201,7 @@ function PlayerActionsView({
             Hand {myState.activeHandIndex + 1} of {myState.hands.length}
           </div>
         )}
-        <Hand3D cards={activeHand.cards} height={120} />
+        <CardHand2D cards={activeHand.cards} />
         <HandValueBadge
           value={activeHand.value}
           isSoft={activeHand.isSoft}
@@ -328,7 +300,7 @@ function ResultsView({
       {bj.dealerHand.holeCardRevealed && (
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>DEALER</div>
-          <Hand3D cards={bj.dealerHand.cards as Card[]} height={100} />
+          <CardHand2D cards={bj.dealerHand.cards as Card[]} />
           <div style={{ marginTop: '4px' }}>
             <HandValueBadge
               value={bj.dealerHand.value}
@@ -348,7 +320,7 @@ function ResultsView({
             {myState.hands.length > 1 && (
               <div style={{ fontSize: '12px', color: '#aaa' }}>Hand {i + 1}</div>
             )}
-            <Hand3D cards={hand.cards} height={100} />
+            <CardHand2D cards={hand.cards} />
             <HandValueBadge
               value={hand.value}
               isSoft={hand.isSoft}

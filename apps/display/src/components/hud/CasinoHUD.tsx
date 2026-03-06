@@ -127,8 +127,19 @@ export function CasinoHUD() {
   // Derive challenge indicators from all players' summaries
   const challengeIndicators = deriveChallengeIndicators(challengeSummary)
 
-  // Hide HUD in lobby
-  if (!currentGame) return null
+  // Hide HUD in lobby — but still show the daily bonus popup if triggered
+  if (!currentGame) {
+    return bonusData ? (
+      <div style={overlayStyle}>
+        <BonusPopup
+          amount={bonusData.amount}
+          streakDay={bonusData.streakDay}
+          multiplierApplied={bonusData.multiplierApplied}
+          onDismiss={dismissBonus}
+        />
+      </div>
+    ) : null
+  }
 
   const gameLabel = CASINO_GAME_LABELS[currentGame as CasinoGame] ?? currentGame
 

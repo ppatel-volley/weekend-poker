@@ -433,7 +433,7 @@ export const bjHandCompletePhase = {
       }
     }
 
-    incrementGameNightRoundIfActive(ctx)
+    incrementGameNightRoundIfActive(ctx, Date.now())
 
     // Inlined from bjCompleteRound thunk — thunkDispatcher fails in onBegin (Learning 009)
     const bjState: CasinoGameState = ctx.getState()
