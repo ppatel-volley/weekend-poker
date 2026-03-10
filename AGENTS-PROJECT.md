@@ -1,25 +1,22 @@
-# Project Configuration — Weekend Casino
+# Project Configuration
 
 > Project-specific configuration for the AI Agent Guidelines.
-> Referenced by [`AGENTS.md`](./AGENTS.md).
+> Referenced by [`AGENTS.md`](./AGENTS.md). Replace placeholder values with your project's actual commands, paths, and keywords.
+>
+>
+> **TEMPLATE WARNING:** If this file still contains `@yourproject/` references, it is unconfigured. Skip keyword trigger checks and use commands as illustrative examples only.
 
 ---
 
 ## Project Commands
 
 ```bash
-# Run all unit tests
+# Run all tests
 pnpm test -- --run
 
 # Run specific package tests (monorepo)
-pnpm --filter @weekend-casino/shared test
-pnpm --filter @weekend-casino/server test
-pnpm --filter @weekend-casino/display test
-pnpm --filter @weekend-casino/controller test
-
-# Run Playwright E2E tests (requires dev servers running)
-# First-time setup: install browser binaries with `pnpm exec playwright install`
-pnpm test:e2e
+pnpm --filter @yourproject/shared test
+pnpm --filter @yourproject/server test
 
 # Type checking
 pnpm typecheck
@@ -27,13 +24,8 @@ pnpm typecheck
 # Production build
 pnpm build
 
-# Development mode (all 3 apps)
+# Development mode
 pnpm dev
-
-# Individual dev servers
-pnpm dev:server
-pnpm dev:display
-pnpm dev:controller
 ```
 
 ---
@@ -42,33 +34,31 @@ pnpm dev:controller
 
 | Path | Purpose |
 |------|---------|
-| `packages/shared/src/__tests__/` | Shared types, constants, and utilities |
-| `apps/server/src/__tests__/` | Server reducers, thunks, phases, voice |
-| `apps/server/src/poker-engine/__tests__/` | Hold'em hand evaluation, betting, positions |
-| `apps/server/src/draw-engine/__tests__/` | 5-Card Draw hand evaluation, discard mechanics |
-| `apps/server/src/tcp-engine/__tests__/` | Three Card Poker hand evaluation, payouts |
-| `apps/server/src/blackjack-engine/__tests__/` | Blackjack hand evaluation, shoe, dealer, payouts |
-| `apps/server/src/bot-engine/__tests__/` | Bot personalities, rules engine, Claude engine, manager |
-| `apps/display/src/__tests__/` | Display components and hooks |
-| `apps/controller/src/__tests__/` | Controller components, voice, and hooks |
-| `e2e/` | Playwright E2E tests |
+| `packages/shared/src/__tests__/` | Shared types and utilities |
+| `apps/server/src/__tests__/` | Server logic and API handlers |
+| `apps/client/src/__tests__/` | Client components and hooks |
+
+---
+
+## Existing Test Files
+
+| File | Purpose |
+|------|---------|
+| `example.test.ts` | Example unit tests |
+| `example.integration.test.ts` | Example integration tests |
 
 ---
 
 ## Keyword Triggers & Task Categories
 
+Map task keywords to learning document numbers from your `learnings/` folder. See [`AGENTS.md`](./AGENTS.md) Appendix C.
+
 | Category | Keywords | Learnings |
 |----------|----------|-----------|
-| Backwards Compatibility | export, import, rename, alias, re-export | 003 |
-| State Shape | CasinoGameState, flat state, sub-object, D-002 | 003 |
-| Session Stats | SessionStats, createSessionStats, poker vs casino | 003 |
-| Game Logic | hand evaluator, payout, phase transition, endIf | — |
-| Voice Pipeline | voice, intent, Deepgram, transcript, STT, voice command | 008 |
-| Bot System | bot, Claude, personality, rules engine | — |
-| Wallet | wallet, chips, balance, rebuy, D-005 | — |
-| Type Integration | shared type, required field, CasinoGameState, hook generics, typecheck, build failure | 007 |
-| Multi-Agent Merge | worktree, parallel agent, merge, integration | 007 |
-| Security Fixes | selectGame, host-only, holeCards, processPlayerAction, voice command, security thunk | 008 |
+| Authentication | auth, login, session, token | 001, 002 |
+| Database | database, migration, schema | 003 |
+| API Development | api, endpoint, route | 004, 005 |
+| Testing | test, spec, expect | 006 |
 
 ---
 
@@ -77,6 +67,18 @@ pnpm dev:controller
 Use conventional commits. Keep the subject line under 72 chars, imperative mood. Body is optional — use it only when the "why" isn't obvious from the subject.
 
 **STRICT: No AI attribution footers.** NEVER add `Co-Authored-By: Claude`, `Generated with Claude Code`, `🤖 Generated with...`, or any similar AI-generated attribution to commits, PR descriptions, or any other output. These lines must never appear anywhere. Note: Claude Code adds these by default — you must actively suppress them.
+
+---
+
+## Git Workflow
+
+<!-- Uncomment the workflow your project uses: -->
+
+<!-- **Trunk-based:** Commit directly to `main`. No feature branches. -->
+<!-- **Feature branch:** Create `feature/name` branches. Merge via PR. -->
+<!-- **PR-required:** All changes via PR. No direct commits to `main`. CI must pass. -->
+
+**Default (if not specified):** Assume feature branch workflow. Create a branch for Standard/Critical tasks; commit directly for Quick tasks.
 
 ---
 
@@ -96,70 +98,41 @@ Always create **private/secret** gists by default. Never use `--public` unless t
 
 ---
 
-## Testing Review Agents
+## Hooks (Optional)
 
-**These agents MUST be spawned whenever testing is taking place** — unit tests, E2E tests, or any verification pass. They are not optional for test phases.
+Claude Code hooks provide automatic guardrails that fire on specific events. Configure in `.claude/settings.json`.
 
-### Playtester Agent
+| Hook Point | When It Fires | Example Use |
+|-----------|--------------|-------------|
+| `SessionStart` | Beginning of a conversation | Load relevant learnings, check environment |
+| `UserPromptSubmit` | Before processing a user message | Route commands, detect keywords |
+| `PostToolUse` (matcher: `Write\|Edit`) | After any file edit | Check for drift from task scope |
 
-**When to spawn:** After any milestone where a playable build exists (i.e., `pnpm dev` runs and games are playable). Spawn during E2E test runs and after completing each game implementation.
+Each hook runs an external script with a hard timeout (3-5s recommended). Hooks should be lightweight checks, not heavy processing. Hooks fail silently if they exceed the timeout.
 
-**Role:** A casual player (not a developer) who reviews the game from a user perspective. Evaluates fun, clarity, pacing, and engagement.
+```jsonc
+// .claude/settings.json — example configuration
+{
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "Write|Edit",
+      "hooks": [{"type": "command", "command": "python3 scripts/drift-check.py", "timeout": 3}]
+    }]
+  }
+}
+```
 
-**Required output:**
-- **Star rating (1-5)** per game for: Fun, Clarity, Pacing, Voice UX, Overall
-- **Love it:** Things that feel natural and would delight a player
-- **Confused:** Things a casual player wouldn't understand
-- **Frustrated:** Things that would annoy or slow down play
-- **Missing:** Features or feedback the player would expect
-- **Suggestions:** Quick wins to improve the experience
-
-**Feedback loop:** Playtester feedback goes to the **Product Manager agent**, who critically evaluates it against the PRD/roadmap and proposes design adaptations. Not every piece of feedback becomes a change — the PM filters signal from noise.
-
-### QA Engineer Agent
-
-**When to spawn:** During Playwright E2E test runs, after merging any game implementation, and before any release milestone.
-
-**Role:** Senior QA engineer performing systematic quality audits. Hunts edge cases, race conditions, state consistency issues, and wallet integrity problems.
-
-**Required output per finding:**
-- **Category:** BUG / RISK / GAP / QUALITY
-- **Severity:** Critical / High / Medium / Low
-- **File and line number** (when applicable)
-- **Reproduction steps**
-- **Expected vs actual behaviour**
-
-**Systematic checks:**
-1. Boundary conditions (min/max values, empty arrays, null states)
-2. State consistency (can the game reach an invalid state?)
-3. Wallet integrity (are chips ever created or destroyed?)
-4. Phase transitions (can we get stuck in a phase?)
-5. Disconnection handling (what happens if a player drops mid-game?)
-6. Voice pipeline (wrong phase, empty transcript, duplicate commands)
-7. Bot system (illegal actions, timeout handling, wallet parity)
-
-### Product Manager Agent
-
-**When to spawn:** After playtester feedback is received. Reviews feedback critically against PRD and canonical decisions.
-
-**Role:** Evaluates playtester feedback and decides what to act on. Not all feedback is actionable — the PM distinguishes between:
-- **Must fix:** Breaks core experience or contradicts PRD
-- **Should fix:** Clear improvement, low effort
-- **Nice to have:** Good idea, defer to next sprint
-- **Won't fix:** Contradicts design intent or canonical decisions
-
-**Required output:**
-- Prioritised list of changes with rationale
-- Which canonical decisions or PRD sections support/reject each change
-- Estimated effort (S/M/L) per change
+> **For AI agents:** You can read and respect hook output, but never modify `.claude/settings.json` unless the user explicitly asks. If a hook blocks your action, report what happened and ask the user to adjust their hook configuration.
 
 ---
 
 ## Learnings System
 
-Current count: **8 documented learnings**
+Current count: **0 documented learnings**
 
-See [`learnings/INDEX.md`](./learnings/INDEX.md) for the complete categorised list.
+See [`learnings/INDEX.md`](./learnings/INDEX.md) for the complete categorized list.
+
+> **Setup**: Create a `learnings/` directory with an `INDEX.md` inside it.
 
 ### When to Add a Learning
 
