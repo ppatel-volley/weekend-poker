@@ -439,4 +439,31 @@ export const bjReducers = {
     ...bj,
     shoePenetration: penetration,
   })),
+
+  /**
+   * Reset all per-phase completion flags for the next round.
+   *
+   * VGF's PhaseRunner2 checks endIf BEFORE running onBegin when transitioning
+   * phases. If stale flags from a completed round persist (allBetsPlaced=true,
+   * dealComplete=true, etc.), endIf returns true immediately — skipping onBegin
+   * (which would have reset them via bjInitRound). This creates an infinite
+   * phase cascade: BJ_PLACE_BETS → ... → BJ_HAND_COMPLETE → BJ_PLACE_BETS,
+   * causing an out-of-memory crash.
+   *
+   * This reducer MUST be called in bjHandCompletePhase.onBegin BEFORE
+   * bjSetRoundCompleteReady to clear stale flags before the phase loops back.
+   */
+  bjResetPhaseFlags: (
+    state: CasinoGameState,
+  ): CasinoGameState => updateBj(state, bj => ({
+    ...bj,
+    allBetsPlaced: false,
+    dealComplete: false,
+    insuranceComplete: false,
+    playerTurnsComplete: false,
+    dealerTurnComplete: false,
+    settlementComplete: false,
+    // NOTE: roundCompleteReady is intentionally NOT reset here —
+    // it's the flag that controls THIS phase's endIf.
+  })),
 }

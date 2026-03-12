@@ -88,6 +88,19 @@ Always create **private/secret** gists by default. Never use `--public` unless t
 
 ---
 
+## External Services & API Keys
+
+API keys are stored in `.env` (gitignored). Never hardcode keys in source files.
+
+| Service | Env Variable | Purpose |
+|---------|-------------|---------|
+| Deepgram | `DEEPGRAM_API_KEY` | Speech-to-text for voice commands |
+| Meshy AI | `MESHY_API_KEY` | 3D model generation (GLB card assets) |
+| ElevenLabs | `ELEVENLABS_API_KEY` | Text-to-speech for dealer voice |
+| Fal.ai | `FAL_AI_API_KEY` | Visual asset generation (textures, images, UI art) |
+
+---
+
 ## Dependencies
 
 - **Prefer existing dependencies** over adding new ones. Check if the project already has a library that covers the need.

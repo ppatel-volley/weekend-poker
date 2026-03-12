@@ -304,6 +304,15 @@ export const crapsRoundCompletePhase = {
     const state: CasinoGameState = ctx.session.state
     if (state.gameChangeRequested) return CasinoPhase.GameSelect
 
+    // Prevent infinite phase cascade when no active human players remain.
+    // If all humans are busted/sitting_out (only bots left), looping back
+    // to CrapsComeOutBetting/CrapsNewShooter creates an unbounded cascade
+    // that causes OOM.
+    const hasActiveHuman = state.players.some(
+      (p: any) => !p.isBot && p.status !== 'busted' && p.status !== 'sitting_out',
+    )
+    if (!hasActiveHuman) return CasinoPhase.GameSelect
+
     // Seven-out: new shooter needed
     if (state.craps?.sevenOut) {
       return CasinoPhase.CrapsNewShooter

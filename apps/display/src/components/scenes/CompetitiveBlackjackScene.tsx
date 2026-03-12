@@ -30,7 +30,7 @@ function CardModel({
       object={clone}
       position={position}
       rotation={[-Math.PI / 2, 0, 0]}
-      scale={[1, 1, 1]}
+      scale={[0.007, 0.007, 0.007]}
     />
   )
 }
@@ -109,7 +109,7 @@ function ArenaPlayerPosition({
       {/* Player's cards */}
       {hand.cards.map((card, i) => (
         <CardModel
-          key={`${card.rank}-${card.suit}`}
+          key={`${card.rank}-${card.suit}-${i}`}
           card={card}
           position={[(i - (hand.cards.length - 1) / 2) * 0.38, 0, 0]}
         />

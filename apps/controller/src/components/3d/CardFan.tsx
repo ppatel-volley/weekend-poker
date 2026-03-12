@@ -36,7 +36,7 @@ export function CardFan({
 
         return (
           <CardModel
-            key={`${card.rank}-${card.suit}`}
+            key={`${card.rank}-${card.suit}-${i}`}
             card={card}
             position={[x, 0, z]}
             rotation={[-Math.PI / 2, 0, rotZ]}

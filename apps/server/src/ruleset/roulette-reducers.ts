@@ -339,4 +339,24 @@ export const rouletteReducers = {
     if (!roulette) return state
     return { ...state, roulette: { ...roulette, roundCompleteReady: ready } }
   },
+
+  /**
+   * Reset all per-phase completion flags for the next round.
+   * Same VGF PhaseRunner2 endIf-before-onBegin bug as BJ — see bj-reducers.ts bjResetPhaseFlags.
+   */
+  rouletteResetPhaseFlags: (state: CasinoGameState): CasinoGameState => {
+    const roulette = state.roulette
+    if (!roulette) return state
+    return {
+      ...state,
+      roulette: {
+        ...roulette,
+        allBetsPlaced: false,
+        bettingClosed: false,
+        spinComplete: false,
+        resultAnnounced: false,
+        payoutComplete: false,
+      },
+    }
+  },
 }

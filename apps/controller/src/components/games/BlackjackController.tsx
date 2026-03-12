@@ -11,8 +11,6 @@
 
 import { useState } from 'react'
 import { usePhase, useStateSync, useDispatchThunk, useSessionMember } from '../../hooks/useVGFHooks.js'
-import { useLastResult } from '../../hooks/useLastResult.js'
-import { ResultToast } from '../shared/ResultToast.js'
 import { CardHand2D } from '../shared/CardDisplay2D.js'
 import type { BlackjackGameState, Card } from '@weekend-casino/shared'
 
@@ -193,11 +191,11 @@ function PlayerActionsView({
   const allDone = activeHand.stood || activeHand.busted || myState.surrendered
 
   return (
-    <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* Hand display */}
+    <div style={{ padding: '12px', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', overflow: 'hidden' }}>
+      {/* Hand display — compact */}
       <div style={{ textAlign: 'center' }}>
         {myState.hands.length > 1 && (
-          <div style={{ fontSize: '12px', color: '#aaa', marginBottom: '4px' }}>
+          <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '2px' }}>
             Hand {myState.activeHandIndex + 1} of {myState.hands.length}
           </div>
         )}
@@ -208,29 +206,30 @@ function PlayerActionsView({
           isBusted={activeHand.busted}
           isBlackjack={activeHand.isBlackjack}
         />
-      </div>
-
-      {/* Dealer's up card */}
-      <div style={{ textAlign: 'center', fontSize: '12px', color: '#aaa' }}>
-        Dealer shows: {bj.dealerHand.cards[0] ? `${bj.dealerHand.cards[0].rank}` : '?'}
+        <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>
+          Dealer shows: {bj.dealerHand.cards[0] ? `${bj.dealerHand.cards[0].rank}` : '?'}
+        </div>
       </div>
 
       {/* Status messages */}
       {!isMyTurn && !allDone && (
-        <div style={{ textAlign: 'center', padding: '16px', color: '#aaa' }}>
+        <div style={{ textAlign: 'center', padding: '8px', color: '#aaa', fontSize: '14px' }}>
           Waiting for other players...
         </div>
       )}
 
       {allDone && (
-        <div style={{ textAlign: 'center', padding: '16px', color: '#aaa' }}>
+        <div style={{ textAlign: 'center', padding: '8px', color: '#aaa', fontSize: '14px' }}>
           {activeHand.busted ? 'BUST!' : activeHand.isBlackjack ? 'BLACKJACK!' : myState.surrendered ? 'SURRENDERED' : `Standing at ${activeHand.value}`}
         </div>
       )}
 
-      {/* Action buttons */}
+      {/* Spacer pushes buttons to bottom */}
+      <div style={{ flex: 1 }} />
+
+      {/* Action buttons — always at bottom */}
       {isMyTurn && !allDone && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: 'auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
           <button
             data-testid="hit-btn"
             onClick={() => dispatchThunk('bjHit', playerId)}
@@ -280,19 +279,24 @@ function PlayerActionsView({
   )
 }
 
-/** Results view. */
+/** Results view with settlement display and Next Round button. */
 function ResultsView({
   bj,
   playerId,
+  dispatchThunk,
+  phase,
 }: {
   bj: BlackjackGameState
   playerId: string
+  dispatchThunk: (name: string, ...args: unknown[]) => void
+  phase: string
 }) {
   const myState = bj.playerStates.find(ps => ps.playerId === playerId)
   if (!myState) return null
 
   const isWin = myState.roundResult > 0
   const isPush = myState.roundResult === 0 && !myState.surrendered
+  const showNextRound = phase === 'BJ_HAND_COMPLETE' && !bj.roundCompleteReady
 
   return (
     <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -353,6 +357,29 @@ function ResultsView({
           Insurance bet: ${myState.insuranceBet}
         </div>
       )}
+
+      {/* Spacer pushes button to bottom */}
+      <div style={{ flex: 1 }} />
+
+      {/* Next Round button — visible during BJ_HAND_COMPLETE until player taps */}
+      {showNextRound && (
+        <button
+          data-testid="next-round-btn"
+          onClick={() => dispatchThunk('bjReadyNextRound')}
+          style={{
+            padding: '20px',
+            fontSize: '22px',
+            fontWeight: 'bold',
+            borderRadius: '12px',
+            border: 'none',
+            cursor: 'pointer',
+            background: '#3498db',
+            color: 'white',
+          }}
+        >
+          NEXT ROUND
+        </button>
+      )}
     </div>
   )
 }
@@ -382,26 +409,21 @@ export function BlackjackController() {
 
   const phaseStr = phase ?? ''
 
-  // Snapshot result when phase cascades from settlement → betting
-  const myState = bj?.playerStates.find(ps => ps.playerId === playerId)
-  const lastResult = useLastResult(phaseStr, myState?.roundResult, myState?.surrendered)
-
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '100vh',
+        height: '100%',
+        maxHeight: '100vh',
+        overflow: 'hidden',
         background: '#1a1a2e',
         color: 'white',
         fontFamily: 'system-ui, sans-serif',
         position: 'relative',
       }}
     >
-      <h2 data-testid="game-heading" style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '16px' }}>Blackjack</h2>
-
-      {/* Result toast overlay — persists over bet placement */}
-      <ResultToast lastResult={lastResult} />
+      <h2 data-testid="game-heading" style={{ textAlign: 'center', margin: '8px 0 0', fontSize: '15px' }}>Blackjack</h2>
 
       {!bj ? (
         <div style={{ textAlign: 'center', padding: '32px', color: '#aaa', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -423,7 +445,7 @@ export function BlackjackController() {
       ) : phaseStr === 'BJ_PLAYER_TURNS' ? (
         <PlayerActionsView bj={bj} playerId={playerId} dispatchThunk={dispatchThunk as any} />
       ) : (
-        <ResultsView bj={bj} playerId={playerId} />
+        <ResultsView bj={bj} playerId={playerId} dispatchThunk={dispatchThunk as any} phase={phaseStr} />
       )}
     </div>
   )

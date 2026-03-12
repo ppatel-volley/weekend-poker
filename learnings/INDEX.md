@@ -14,7 +14,9 @@
 | Dependencies / pnpm install | 005 |
 | React 19 compatibility | 005 |
 | VGF dispatch / reducers | 006, 009, 015 |
-| VGF phase internals / cascade | 009, 015 |
+| VGF phase internals / cascade | 009, 015, 021 |
+| VGF phase flag reset / OOM | 021 |
+| Bot auto-actions in onBegin | 022 |
 | VGF 4.8.0 migration / WGFServer | 015 |
 | PlatformProvider / auth / VPN | 015 |
 | Multi-agent type integration | 007 |
@@ -113,6 +115,16 @@ Adding intent patterns to `parseVoiceIntent.ts` without adding routing in `proce
 **Severity:** Critical
 **Category:** Persistence, API Contracts, Session State, Atomicity
 Side-channel persistence systems (profiles, achievements, challenges, cosmetics) need complete write pipelines, not just storage + detection. Key lessons: (1) Define API contracts before building server+client in parallel — mock-heavy tests create false confidence. (2) Module-level Maps for session tracking MUST include sessionId in keys and wire cleanup to disconnect. (3) Never use setTimeout for critical state mutations — dispatch synchronously, snapshot original state for rollback. (4) String cross-references between definition tables need referential integrity tests. (5) Calendar math: never approximate (dayOfYear/7), use explicit day-of-week calculations.
+
+### 021 — VGF PhaseRunner2 checks endIf BEFORE onBegin on phase re-entry
+**Severity:** Critical
+**Category:** VGF, Phase Lifecycle, OOM
+When a round loops back to an earlier phase, stale completion flags from the previous round cause `endIf` to return true immediately — before `onBegin` gets a chance to reset them via `initRound`. This creates an infinite cascade through all phases, allocating immutable state objects until OOM. Fix: add a `resetPhaseFlags` reducer that clears ALL per-phase flags, called in the round-complete phase's `onBegin` before setting round-complete. Affected all 5 games.
+
+### 022 — Bots must auto-resolve ALL phase prompts in onBegin
+**Severity:** High
+**Category:** VGF, Bot Logic, Phase Lifecycle
+Any phase that waits for player input (betting, insurance, player turns) must auto-resolve bots in `onBegin`. Bots can't dispatch thunks — they have no controller. The insurance phase was missing bot auto-decline, causing the game to hang when the dealer showed an Ace. Every new input phase must handle the bot path.
 
 ### 015 — VGF 4.8.0 Migration (from emoji-multiplatform)
 **Severity:** Critical
@@ -243,3 +255,12 @@ Mandatory for production Docker images: (1) Never run as root — add `USER` dir
 | Redis volume persistence | 019 |
 | Unpinned base images | 019 |
 | hadolint / trivy image scanning | 019 |
+| PhaseRunner2 endIf before onBegin | 021 |
+| Stale phase flags infinite cascade | 021 |
+| resetPhaseFlags reducer pattern | 021 |
+| OOM from phase loop | 021 |
+| Round-looping phase safety | 021 |
+| Bot auto-decline insurance | 022 |
+| Bot auto-action in onBegin | 022 |
+| Phase hangs waiting for bot | 022 |
+| .every() across all players | 022 |

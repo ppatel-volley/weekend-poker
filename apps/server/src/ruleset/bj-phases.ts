@@ -30,6 +30,7 @@ import {
 import { getServerGameState, setServerGameState } from '../server-game-state.js'
 import { wrapWithGameNightCheck, incrementGameNightRoundIfActive } from './game-night-utils.js'
 
+
 /**
  * BJ_PLACE_BETS: Players place bets (min 10, max 500 per D-006).
  */
@@ -201,6 +202,22 @@ export const bjInsurancePhase = {
       ctx.reducerDispatcher('bjSetInsuranceComplete', true)
     } else {
       ctx.reducerDispatcher('setDealerMessage', 'Insurance?')
+
+      // Auto-decline insurance for bots — they can't respond to prompts
+      const afterState: CasinoGameState = ctx.getState()
+      for (const ps of afterState.blackjack!.playerStates) {
+        const player = afterState.players.find((p: any) => p.id === ps.playerId)
+        if (player?.isBot && !ps.insuranceResolved) {
+          ctx.reducerDispatcher('bjDeclineInsurance', ps.playerId)
+        }
+      }
+
+      // Check if all players resolved after bot auto-declines
+      const postBot: CasinoGameState = ctx.getState()
+      const allResolved = postBot.blackjack!.playerStates.every((ps: any) => ps.insuranceResolved)
+      if (allResolved) {
+        ctx.reducerDispatcher('bjSetInsuranceComplete', true)
+      }
     }
 
     return ctx.getState()
@@ -240,8 +257,11 @@ export const bjPlayerTurnsPhase = {
 
     // Auto-stand bots — use reducers directly (dispatchThunk unreliable in onBegin, learning 009)
     // Loop: keep auto-standing while the current turn player is a bot
+    // Safety counter prevents infinite loop if state is corrupted (matches thunks version)
+    let safetyCounter = 0
     let state: CasinoGameState = ctx.getState()
-    while (state.blackjack) {
+    while (state.blackjack && safetyCounter < 10) {
+      safetyCounter++
       const bj = state.blackjack
       if (bj.currentTurnIndex >= bj.turnOrder.length) break
       const currentPlayerId = bj.turnOrder[bj.currentTurnIndex]
@@ -270,10 +290,11 @@ export const bjPlayerTurnsPhase = {
     const state: CasinoGameState = ctx.session.state
     const bj = state.blackjack
     if (!bj) return false
-    return bj.playerTurnsComplete === true ||
-      bj.playerStates.every((ps: any) =>
-        ps.surrendered || ps.hands.every((h: any) => h.stood || h.busted)
-      )
+    // ONLY check the explicit flag — NOT individual hand states.
+    // Checking hands.every(stood/busted) causes VGF to fire endIf mid-thunk
+    // when bjStandHand makes the last hand stood, before inlineCheckAdvance
+    // finishes its bot loop. This caused the "stand freezes" bug.
+    return bj.playerTurnsComplete === true
   },
   next: CasinoPhase.BjDealerTurn,
 }
@@ -454,7 +475,24 @@ export const bjHandCompletePhase = {
       }
     }
 
-    ctx.reducerDispatcher('bjSetRoundCompleteReady', true)
+    // Reset all per-phase completion flags BEFORE marking this round complete.
+    // VGF's PhaseRunner2 checks endIf BEFORE running onBegin on the next phase.
+    // Without this reset, stale flags (allBetsPlaced=true, dealComplete=true, etc.)
+    // from this round cause an infinite cascade when looping back to BJ_PLACE_BETS,
+    // because every endIf returns true immediately — skipping onBegin (which would
+    // have reset them via bjInitRound). This infinite cascade causes OOM.
+    ctx.reducerDispatcher('bjResetPhaseFlags')
+
+    // Only auto-advance if no human players remain (all bots).
+    // Otherwise, wait for a human to tap "Next Round" on the controller
+    // via the bjReadyNextRound thunk — so they can see settlement results.
+    const postCleanup: CasinoGameState = ctx.getState()
+    const hasHumanPlayer = postCleanup.players.some(
+      (p: any) => !p.isBot && p.status !== 'busted' && p.status !== 'sitting_out',
+    )
+    if (!hasHumanPlayer) {
+      ctx.reducerDispatcher('bjSetRoundCompleteReady', true)
+    }
 
     return ctx.getState()
   },
@@ -465,6 +503,15 @@ export const bjHandCompletePhase = {
   next: wrapWithGameNightCheck((ctx: any) => {
     const state: CasinoGameState = ctx.session.state
     if (state.gameChangeRequested) return CasinoPhase.GameSelect
+
+    // Prevent infinite phase cascade when no active human players remain.
+    // If all humans are busted/sitting_out (only bots left), looping back
+    // to BjPlaceBets creates an unbounded cascade that causes OOM.
+    const hasActiveHuman = state.players.some(
+      (p: any) => !p.isBot && p.status !== 'busted' && p.status !== 'sitting_out',
+    )
+    if (!hasActiveHuman) return CasinoPhase.GameSelect
+
     return CasinoPhase.BjPlaceBets
   }),
 }

@@ -107,8 +107,8 @@ export function GameView2D() {
           }}
         >
           {communityCards.length > 0
-            ? communityCards.map((c) => (
-                <CardImage key={`${c.rank}-${c.suit}`} card={c} height={110} />
+            ? communityCards.map((c, i) => (
+                <CardImage key={`${c.rank}-${c.suit}-${i}`} card={c} height={110} />
               ))
             : <span style={{ opacity: 0.3, fontSize: '2rem' }}>--</span>
           }
