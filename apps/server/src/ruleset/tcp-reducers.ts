@@ -272,4 +272,25 @@ export const tcpReducers = {
       threeCardPoker: { ...tcp, roundCompleteReady: ready },
     }
   },
+
+  /**
+   * Reset all per-phase completion flags for the next round.
+   * Same VGF PhaseRunner2 endIf-before-onBegin bug as BJ — see bj-reducers.ts bjResetPhaseFlags.
+   */
+  tcpResetPhaseFlags: (state: CasinoGameState): CasinoGameState => {
+    const tcp = state.threeCardPoker
+    if (!tcp) return state
+
+    return {
+      ...state,
+      threeCardPoker: {
+        ...tcp,
+        allAntesPlaced: false,
+        allDecisionsMade: false,
+        dealComplete: false,
+        dealerRevealed: false,
+        payoutComplete: false,
+      },
+    }
+  },
 }

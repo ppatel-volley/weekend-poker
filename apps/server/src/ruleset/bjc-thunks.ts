@@ -45,9 +45,12 @@ async function bjcInlineCheckAdvance(ctx: ThunkCtx): Promise<void> {
   // Advance turn (BJC has no splits, so no hand advancement needed)
   await ctx.dispatch('bjcAdvanceTurn')
 
-  // Auto-stand consecutive bots after the advance
+  // Auto-stand consecutive bots after the advance.
+  // Safety counter prevents infinite loops (bounded by player count).
   let updated = ctx.getState()
-  while (updated.blackjackCompetitive) {
+  let safetyCounter = 0
+  while (updated.blackjackCompetitive && safetyCounter < 10) {
+    safetyCounter++
     const bjcU = updated.blackjackCompetitive
     if (bjcU.currentTurnIndex >= bjcU.turnOrder.length) break
     const nextPlayerId = bjcU.turnOrder[bjcU.currentTurnIndex]
@@ -407,6 +410,18 @@ export const bjcThunks = {
 
     await ctx.dispatch('bjcSetSettlementResult', winnerIds, message)
     await ctx.dispatch('setDealerMessage', message)
+  },
+
+  /**
+   * Signal readiness for the next round — dispatched from the controller
+   * after the player has seen the settlement results.
+   */
+  bjcReadyNextRound: async (ctx: ThunkCtx) => {
+    // Validate caller is a session member (prevents griefing via unauthenticated dispatch)
+    const state = ctx.getState()
+    const callerId = ctx.getClientId()
+    if (!state.players.some((p: any) => p.id === callerId)) return
+    await ctx.dispatch('bjcSetRoundCompleteReady', true)
   },
 
   /**

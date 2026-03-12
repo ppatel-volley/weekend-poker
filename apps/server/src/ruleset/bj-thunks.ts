@@ -59,9 +59,13 @@ async function inlineCheckAdvance(ctx: ThunkCtx, playerId: string): Promise<void
   // All hands for this player done — advance turn
   await ctx.dispatch('bjAdvanceTurn')
 
-  // Auto-stand consecutive bots after the advance
+  // Auto-stand consecutive bots after the advance.
+  // Each bot action is awaited to ensure fresh state for the next iteration.
+  // The chain is bounded by player count (max 3 bots = 6 dispatches total).
   let updated = ctx.getState()
-  while (updated.blackjack) {
+  let safetyCounter = 0
+  while (updated.blackjack && safetyCounter < 10) {
+    safetyCounter++
     const bjU = updated.blackjack
     if (bjU.currentTurnIndex >= bjU.turnOrder.length) break
     const nextPlayerId = bjU.turnOrder[bjU.currentTurnIndex]
@@ -601,6 +605,18 @@ export const bjThunks = {
     }
 
     await ctx.dispatch('bjSetSettlementComplete', true)
+  },
+
+  /**
+   * Signal readiness for the next round — dispatched from the controller
+   * after the player has seen the settlement results.
+   */
+  bjReadyNextRound: async (ctx: ThunkCtx) => {
+    // Validate caller is a session member (prevents griefing via unauthenticated dispatch)
+    const state = ctx.getState()
+    const callerId = ctx.getClientId()
+    if (!state.players.some((p: any) => p.id === callerId)) return
+    await ctx.dispatch('bjSetRoundCompleteReady', true)
   },
 
   /**

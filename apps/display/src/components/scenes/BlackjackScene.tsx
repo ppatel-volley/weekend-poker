@@ -33,7 +33,7 @@ function CardModel({
       object={clone}
       position={position}
       rotation={faceUp ? [-Math.PI / 2, 0, 0] : [-Math.PI / 2, 0, Math.PI]}
-      scale={[1, 1, 1]}
+      scale={CARD_SCALE}
     />
   )
 }
@@ -95,9 +95,9 @@ function PlayerPosition({
       {/* Player's cards */}
       {hand.cards.map((card, i) => (
         <CardModel
-          key={`${card.rank}-${card.suit}`}
+          key={`${card.rank}-${card.suit}-${i}`}
           card={card}
-          position={[(i - (hand.cards.length - 1) / 2) * 0.38, 0, 0]}
+          position={[(i - (hand.cards.length - 1) / 2) * 0.8, 0, 0]}
           faceUp
         />
       ))}
@@ -146,13 +146,13 @@ function DealerArea({
   const hasCards = dealer.cards.length > 0
 
   return (
-    <group position={[0, 0.86, -1.4]}>
+    <group position={[0, 0.86, -0.8]}>
       {/* Dealer cards */}
       {hasCards && dealer.cards.map((card, i) => (
         <CardModel
-          key={`${card.rank}-${card.suit}`}
+          key={`${card.rank}-${card.suit}-${i}`}
           card={card}
-          position={[(i - (dealer.cards.length - 1) / 2) * 0.38, 0, 0]}
+          position={[(i - (dealer.cards.length - 1) / 2) * 0.8, 0, 0]}
           faceUp={i === 0 || dealer.holeCardRevealed}
         />
       ))}
@@ -176,64 +176,79 @@ function DealerArea({
   )
 }
 
+/** Player seat positions in an arc across the bottom of the table. */
 const SEAT_POSITIONS: [number, number, number][] = [
-  [-1.5, 0.86, 0.8],
-  [-0.5, 0.86, 1.1],
-  [0.5, 0.86, 1.1],
-  [1.5, 0.86, 0.8],
+  [-2.0, 0.86, 1.5],
+  [-0.7, 0.86, 2.0],
+  [0.7, 0.86, 2.0],
+  [2.0, 0.86, 1.5],
 ]
+
+/** Card scale: GLB cards are ~100 units tall. 0.012 makes them ~1.2 units = good table size. */
+const CARD_SCALE: [number, number, number] = [0.012, 0.012, 0.012]
 
 export function BlackjackScene() {
   const bj = useStateSyncSelector(s => s.blackjack) as BlackjackGameState | undefined
 
   return (
     <group>
-      {/* Floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[20, 20]} />
-        <meshStandardMaterial color="#0a0a14" />
-      </mesh>
-
-      {/* Semi-circle table */}
-      <mesh position={[0, 0.8, 0]} castShadow>
-        <cylinderGeometry args={[3, 3, 0.12, 32, 1, false, 0, Math.PI]} />
-        <meshStandardMaterial color="#0a2a4a" />
-      </mesh>
-
-      {/* Table felt markings — betting circles */}
-      {SEAT_POSITIONS.map((pos, i) => (
-        <mesh key={i} position={[pos[0], 0.87, pos[2] - 0.3]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[0.2, 0.25, 32]} />
-          <meshStandardMaterial color="#0d2d4d" />
+      {/* Scene-level camera override: closer to the table, looking down */}
+      <group>
+        {/* Floor */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[20, 20]} />
+          <meshStandardMaterial color="#0d1117" />
         </mesh>
-      ))}
 
-      <CardDeckProvider>
-        {/* Dealer area */}
-        {bj && <DealerArea bj={bj} />}
+        {/* Semi-circle table — rotated so flat edge faces camera (bottom of screen) */}
+        <mesh position={[0, 0.8, 0.5]} rotation={[0, Math.PI / 2, 0]} castShadow>
+          <cylinderGeometry args={[3.5, 3.5, 0.12, 48, 1, false, 0, Math.PI]} />
+          <meshStandardMaterial color="#2d8a5e" />
+        </mesh>
 
-        {/* Player positions */}
-        {bj?.playerStates.map((ps, i) => (
-          <PlayerPosition
-            key={ps.playerId}
-            playerState={ps}
-            seatPosition={SEAT_POSITIONS[i] ?? SEAT_POSITIONS[0]!}
-          />
+        {/* Table rim / edge */}
+        <mesh position={[0, 0.8, 0.5]} rotation={[0, Math.PI / 2, 0]}>
+          <cylinderGeometry args={[3.55, 3.55, 0.15, 48, 1, false, 0, Math.PI]} />
+          <meshStandardMaterial color="#6b4c2a" />
+        </mesh>
+
+        {/* Table felt markings — betting circles */}
+        {SEAT_POSITIONS.map((pos, i) => (
+          <mesh key={i} position={[pos[0], 0.87, pos[2] - 0.3]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.25, 0.3, 32]} />
+            <meshStandardMaterial color="#2a7a4a" emissive="#1a4a2a" emissiveIntensity={0.3} />
+          </mesh>
         ))}
-      </CardDeckProvider>
 
-      {/* Bright, glamorous lighting (3500K feel) */}
-      <ambientLight intensity={0.35} color="#fff5e6" />
+        <CardDeckProvider>
+          {/* Dealer area — centred at top of table */}
+          {bj && <DealerArea bj={bj} />}
+
+          {/* Player positions — arc across bottom */}
+          {bj?.playerStates.map((ps, i) => (
+            <PlayerPosition
+              key={ps.playerId}
+              playerState={ps}
+              seatPosition={SEAT_POSITIONS[i] ?? SEAT_POSITIONS[0]!}
+            />
+          ))}
+        </CardDeckProvider>
+      </group>
+
+      {/* Bright casino lighting */}
+      <ambientLight intensity={0.9} color="#fff5e6" />
       <spotLight
-        position={[0, 8, 3]}
-        angle={0.6}
-        penumbra={0.4}
-        intensity={1.5}
+        position={[0, 8, 2]}
+        angle={0.8}
+        penumbra={0.3}
+        intensity={3}
         castShadow
         color="#fffaf0"
       />
-      <pointLight position={[-4, 5, 0]} intensity={0.3} color="#b0d0ff" />
-      <pointLight position={[4, 5, 0]} intensity={0.3} color="#b0d0ff" />
+      <pointLight position={[-4, 5, 0]} intensity={1} color="#b0d0ff" />
+      <pointLight position={[4, 5, 0]} intensity={1} color="#b0d0ff" />
+      {/* Fill light from below/front */}
+      <pointLight position={[0, 3, 6]} intensity={0.5} color="#fff5e6" />
     </group>
   )
 }

@@ -210,8 +210,11 @@ export const bjcPlayerTurnsPhase = {
 
         // Auto-stand bots — use reducers directly (dispatchThunk unreliable in onBegin, learning 009)
         // Loop: keep auto-standing while the current turn player is a bot
+        // Safety counter prevents infinite loop if state is corrupted (matches thunks version)
+        let safetyCounter = 0
         let loopState: CasinoGameState = ctx.getState()
-        while (loopState.blackjackCompetitive) {
+        while (loopState.blackjackCompetitive && safetyCounter < 10) {
+          safetyCounter++
           const bjcLoop = loopState.blackjackCompetitive
           if (bjcLoop.currentTurnIndex >= bjcLoop.turnOrder.length) break
           const currentPlayerId = bjcLoop.turnOrder[bjcLoop.currentTurnIndex]
@@ -242,8 +245,11 @@ export const bjcPlayerTurnsPhase = {
     const state: CasinoGameState = ctx.session.state
     const bjc = state.blackjackCompetitive
     if (!bjc) return false
-    return bjc.playerTurnsComplete === true ||
-      bjc.playerStates.every((ps: any) => ps.hand.stood || ps.hand.busted)
+    // ONLY check the explicit flag — NOT individual hand states.
+    // Checking hands.every(stood/busted) causes VGF to fire endIf mid-thunk
+    // when bjcStandHand makes the last hand stood, before bjcInlineCheckAdvance
+    // finishes its bot loop. Same fix as BJ Classic (stand freeze bug).
+    return bjc.playerTurnsComplete === true
   },
   next: CasinoPhase.BjcShowdown,
 }
@@ -340,7 +346,21 @@ export const bjcHandCompletePhase = {
       }
     }
 
-    ctx.reducerDispatcher('bjcSetRoundCompleteReady', true)
+    // Reset all per-phase completion flags BEFORE marking this round complete.
+    // VGF's PhaseRunner2 checks endIf BEFORE running onBegin on the next phase.
+    // Without this reset, stale flags cause an infinite cascade (OOM). See bj-phases.ts.
+    ctx.reducerDispatcher('bjcResetPhaseFlags')
+
+    // Only auto-advance if no human players remain (all bots).
+    // Otherwise, wait for a human to tap "Next Round" on the controller
+    // via the bjcReadyNextRound thunk — so they can see settlement results.
+    const postCleanup: CasinoGameState = ctx.getState()
+    const hasHumanPlayer = postCleanup.players.some(
+      (p: any) => !p.isBot && p.status !== 'busted' && p.status !== 'sitting_out',
+    )
+    if (!hasHumanPlayer) {
+      ctx.reducerDispatcher('bjcSetRoundCompleteReady', true)
+    }
 
     return ctx.getState()
   },
@@ -351,6 +371,15 @@ export const bjcHandCompletePhase = {
   next: wrapWithGameNightCheck((ctx: any) => {
     const state: CasinoGameState = ctx.session.state
     if (state.gameChangeRequested) return CasinoPhase.GameSelect
+
+    // Prevent infinite phase cascade when no active human players remain.
+    // If all humans are busted/sitting_out (only bots left), looping back
+    // to BjcPlaceBets creates an unbounded cascade that causes OOM.
+    const hasActiveHuman = state.players.some(
+      (p: any) => !p.isBot && p.status !== 'busted' && p.status !== 'sitting_out',
+    )
+    if (!hasActiveHuman) return CasinoPhase.GameSelect
+
     return CasinoPhase.BjcPlaceBets
   }),
 }

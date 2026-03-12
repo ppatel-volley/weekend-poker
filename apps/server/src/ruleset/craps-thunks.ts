@@ -372,6 +372,10 @@ export const crapsThunks = {
     const craps = state.craps
     if (!craps) return
 
+    // Reset per-phase completion flags BEFORE marking round complete.
+    // VGF's PhaseRunner2 checks endIf BEFORE running onBegin — stale flags
+    // cause infinite cascade (OOM). See bj-reducers.ts bjResetPhaseFlags.
+    await ctx.dispatch('crapsResetPhaseFlags')
     await ctx.dispatch('crapsSetRoundCompleteReady', true)
     await ctx.dispatch('setDealerMessage', null)
   },

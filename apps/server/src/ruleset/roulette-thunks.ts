@@ -376,6 +376,10 @@ export const rouletteThunks = {
       colour,
     })
 
+    // Reset per-phase completion flags BEFORE marking round complete.
+    // VGF's PhaseRunner2 checks endIf BEFORE running onBegin — stale flags
+    // cause infinite cascade (OOM). See bj-reducers.ts bjResetPhaseFlags.
+    await ctx.dispatch('rouletteResetPhaseFlags')
     await ctx.dispatch('rouletteSetRoundCompleteReady', true)
     await ctx.dispatch('setDealerMessage', null)
   },

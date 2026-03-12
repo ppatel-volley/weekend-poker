@@ -229,6 +229,10 @@ export const tcpThunks = {
    * Complete the round — sync stats, prepare for next round.
    */
   tcpCompleteRound: async (ctx: ThunkCtx) => {
+    // Reset per-phase completion flags BEFORE marking round complete.
+    // VGF's PhaseRunner2 checks endIf BEFORE running onBegin — stale flags
+    // cause infinite cascade (OOM). See bj-reducers.ts bjResetPhaseFlags.
+    await ctx.dispatch('tcpResetPhaseFlags')
     await ctx.dispatch('tcpSetRoundCompleteReady', true)
     await ctx.dispatch('setDealerMessage', null)
   },

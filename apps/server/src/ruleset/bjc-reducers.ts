@@ -267,4 +267,19 @@ export const bjcReducers = {
     playerStates: bjc.playerStates.filter(ps => ps.playerId !== playerId),
     turnOrder: bjc.turnOrder.filter(id => id !== playerId),
   })),
+
+  /**
+   * Reset all per-phase completion flags for the next round.
+   * Same VGF PhaseRunner2 endIf-before-onBegin bug as BJ Classic — see bjResetPhaseFlags.
+   */
+  bjcResetPhaseFlags: (
+    state: CasinoGameState,
+  ): CasinoGameState => updateBjc(state, bjc => ({
+    ...bjc,
+    allAntesPlaced: false,
+    dealComplete: false,
+    playerTurnsComplete: false,
+    showdownComplete: false,
+    settlementComplete: false,
+  })),
 }

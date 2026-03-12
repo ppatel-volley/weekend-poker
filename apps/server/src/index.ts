@@ -112,27 +112,25 @@ io.on('connection', (socket) => {
     if (clientType === ClientType.Controller) {
       // SECURITY: Validate userId is an actual VGF session member before registering.
       // Prevents connection registry hijack (F2+F8).
-      const sessionMember = storage.getSessionMemberById(sessionId, userId)
-      if (!sessionMember) {
-        logger.warn({ sessionId, userId }, 'Rejected connection — not a session member, disconnecting socket')
-        socket.disconnect(true)
-        return
-      }
+      // VGF's WebSocketServer registers the member concurrently with this callback,
+      // so we allow a brief retry window (3 attempts, 200ms apart) for the race.
+      // Post-validation setup: register socket, cancel disconnect timers, bind disconnect handler.
+      // Only runs after membership is confirmed — prevents hijack and cleanup of unvalidated sockets.
+      const onValidated = () => {
+        registerSocket(sessionId, userId, socket)
 
-      registerSocket(sessionId, userId, socket)
+        // Cancel any pending disconnect cleanup (reconnection scenario)
+        const timerKey = `${sessionId}:${userId}`
+        const pending = disconnectTimers.get(timerKey)
+        if (pending) {
+          clearTimeout(pending)
+          disconnectTimers.delete(timerKey)
+          logger.info({ sessionId, userId }, 'Reconnection detected — cancelled disconnect cleanup')
+        }
 
-      // Cancel any pending disconnect cleanup (reconnection scenario)
-      const timerKey = `${sessionId}:${userId}`
-      const pending = disconnectTimers.get(timerKey)
-      if (pending) {
-        clearTimeout(pending)
-        disconnectTimers.delete(timerKey)
-        logger.info({ sessionId, userId }, 'Reconnection detected — cancelled disconnect cleanup')
-      }
-
-      socket.on('disconnect', () => {
-        unregisterConnection(sessionId, userId)
-        logger.info({ sessionId, userId }, 'Controller disconnected — connection unregistered')
+        socket.on('disconnect', () => {
+          unregisterConnection(sessionId, userId)
+          logger.info({ sessionId, userId }, 'Controller disconnected — connection unregistered')
 
         // Capture phase at disconnect time for safety check below.
         const currentSession = storage.getSessionById(sessionId)
@@ -214,6 +212,37 @@ io.on('connection', (socket) => {
 
         disconnectTimers.set(timerKey, timer)
       })
+      }
+
+      const sessionMember = storage.getSessionMemberById(sessionId, userId)
+      if (sessionMember) {
+        // Member already registered — safe to connect immediately.
+        onValidated()
+      } else {
+        // Deferred validation: VGF may not have registered the member yet.
+        // Retry up to 3 times with 200ms delay before rejecting.
+        // Socket is NOT registered until validation succeeds (prevents hijack).
+        let validated = false
+        const retryValidation = async () => {
+          for (let attempt = 0; attempt < 3; attempt++) {
+            await new Promise(r => setTimeout(r, 200))
+            if (storage.getSessionMemberById(sessionId, userId)) {
+              validated = true
+              return
+            }
+          }
+        }
+        retryValidation().then(() => {
+          if (validated && socket.connected) {
+            onValidated()
+          } else if (!socket.connected) {
+            logger.info({ sessionId, userId }, 'Socket disconnected before validation completed — skipping registration')
+          } else {
+            logger.warn({ sessionId, userId }, 'Rejected connection — not a session member after retries, disconnecting socket')
+            socket.disconnect(true)
+          }
+        })
+      }
     }
   } catch (err) {
     logger.warn({ err }, 'Socket.IO connection query param parsing failed')

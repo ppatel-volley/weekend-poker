@@ -370,6 +370,29 @@ export const crapsReducers = {
     }
   },
 
+  /**
+   * Reset all per-phase completion flags for the next round.
+   * Same VGF PhaseRunner2 endIf-before-onBegin bug as BJ — see bj-reducers.ts bjResetPhaseFlags.
+   */
+  crapsResetPhaseFlags: (
+    state: CasinoGameState,
+  ): CasinoGameState => {
+    const craps = state.craps
+    if (!craps) return state
+    return {
+      ...state,
+      craps: {
+        ...craps,
+        newShooterReady: false,
+        allComeOutBetsPlaced: false,
+        rollComplete: false,
+        comeOutResolutionComplete: false,
+        allPointBetsPlaced: false,
+        pointResolutionComplete: false,
+      },
+    }
+  },
+
   /** Return all active come bets at face value (RC-5: game switch). */
   crapsReturnComeBets: (
     state: CasinoGameState,
