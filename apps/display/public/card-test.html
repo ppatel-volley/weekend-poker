@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Card Rendering Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #111; color: white; font-family: system-ui; }
+    #info { position: fixed; top: 10px; left: 10px; z-index: 100; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; font-size: 14px; max-width: 400px; }
+    #root { width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <h3>Card Rendering Test</h3>
+    <div id="status">Loading...</div>
+  </div>
+  <div id="root"></div>
+  <script type="module" src="/src/card-test.tsx"></script>
+</body>
+</html>

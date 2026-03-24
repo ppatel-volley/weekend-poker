@@ -56,29 +56,42 @@ export function CardDeckProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const map = new Map<string, THREE.Object3D>()
 
-    // Use gltf.nodes (flat lookup from drei) as primary source
+    // Use gltf.nodes (flat lookup from drei) as primary source.
+    // NOTE: drei's useGLTF preserves ORIGINAL node names with spaces (e.g. "Ace of Spades").
+    // Three.js GLTFLoader does NOT always convert spaces to underscores — it depends on
+    // the loader version and how nodes are accessed. We check BOTH patterns to be safe.
     const nodes = (gltf as any).nodes as Record<string, THREE.Object3D> | undefined
     if (nodes) {
       for (const [rawName, node] of Object.entries(nodes)) {
-        if (!rawName.includes('_of_')) continue
-        // Skip leaf meshes (e.g. "Ace_of_Spades_01_-_Default_0") — they have more than one _ segment after _of_
-        // Card groups: "Ace_of_Spades" (3 parts). Meshes: "Ace_of_Spades_01_-_Default_0" (many parts)
-        const afterOf = rawName.split('_of_')[1] ?? ''
-        if (afterOf.includes('_')) continue
-        // Normalise name back to spaces for lookup by cardToMeshName
+        // Match card groups: "Ace of Spades" (spaces) or "Ace_of_Spades" (underscores)
+        const hasSpaceOf = rawName.includes(' of ')
+        const hasUnderscoreOf = rawName.includes('_of_')
+        if (!hasSpaceOf && !hasUnderscoreOf) continue
+
+        // Skip leaf meshes (sub-parts like "Ace of Spades_01 - Default_0")
+        // Card groups have a single suit word after " of " with no extra parts
+        const separator = hasSpaceOf ? ' of ' : '_of_'
+        const afterOf = rawName.split(separator)[1] ?? ''
+        // Leaf meshes have underscores or " - " after the suit name
+        if (afterOf.includes('_') || afterOf.includes(' - ')) continue
+
+        // Normalise to canonical format: "Rank of Suit" (spaces)
         let name = rawName.replace(/_/g, ' ')
         if (name.includes('Eigh of')) name = name.replace('Eigh of', 'Eight of')
         map.set(name, node)
       }
     }
 
-    // Fallback: traverse scene
+    // Fallback: traverse scene (same dual-pattern matching)
     if (map.size === 0) {
       scene.traverse((child) => {
-        if (!child.name.includes('_of_')) return
+        const hasSpaceOf = child.name.includes(' of ')
+        const hasUnderscoreOf = child.name.includes('_of_')
+        if (!hasSpaceOf && !hasUnderscoreOf) return
         if (child.children.length === 0) return
-        const afterOf = child.name.split('_of_')[1] ?? ''
-        if (afterOf.includes('_')) return
+        const separator = hasSpaceOf ? ' of ' : '_of_'
+        const afterOf = child.name.split(separator)[1] ?? ''
+        if (afterOf.includes('_') || afterOf.includes(' - ')) return
         let name = child.name.replace(/_/g, ' ')
         if (name.includes('Eigh of')) name = name.replace('Eigh of', 'Eight of')
         map.set(name, child)

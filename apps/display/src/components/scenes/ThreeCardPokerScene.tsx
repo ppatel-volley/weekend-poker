@@ -49,7 +49,7 @@ function CardModel({
   const yRot = faceUp ? 0 : Math.PI
 
   return (
-    <group ref={groupRef} position={position} rotation={[-Math.PI / 2, yRot, 0]} scale={[1, 1, 1]} />
+    <group ref={groupRef} position={position} rotation={[-Math.PI / 2, yRot, 0]} scale={[0.007, 0.007, 0.007]} />
   )
 }
 

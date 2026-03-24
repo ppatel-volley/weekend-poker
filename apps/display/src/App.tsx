@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, Suspense } from 'react'
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react'
 import {
   VGFProvider,
   createSocketIOClientTransport,
@@ -12,6 +12,7 @@ import { LobbyScene } from './components/scenes/LobbyScene.js'
 import { CasinoHUD } from './components/hud/CasinoHUD.js'
 import { LobbyView } from './components/LobbyView.js'
 import { ReactionOverlay } from './components/ReactionOverlay.js'
+import { BlackjackVideoOverlay } from './components/VideoOverlay.js'
 import { SessionIdContext } from './hooks/useSessionId.js'
 import { usePhase } from './hooks/useVGFHooks.js'
 import { MaybePlatformProvider, InputModeProvider } from './platform/index.js'
@@ -91,12 +92,16 @@ function DisplayRouter() {
 
   return (
     <>
+      {/* Ambient background video renders behind the canvas (z-index 0) */}
+      {/* Foreground overlay videos render above everything (z-index 20/50) */}
+      <BlackjackVideoOverlay />
+
       <Canvas
         shadows={{ type: PCFShadowMap }}
         gl={CANVAS_GL_CONFIG}
         dpr={1}
-        camera={{ fov: 45, near: 0.1, far: 100, position: [0, 8, 10] }}
-        style={{ position: 'absolute', inset: 0 }}
+        camera={{ fov: 50, near: 0.1, far: 100, position: [0, 5, 5] }}
+        style={{ position: 'absolute', inset: 0, zIndex: 1 }}
       >
         <Suspense fallback={null}>
           <SceneRouter />
@@ -131,7 +136,16 @@ function ConnectedApp({ sessionId, serverUrl }: { sessionId: string; serverUrl: 
   )
 }
 
+const CardTestPage = import.meta.env.DEV
+  ? lazy(() => import('./card-test.js').then(m => ({ default: m.CardTestPage })))
+  : null
+
 export function App() {
+  // Card rendering test mode (dev only): http://localhost:5173/?test=cards
+  if (import.meta.env.DEV && CardTestPage && new URLSearchParams(window.location.search).get('test') === 'cards') {
+    return <Suspense fallback={<div style={{ color: 'white', padding: 40 }}>Loading card test...</div>}><CardTestPage /></Suspense>
+  }
+
   const devParams = useMemo(() => getDevParams(), [])
   const effectiveServerUrl = devParams.serverUrl ?? SERVER_URL
 

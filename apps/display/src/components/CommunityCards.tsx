@@ -16,8 +16,9 @@ const COMMUNITY_CARD_POSITIONS: [number, number, number][] = [
   [0.6, 0.01, -0.3],
 ]
 
-/** Scale factor applied to each card when placed on the table. */
-const CARD_SCALE = 0.3
+/** Scale factor applied to each card when placed on the table.
+ * GLB card meshes are ~100 units tall. At 0.007, they become ~0.7 units — table-appropriate. */
+const CARD_SCALE = 0.007
 
 /** Rotation so the card faces upward (lying flat on the table). */
 const CARD_ROTATION = new THREE.Euler(-Math.PI / 2, 0, 0)

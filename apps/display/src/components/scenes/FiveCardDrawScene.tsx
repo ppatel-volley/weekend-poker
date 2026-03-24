@@ -66,7 +66,7 @@ function CardModel({
   ]
 
   return (
-    <group ref={groupRef} position={position} rotation={baseRotation} scale={[1, 1, 1]} />
+    <group ref={groupRef} position={position} rotation={baseRotation} scale={[0.007, 0.007, 0.007]} />
   )
 }
 
